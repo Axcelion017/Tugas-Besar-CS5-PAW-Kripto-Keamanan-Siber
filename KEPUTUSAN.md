@@ -1,0 +1,13 @@
+# KEPUTUSAN.md — Keputusan Arsitektur Kriptografi
+
+Dokumen ini mencatat keputusan desain kriptografi untuk sistem Resilio-Health sesuai ketentuan Tugas 1 (Milestone `v0.1`).
+
+## Tabel Keputusan Desain Kriptografi
+
+| ID | Kebutuhan Keamanan | Mekanisme Terpilih | Alasan & Rationale | Alternatif yang Dipertimbangkan | Alasan Alternatif Ditolak |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **ADR-01** | Kerahasiaan Rekam Medis (EHR Payload) | **AES-256-GCM** (Galois/Counter Mode via Web Crypto API) | Menyediakan enkripsi simetris terotentikasi (*Authenticated Encryption with Associated Data* / AEAD). Efisien, standar industri NIST, dan memiliki integritas *ciphertext* bawaan melalui tag 128-bit. | 1. AES-CBC + HMAC-SHA256 terpisah<br>2. Sandi Klasik (Vigenere/Playfair)<br>3. RSA-2048 | • AES-CBC rentan terhadap *padding oracle attack* jika implementasi penanganan galat tidak cermat.<br>• Sandi klasik tidak memenuhi standar keamanan komputasi modern.<br>• RSA tidak cocok untuk payload teks panjang (asimetris lambat dan ada batasan ukuran blok). |
+| **ADR-02** | Verifikasi Keutuhan dan Anti-Tamper | **HMAC-SHA256** | Memastikan bahwa *ciphertext* yang disimpan tidak diutak-atik oleh pihak ketiga atau media simpan lokal sebelum proses dekripsi. | 1. Plain SHA-256 (Hash saja)<br>2. CRC32 | • Hash tanpa kunci rahasia rentan terhadap penggantian konten (*length extension / simple replacement*).<br>• CRC32 adalah deteksi kesalahan transmisi, bukan fungsi integritas kriptografis. |
+| **ADR-03** | Pembangkitan Keacakan Nonce/IV | **CSPRNG** via `window.crypto.getRandomValues()` | Menghasilkan *Initialization Vector* 96-bit (12 bytes) yang acak kriptografis per setiap sesi enkripsi, mencegah serangan IV reuse pada mode GCM. | 1. `Math.random()`<br>2. Timestamp / Incrementing Counter | • `Math.random()` adalah PRNG linier deterministik yang dapat diprediksi (*insecure*).<br>• Counter murni membutuhkan sinkronisasi state persisten yang rentan rusak jika sesi terhenti. |
+| **ADR-04** | Representasi Data Kriptografis | **Heksadesimal (Hex String)** | Menghindari korupsi karakter akibat encoding non-standar saat transit JSON dan memudahkan inspeksi audit visual pada pengujian. | Base64 URL-safe | Base64 efisien dalam ukuran, namun representasi Hex dipilih pada *Milestone 1* untuk konsistensi panjang string tetap (64 hex char = 256 bit). |
+| **ADR-05** | Prinsip Penanganan Galat | **Fail-Closed (Safe Rejection)** | Jika digest HMAC tidak cocok atau tag GCM salah, sistem langsung melempar eksepsi dan mengunci akses tanpa membocorkan pesan error deskriptif (*Zero Information Leak*). | Tolerant Decryption (Fallback parsing) | Pendekatan toleran dapat dimanipulasi penyerang untuk menebak struktur data (*chosen-ciphertext attacks*). |
