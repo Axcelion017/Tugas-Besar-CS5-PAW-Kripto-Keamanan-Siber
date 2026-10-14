@@ -98,7 +98,7 @@ flowchart TD
     class TB1,TB2 boundary;
 ```
 3. Matriks Aliran Data (Data Flow Matrix)
-    ![alt text](image.png)
+    ![alt text](dataflowmatrix.png)
 
 4. Titik Penegakan Keamanan Kriptografi (Cryptographic Enforcement Points)
 Titik Enkripsi (Enforcement Point 1 — PRC-03):
