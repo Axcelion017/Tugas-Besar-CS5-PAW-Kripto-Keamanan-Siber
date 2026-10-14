@@ -96,7 +96,7 @@ flowchart TD
     classDef boundary fill:#fee2e2,stroke:#dc2626,stroke-width:2px,stroke-dasharray: 5 5;
     class DS01 cryptoProtected;
     class TB1,TB2 boundary;
-
+```
 3. Matriks Aliran Data (Data Flow Matrix)
     ![alt text](image.png)
 

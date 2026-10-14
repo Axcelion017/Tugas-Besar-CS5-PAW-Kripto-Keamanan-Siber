@@ -52,7 +52,7 @@ app/layout.tsx (Server Component: HTML Shell, Montserrat Font, Global CSS)
           ├── Tabel Delegasi Penugasan Dokter ke Pasien Bangsal
           ├── Modul Simulasi Manipulasi Data (HMAC Tamper Test)
           └── Audit Log Aktivitas Keamanan
-
+```
 
 3. Kontrak Antarmuka Komponen (TypeScript Interface Contracts)
 3.1 Kontrak Sesi Pengguna (lib/auth/auth.ts)
