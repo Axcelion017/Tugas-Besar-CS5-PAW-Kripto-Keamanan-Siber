@@ -1,13 +1,34 @@
 # Risk Register & Rencana Kontrol — Resilio-Health
 
-Analisis kemungkinan dan dampak dari 5 risiko prioritas utama pada sistem Resilio-Health beserta rencana kontrol mitigasinya.
+Dokumen ini mendokumentasikan analisis kemungkinan, tingkat dampak, serta rencana kontrol mitigasi dari **5 Risiko Prioritas Utama** pada sistem Resilio-Health, didasarkan pada data insiden nyata (kasus Change Healthcare dan data kerentanan BSSN 2026).
 
-## Tabel Risiko Prioritas
+---
 
-| No | ID Risiko | Ancaman Terkait | Alasan Kemungkinan & Dampak Sesuai Kondisi Produk | Nilai Risiko | Rencana Kontrol & Alokasi Milestone |
-| :-: | :--- | :--- | :--- | :--- | :--- |
-| **1** | **RSK-01** | THR-04 (Info Disclosure EHR) | **Kemungkinan Sedang**: Media browser storage rentan diakses skrip pihak ketiga.<br>**Dampak Kritis**: Kebocoran riwayat penyakit merusak privasi pasien secara permanen. | **Tinggi** | **Tugas 1 (v0.1) & Tugas 2 (v0.2)**: Enkripsi AES-256-GCM sisi klien sehingga media simpan hanya memuat ciphertext opaque (Zero-Knowledge Admin). |
-| **2** | **RSK-02** | THR-02 (Data Tampering EHR) | **Kemungkinan Tinggi**: Penyimpanan lokal tanpa proteksi integritas mudah disunting secara manual via DevTools.<br>**Dampak Kritis**: Data medis palsu dapat memicu kesalahan fatal dosis obat. | **Tinggi** | **Tugas 1 (v0.1)**: Penggunaan HMAC-SHA256 untuk verifikasi integritas data sebelum didekripsi; tolak dekripsi jika hash tidak valid. |
-| **3** | **RSK-03** | THR-06 (Privilege Escalation) | **Kemungkinan Sedang**: Pengaturan role berbasis state klien tanpa validasi server pada versi awal.<br>**Dampak Tinggi**: Pengguna biasa dapat mengambil alih fungsi admin/dokter. | **Tinggi** | **Tugas 1 (v0.1) & Tugas 2 (v0.2)**: Pemisahan view ketat di `/beranda` dan validasi otorisasi ganda (Zero-Trust Guard) pada penugasan pasien. |
-| **4** | **RSK-04** | THR-07 (IV Reuse Attack) | **Kemungkinan Rendah-Sedang**: Kesalahan generator keacakan semu dapat menghasilkan IV duplikat.<br>**Dampak Kritis**: Kunci simetris AES-GCM dapat dipulihkan oleh penyerang jika IV berulang. | **Tinggi** | **Tugas 1 (v0.1)**: Menggunakan `window.crypto.getRandomValues(new Uint8Array(12))` untuk menjamin 96-bit nonce unik per operasi enkripsi. |
-| **5** | **RSK-05** | THR-01 (Session Hijacking) | **Kemungkinan Sedang**: Ketiadaan token expiry dan rotasi session key pada penyimpanan frontend.<br>**Dampak Sedang-Tinggi**: Sesi dokter tertinggal di komputer bangsal dapat disalahgunakan staf lain. | **Sedang** | **Tugas 2 (v0.2) & Tugas 3 (v0.3)**: Implementasi HTTP-Only Cookie, token expiry otomatis, dan audit log sesi terproteksi HMAC. |
+## Tabel Risiko Prioritas Sistem
+
+| No | ID Risiko | Ancaman Terkait | Alasan Kemungkinan & Dampak Nyata | Nilai Risiko | Rencana Kontrol & Alokasi Milestone |
+| :-: | :--- | :--- | :--- | :-: | :--- |
+| **1** | **RSK-01** | THR-04 (Info Disclosure EHR) | **Kemungkinan Sedang**: Basis data pusat rumah sakit sering menjadi target eksfiltrasi peretas internal/eksternal.<br>**Dampak Kritis**: Kebocoran riwayat penyakit, diagnosis HIV/kanker, dan resep obat melanggar UU PDP dan menghancurkan reputasi faskes secara permanen. | **Kritis** | **Milestone 1 & 2**: Penerapan **AES-256-GCM** sisi klien. Server pusat dan admin basis data hanya menyimpan *opaque ciphertext* (*Zero-Knowledge Storage*). Data hanya bisa didekripsi di browser pasien atau dokter berizin. |
+| **2** | **RSK-02** | THR-02 (Data Tampering EHR) | **Kemungkinan Tinggi**: Data yang disimpan di perangkat lokal (saat offline) atau saat transit jaringan rentan disunting melalui DevTools atau malware *man-in-the-middle*.<br>**Dampak Kritis**: Manipulasi dosis obat atau riwayat alergi memicu malpraktik medis dan kematian pasien. | **Kritis** | **Milestone 1 & 2**: Penerapan **HMAC-SHA256** (RFC 2104). Setiap ciphertext diberi tag integritas; server pusat menolak sinkronisasi dan klien menolak dekripsi jika terjadi perubahan 1 bit (*Fail-Closed*). |
+| **3** | **RSK-03** | THR-06 (BOLA / IDOR API Breach) | **Kemungkinan Sangat Tinggi**: Mendominasi 96% celah web kesehatan di Indonesia; penyerang cukup menebak ID pasien di URL `/api/v1/records/pasien-123` untuk mengunduh rekam medis orang lain.<br>**Dampak Kritis**: Eksfiltrasi rekam medis ratusan ribu pasien sekaligus tanpa memicu alarm otentikasi standar. | **Kritis** | **Milestone 2 & 3**: Penerapan **Zero-Trust BOLA / IDOR Guard**. Setiap permintaan data medis memverifikasi token dokter DAN memeriksa relasi izin aktif (`access_grants`) terhadap pasien terkait. Akses tidak sah diblokir 403 Forbidden dan dicatat ke SIEM. |
+| **4** | **RSK-04** | THR-05 (Downtime Chaos / Ransomware) | **Kemungkinan Tinggi**: Ketergantungan faskes pada server cloud pusat (seperti SATUSEHAT) menyebabkan klinik lumpuh total saat internet mati atau server diserang ransomware.<br>**Dampak Kritis**: Dokter kehilangan akses ke riwayat pasien gawat darurat, penanganan medis terhenti total. | **Tinggi** | **Milestone 2**: Arsitektur **Offline-First PWA** dengan Service Worker dan IndexedDB lokal. Stasiun kerja dokter tetap dapat membuka data antrean terenkripsi dan menulis RME saat koneksi putus, lalu otomatis disinkronkan saat pulih. |
+| **5** | **RSK-05** | THR-01 & THR-08 (Spoofing / Dokter Gadungan) | **Kemungkinan Sedang**: Ketiadaan verifikasi dokumen kependudukan memungkinkan akun pasien fiktif; dokter gadungan menyusup tanpa STR/SIP resmi.<br>**Dampak Tinggi**: Polusi data medis nasional, malpraktik oleh pihak tidak berwenang, dan pencurian identitas. | **Tinggi** | **Milestone 2**: Sistem **Verifikasi KYC (KTP/NIK)** dan **KYD (STR & SIP)** oleh Admin Regulator Kemenkes. Akun baru berstatus `PENDING` dan dibatasi secara ketat hingga dokumen fisiknya divalidasi sah. |
+
+---
+
+## Matriks Evaluasi Risiko (Risk Heatmap)
+
+```text
+Dampak (Impact)
+  ▲
+K | [RSK-04]          | [RSK-01, RSK-02]  | [RSK-03: BOLA/IDOR]
+T |                   | [RSK-05: KYC/KYD] |
+S |                   |                   |
+R |                   |                   |
+  +------------------------------------------------►
+    Rendah              Sedang              Tinggi
+                   Kemungkinan (Likelihood)
+```
+
+- **Kritis (Merah)**: RSK-01 (Kebocoran EHR), RSK-02 (Manipulasi Rekam Medis), RSK-03 (BOLA / IDOR).
+- **Tinggi (Kuning/Oranye)**: RSK-04 (Downtime Chaos / Ransomware), RSK-05 (Akun Fiktif & Dokter Gadungan).

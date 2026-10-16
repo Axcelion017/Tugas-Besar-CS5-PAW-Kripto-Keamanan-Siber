@@ -1,120 +1,196 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { loginUser } from "@/lib/auth/auth";
+import { getUserSession, loginUser, normalizeRole, UserSession } from "@/lib/auth/auth";
 
-export default function LoginPage() {
+export default function HomePage() {
   const router = useRouter();
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [errorMsg, setErrorMsg] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
+  const [activeSession, setActiveSession] = useState<UserSession | null>(null);
 
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setErrorMsg("");
-
-    const success = loginUser(username, password);
-    if (success) {
-      router.replace("/beranda");
-    } else {
-      setErrorMsg("Kredensial tidak valid. Silakan gunakan tombol demo di bawah.");
-      setIsLoading(false);
+  useEffect(() => {
+    const s = getUserSession();
+    if (s) {
+      setActiveSession(s);
     }
-  };
+  }, []);
 
-  const handleQuickLogin = (u: string, p: string) => {
-    const success = loginUser(u, p);
-    if (success) {
-      router.replace("/beranda");
+  const handleQuickDemo = (user: string, pass: string) => {
+    const session = loginUser(user, pass);
+    if (session) {
+      const target = normalizeRole(session.role);
+      router.push(`/${target}`);
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col justify-center items-center p-4 font-sans text-slate-800">
-      <div className="max-w-md w-full bg-white rounded-3xl shadow-xl border border-slate-200 p-8">
-        <div className="text-center mb-8">
-          <div className="w-14 h-14 bg-red-600 rounded-2xl mx-auto flex items-center justify-center text-white font-black text-2xl shadow-lg shadow-red-200 mb-4">
-            R
-          </div>
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight">RESILIO-HEALTH</h1>
-          <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mt-1">
-            Sistem Informasi Rumah Sakit & Rekam Medis
-          </p>
-        </div>
-
-        {errorMsg && (
-          <div className="mb-6 p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-bold">
-            {errorMsg}
-          </div>
-        )}
-
-        <form onSubmit={handleLogin} className="space-y-4">
-          <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
-              Nama Pengguna (Username)
-            </label>
-            <input
-              type="text"
-              required
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="Contoh: dr_andi, budi, admin"
-              className="w-full px-4 py-3 rounded-xl border border-slate-300 font-semibold text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-500"
-            />
+    <div className="min-h-screen bg-[#F8FAFC] text-slate-800 font-sans antialiased flex flex-col justify-between">
+      {/* Navigation Bar */}
+      <header className="bg-white/80 backdrop-blur-md border-b border-slate-200 sticky top-0 z-30 px-6 py-4">
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-red-600 rounded-xl flex items-center justify-center text-white font-black text-xl shadow-md shadow-red-200">
+              R
+            </div>
+            <div>
+              <span className="font-black text-slate-900 tracking-tight text-lg">
+                RESILIO<span className="text-red-600">-HEALTH</span>
+              </span>
+              <p className="text-[10px] text-slate-500 font-bold tracking-wider uppercase">
+                Zero-Trust Hospital Information System
+              </p>
+            </div>
           </div>
 
-          <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
-              Kata Sandi (Password)
-            </label>
-            <input
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              className="w-full px-4 py-3 rounded-xl border border-slate-300 font-semibold text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-500"
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="w-full py-3.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-black uppercase tracking-wider shadow-md shadow-red-600/30 transition-all mt-2"
-          >
-            {isLoading ? "Memverifikasi..." : "Masuk ke Sistem"}
-          </button>
-        </form>
-
-        <div className="mt-8 pt-6 border-t border-slate-100">
-          <p className="text-xs font-bold text-slate-400 uppercase text-center mb-3">
-            Akses Cepat Pengujian Role
-          </p>
-          <div className="grid grid-cols-3 gap-2">
-            <button
-              onClick={() => handleQuickLogin("dr_andi", "doctor123")}
-              className="py-2.5 px-2 bg-slate-100 hover:bg-red-50 hover:text-red-700 rounded-xl text-xs font-extrabold text-slate-700 transition-all text-center border border-slate-200"
-            >
-              Dokter
-            </button>
-            <button
-              onClick={() => handleQuickLogin("budi", "patient123")}
-              className="py-2.5 px-2 bg-slate-100 hover:bg-red-50 hover:text-red-700 rounded-xl text-xs font-extrabold text-slate-700 transition-all text-center border border-slate-200"
-            >
-              Pasien
-            </button>
-            <button
-              onClick={() => handleQuickLogin("admin", "admin123")}
-              className="py-2.5 px-2 bg-slate-100 hover:bg-red-50 hover:text-red-700 rounded-xl text-xs font-extrabold text-slate-700 transition-all text-center border border-slate-200"
-            >
-              Admin
-            </button>
+          <div className="flex items-center gap-3">
+            {activeSession ? (
+              <Link
+                href={`/${normalizeRole(activeSession.role)}`}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md transition"
+              >
+                Buka Dashboard ({activeSession.name}) →
+              </Link>
+            ) : (
+              <>
+                <Link
+                  href="/login"
+                  className="px-4 py-2 text-slate-700 hover:text-slate-900 text-xs font-bold transition"
+                >
+                  Masuk
+                </Link>
+                <Link
+                  href="/login"
+                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md transition"
+                >
+                  Portal Masuk →
+                </Link>
+              </>
+            )}
           </div>
         </div>
-      </div>
+      </header>
+
+      {/* Hero Section */}
+      <main className="max-w-7xl mx-auto px-6 py-12 space-y-16">
+        <div className="text-center max-w-3xl mx-auto space-y-6">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-red-50 border border-red-200 text-red-700 text-xs font-bold">
+            <span className="w-2 h-2 rounded-full bg-red-600"></span>
+            <span>Standar Permenkes No. 24/2022 & UU Pelindungan Data Pribadi (UU PDP)</span>
+          </div>
+
+          <h1 className="text-4xl md:text-5xl font-black text-slate-900 tracking-tight leading-tight">
+            Resiliensi Rekam Medis Digital Tanpa Titik Lemah Tunggal
+          </h1>
+
+          <p className="text-base text-slate-600 leading-relaxed font-medium">
+            Resilio-Health adalah Sistem Informasi Rumah Sakit berbasis web yang melindungi data klinis pasien dengan <strong>Enkripsi Sisi Klien (AES-256-GCM)</strong>, jaminan keutuhan <strong>HMAC-SHA256</strong>, ketahanan <strong>Offline-First (PWA & IndexedDB)</strong>, serta <strong>Zero-Trust BOLA/IDOR Defense</strong>.
+          </p>
+
+          {/* Quick Demo Action Buttons */}
+          <div className="pt-4 p-6 bg-white rounded-3xl border border-slate-200 shadow-xl space-y-4">
+            <p className="text-xs font-black uppercase tracking-wider text-slate-400">
+              Pilih Akses Cepat Evaluasi Peran Pengguna (Quick Demo):
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <button
+                type="button"
+                onClick={() => handleQuickDemo("dr_andi", "doctor123")}
+                className="p-4 rounded-2xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-left transition group cursor-pointer"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-mono font-bold text-emerald-800">ROLE: NAKES</span>
+                  <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-200 text-emerald-800">
+                    Tenaga Medis
+                  </span>
+                </div>
+                <h3 className="text-sm font-bold text-slate-900 mt-2">dr. Andi Pratama, Sp.PD</h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Input SOAP, ICD-10, Enkripsi RME, & Offline Sync
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleQuickDemo("budi", "patient123")}
+                className="p-4 rounded-2xl bg-blue-50 hover:bg-blue-100 border border-blue-200 text-left transition group cursor-pointer"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-mono font-bold text-blue-800">ROLE: PASIEN</span>
+                  <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-blue-200 text-blue-800">
+                    Pasien
+                  </span>
+                </div>
+                <h3 className="text-sm font-bold text-slate-900 mt-2">Budi Santoso (NIK)</h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Dekripsi Pribadi, Cari Faskes, Booking & Revoke
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleQuickDemo("admin", "admin123")}
+                className="p-4 rounded-2xl bg-purple-50 hover:bg-purple-100 border border-purple-200 text-left transition group cursor-pointer"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-mono font-bold text-purple-800">ROLE: ADMIN</span>
+                  <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-purple-200 text-purple-800">
+                    Admin Regulator
+                  </span>
+                </div>
+                <h3 className="text-sm font-bold text-slate-900 mt-2">Administrator Kemenkes</h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Verifikasi KYC/KYD, SIEM Monitor & Kill-Switch
+                </p>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* 3 Pillars Overview */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-3">
+            <div className="w-10 h-10 rounded-xl bg-red-100 text-red-600 flex items-center justify-center text-xl font-bold">
+              1
+            </div>
+            <h3 className="text-base font-bold text-slate-900">
+              Pengembangan Aplikasi Web (PAW)
+            </h3>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Arsitektur Progressive Web App (PWA) dengan Service Worker dan IndexedDB. Dokter tetap dapat membuka dan menginput data pasien meski koneksi internet putus (Downtime Resilience).
+            </p>
+          </div>
+
+          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-3">
+            <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center text-xl font-bold">
+              2
+            </div>
+            <h3 className="text-base font-bold text-slate-900">
+              Kriptografi Sisi Klien
+            </h3>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Enkripsi AES-256-GCM langsung di browser pasien/dokter sebelum tersimpan di server. Deteksi manipulasi data menggunakan HMAC-SHA256 berprinsip Fail-Closed.
+            </p>
+          </div>
+
+          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-3">
+            <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center text-xl font-bold">
+              3
+            </div>
+            <h3 className="text-base font-bold text-slate-900">
+              Keamanan Siber & Zero-Trust
+            </h3>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Pertahanan BOLA/IDOR ketat dengan verifikasi relasi consent aktif. Pemisahan peran mutlak (Admin dilarang membaca data medis), pemantauan SIEM, dan isolasi faskes terinfeksi malware.
+            </p>
+          </div>
+        </div>
+      </main>
+
+      {/* Footer */}
+      <footer className="bg-white border-t border-slate-200 py-6 px-6 text-center text-xs text-slate-500">
+        <p>Resilio-Health • Integrasi Tugas Besar PAW, Kriptografi & Keamanan Siber 2026</p>
+      </footer>
     </div>
   );
 }

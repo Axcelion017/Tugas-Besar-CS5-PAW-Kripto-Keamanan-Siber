@@ -24,16 +24,16 @@ export async function encryptAES(
 
   const cryptoKey = await crypto.subtle.importKey(
     "raw",
-    rawKey as any,
+    rawKey as BufferSource,
     { name: "AES-GCM" },
     false,
     ["encrypt"]
   );
 
   const encryptedBuf = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv: iv as any },
+    { name: "AES-GCM", iv: iv as BufferSource },
     cryptoKey,
-    encoder.encode(plaintext) as any
+    encoder.encode(plaintext) as BufferSource
   );
 
   return {
@@ -55,16 +55,16 @@ export async function decryptAES(
 
   const cryptoKey = await crypto.subtle.importKey(
     "raw",
-    rawKey as any,
+    rawKey as BufferSource,
     { name: "AES-GCM" },
     false,
     ["decrypt"]
   );
 
   const decryptedBuf = await crypto.subtle.decrypt(
-    { name: "AES-GCM", iv: iv as any },
+    { name: "AES-GCM", iv: iv as BufferSource },
     cryptoKey,
-    ciphertextBuf as any
+    ciphertextBuf as BufferSource
   );
 
   return decoder.decode(decryptedBuf);

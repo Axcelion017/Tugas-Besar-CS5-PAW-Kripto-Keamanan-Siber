@@ -18,7 +18,7 @@ export async function generateHMAC(message: string, keyHex: string): Promise<str
 
   const cryptoKey = await crypto.subtle.importKey(
     "raw",
-    rawKey as any,
+    rawKey as BufferSource,
     { name: "HMAC", hash: "SHA-256" },
     false,
     ["sign"]
@@ -27,7 +27,7 @@ export async function generateHMAC(message: string, keyHex: string): Promise<str
   const signature = await crypto.subtle.sign(
     "HMAC",
     cryptoKey,
-    encoder.encode(message) as any
+    encoder.encode(message) as BufferSource
   );
 
   return bufToHex(signature);

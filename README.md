@@ -1,126 +1,118 @@
 # Resilio-Health — Hospital Information System (HIS)
 
-Resilio-Health adalah sistem informasi rekam medis rumah sakit berbasis web yang mengintegrasikan antarmuka responsif dan aksesibel, protokol pengawasan otorisasi *Zero-Trust*, serta perlindungan kerahasiaan dan integritas data klinis *end-to-end* menggunakan Web Crypto API standar W3C.
+Resilio-Health adalah sistem informasi rekam medis rumah sakit berbasis web yang mengintegrasikan antarmuka responsif dan aksesibel, protokol pengawasan otorisasi *Zero-Trust*, ketahanan *Offline-First* (PWA & IndexedDB), serta perlindungan kerahasiaan dan integritas data klinis *end-to-end* menggunakan Web Crypto API standar W3C.
 
 Repositori ini digunakan secara berkelanjutan sepanjang semester untuk tiga mata kuliah terintegrasi:
-1. **Pengembangan Aplikasi Web (PAW)** — Milestone 1: Antarmuka Web Responsif dan Aksesibel (Tag: `v0.1`)
-2. **Kriptografi** — Tugas 1: Fondasi dan Komponen Dasar Kriptografi (Tag: `v0.1`)
-3. **Keamanan Komputasi dan Siber (KKS)** — Tugas 1: Threat Modeling dan Analisis Risiko Produk (Penanda: `sec-0.1`)
+1. **Pengembangan Aplikasi Web (PAW)** — Milestone 2: Arsitektur Modular Multi-Role, Offline-First PWA & Aksesibilitas WCAG 2.1 AA (Tag: `v0.2`)
+2. **Kriptografi** — Tugas 2: Zero-Knowledge Client-Side Encryption (AES-256-GCM + HMAC-SHA256) & Deteksi Manipulasi Data (Tag: `v0.2`)
+3. **Keamanan Komputasi dan Siber (KKS)** — Tugas 2: Zero-Trust BOLA / IDOR Defense, KYC/KYD Verification, SIEM Monitor, & Ransomware Isolation Kill-Switch (Penanda: `sec-0.2`)
 
 ---
 
 ## 1. Konsep Produk & Permasalahan yang Diselesaikan
 
-### 1.1 Latar Belakang & Permasalahan
-Sistem Informasi Manajemen Rumah Sakit (SIMRS) konvensional kerap menyimpan data klinis pasien dalam bentuk teks terang (*plaintext*) pada basis data terpusat. Hal ini menimbulkan kerentanan kebocoran riwayat penyakit oleh pihak internal/penyedia *cloud* (*Information Disclosure*) serta risiko manipulasi dosis rekam medis (*Data Tampering*).
+### 1.1 Latar Belakang & Permasalahan Dunia Nyata
+Berdasarkan data insiden nyata hingga tahun 2026:
+- **Kasus Change Healthcare (AS)**: Kebocoran lebih dari 190 juta rekam medis akibat kelumpuhan server pusat oleh serangan *ransomware*.
+- **Data BSSN Indonesia**: Sebanyak 96% permasalahan keamanan digital di faskes bersumber dari kerentanan web (BOLA/IDOR, miskonfigurasi API, dan kebocoran token). Ketika server pusat down, faskes daerah kehilangan akses terhadap data pasien sehingga penanganan medis gawat darurat terhenti total (*Downtime Chaos*).
+- **Single Point of Failure (SPOF)**: Integrasi API nasional (seperti SATUSEHAT) rentan lumpuh jika server pusat terganggu.
 
 ### 1.2 Solusi Resilio-Health
 Resilio-Health menyelesaikan permasalahan tersebut dengan:
-- **Zero-Knowledge Storage**: Seluruh rekam medis klinis (keluhan, diagnosa, dan resep) dienkripsi di peramban menggunakan kunci unik pasien sebelum disimpan (*client-side encryption*).
-- **Zero-Trust Access Control**: Dokter hanya dapat memasukkan catatan medis ke pasien yang telah ditugaskan secara resmi oleh Administrator bangsal.
-- **Deteksi Pemalsuan Integritas**: Penerapan HMAC-SHA256 mendeteksi manipulasi data sekecil 1 bit pada media penyimpanan lokal.
+- **Ketahanan Offline-First PWA (PAW)**: Stasiun kerja nakes tetap dapat membuka data antrean dan menginput formulir pemeriksaan klinis ke IndexedDB lokal saat internet mati, lalu otomatis tersinkronisasi saat jaringan pulih.
+- **Zero-Knowledge Storage (Kriptografi)**: Seluruh rekam medis klinis (SOAP: keluhan, tanda vital, diagnosa ICD-10, dan resep) dienkripsi di peramban menggunakan AES-256-GCM dan diberi tag integritas HMAC-SHA256 sebelum disimpan ke server atau media lokal.
+- **Zero-Trust BOLA / IDOR Defense (KKS)**: Gateway API memverifikasi tiket izin aktif (`access_grants`) sebelum mengembalikan data medis pasien, memblokir percobaan IDOR seketika, serta menyediakan saklar darurat *kill-switch* untuk mengisolasi faskes yang terinfeksi ransomware.
 
 ---
 
-## 2. Arsitektur Antarmuka & Peran Pengguna (Role-Based Hub)
+## 2. Arsitektur Domain & Peran Pengguna (Role Segregation)
 
-Sistem menggunakan gerbang terpadu pada rute `/beranda` yang secara dinamis menampilkan antarmuka spesifik sesuai sesi akun pengguna:
+Sistem menerapkan arsitektur modular Next.js App Router dengan pemisahan wilayah publik `(auth)` dan wilayah terproteksi `(dashboard)` yang terbagi ke dalam 3 domain peran:
 
-- **1. Stasiun Kerja Dokter (`DokterView.tsx`)**:
-  - Pilihan pasien bangsal yang ditugaskan.
-  - Formulir input klinis dengan validasi sisi klien (*client-side validation*) untuk keluhan, tanda vital, diagnosa, dan resep.
-  - Enkripsi otomatis AES-256-GCM dan pembangkitan HMAC-SHA256 digest.
-  - Visualisasi grafik fluktuasi tekanan darah (sistolik/diastolik) pasien.
-- **2. Portal Mandiri Pasien (`PasienView.tsx`)**:
-  - Tampilan riwayat rekam medis pribadi pasien yang sedang login.
-  - Fitur dekripsi *on-demand* menggunakan kunci privat pasien.
-  - Indikator validasi integritas HMAC data rekam medis.
-- **3. Dasbor Administrator (`AdminView.tsx`)**:
-  - Manajemen delegasi penugasan dokter terhadap pasien bangsal (Zero-Trust Gatekeeper).
-  - Simulasi pengujian integritas kriptografi (*Tamper Simulation*) untuk menguji ketahanan deteksi manipulasi data.
-  - Audit log sistem.
+### 1. Portal Mandiri Pasien (`app/(dashboard)/pasien/`) — UR-P01 s.d. UR-P08
+- **Ringkasan Kesehatan & Kartu Darurat**: Kartu Resilio ID darurat berstatus KYC terverifikasi Dukcapil dan indikator riwayat alergi berbahaya.
+- **Pencarian Faskes Pintar**: Menemukan RS, klinik, atau puskesmas berdasarkan keluhan gejala penyakit (Hipertensi, Jantung, Gigi, ISPA) atau spesialisasi.
+- **Eksplorasi Profil Faskes & Dokter**: Meninjau jadwal dokter, nomor SIP terverifikasi, dan kuota antrean harian.
+- **Pemesanan Jadwal & Auto-Consent**: Memesan antrean dengan penerbitan tiket izin akses digital otomatis berbatas waktu bagi dokter pemeriksa.
+- **Linimasa RME & Grafik Tanda Vital**: Visualisasi tren fluktuasi tekanan darah sistolik/diastolik serta fitur dekripsi mandiri menggunakan kunci privat pasien.
+- **Kedaulatan Izin (Consent Manager)**: Pemberian izin rujukan lintas faskes dan pencabutan hak akses instan (*1-Click Revoke*).
+- **Audit Trail Pribadi & Laporan Kendala**: Transparansi log siapa dan kapan data medis dibuka (UU PDP) serta pelaporan kendala teknis ke Admin.
 
-### Komponen Reusable Bertipe (`components/ui/`)
-1. **`StatCard`**: Kartu ringkasan metrik statistik dengan props bertipe.
-2. **`InputField`**: Input formulir aksesibel yang terikat dengan pesan galat validasi.
-3. **`StatusBadge`**: Indikator status peran, otorisasi, dan validitas integritas.
-4. **`TopHeader`**: Bilah navigasi atas responsif dengan kartu identitas pengguna aktif.
-5. **`LogoutModal`**: Dialog konfirmasi keluar sistem aksesibel tanpa popup peramban *native*.
+### 2. Stasiun Kerja Tenaga Kesehatan (`app/(dashboard)/nakes/`) — UR-T01 s.d. UR-T06
+- **Antrean Pasien & Jadwal Harian**: Daftar periksa harian dengan status periksa (Menunggu, Sedang Diperiksa, Selesai) dan peringatan alergi kritis.
+- **Pemeriksaan Klinis (SOAP Standar)**: Formulir anamnesis (S), tanda vital fisik (O), kode diagnosis internasional ICD-10 (A), dan *e-Prescription* (P) dengan enkripsi AES-256-GCM + tag HMAC-SHA256.
+- **Pencarian Pasien via NIK (BOLA Guard)**: Validasi izin akses sebelum data dibuka; percobaan akses tanpa izin langsung diblokir 403 Forbidden dan dicatat ke SIEM.
+- **Ketahanan Offline (IndexedDB Engine)**: Operasional penuh saat internet faskes mati; data diantrekan secara terenkripsi di memori lokal.
+- **Background Sync & Surat Rujukan**: Sinkronisasi otomatis ke server pusat setelah verifikasi HMAC lolos serta penerbitan surat rujukan digital antar faskes.
 
----
-
-## 3. Spesifikasi & Kebutuhan Kriptografi Produk
-
-### 3.1 Tabel Kebutuhan Kriptografi Produk
-
-| Data Produk | Kebutuhan / Ancaman | Tujuan Keamanan | Algoritma Terpilih | Prioritas |
-| :--- | :--- | :--- | :--- | :---: |
-| **Keluhan, Diagnosa, Resep (EHR)** | Kebocoran data rekam medis oleh admin/perantara | Kerahasiaan (*Confidentiality*) | **AES-256-GCM** (NIST SP 800-38D) | **Kritis** |
-| **Ciphertext Rekam Medis** | Pemalsuan riwayat medis / malpraktik dosis | Keutuhan (*Integrity & Authenticity*) | **HMAC-SHA256** (RFC 2104) | **Kritis** |
-| **Hak Penugasan Dokter-Pasien** | Peniruan identitas dokter bangsal lain | Otentikasi Akses (*Authorization*) | **Zero-Trust Role Guard** | **Tinggi** |
-
-### 3.2 Rancangan Komponen Kriptografi
-- **Masukan**: Plaintext objek rekam medis format JSON string + Kunci 256-bit Hexadecimal unik per pasien.
-- **Proses**:
-  1. Pembangkitan *Initialization Vector* (IV) 96-bit (12 bytes) acak kriptografis menggunakan CSPRNG `window.crypto.getRandomValues()`.
-  2. Enkripsi Galois/Counter Mode (AES-GCM) dengan otentikasi tag bawaan 128-bit.
-  3. Kalkulasi *Keyed-Hash Message Authentication Code* (HMAC-SHA256) atas string *ciphertext*.
-- **Keluaran**: Rekam data aman `{ ciphertext: hex, iv: hex, hmacDigest: hex, timestamp: string }`.
-- **Representasi Data**: Heksadesimal (*Hex String*, 64 karakter untuk kunci 256-bit dan 24 karakter untuk IV 96-bit).
-- **Prinsip Keamanan**: *Fail-Closed* — dekripsi ditolak secara aman jika digest HMAC tidak valid atau IV korup.
+### 3. Konsol Pengawas Regulasi Admin (`app/(dashboard)/admin/`) — UR-A01 s.d. UR-A05
+- **Ringkasan Eksekutif & Status Sistem**: Agregat antrean KYC/KYD, tingkat ancaman siber, dan status kesehatan faskes terintegrasi.
+- **Verifikasi Kependudukan Pasien (KYC)**: Antrean verifikasi kecocokan nomor NIK dengan dokumen foto fisik KTP asli.
+- **Verifikasi Kredensial Dokter (KYD)**: Validasi nomor STR (Konsil Kedokteran) dan nomor SIP dokter sebelum wewenang penginputan RME diaktifkan.
+- **Master Faskes & Ransomware Kill-Switch**: Pengelolaan direktori faskes dan tombol saklar darurat untuk mengisolasi faskes yang terinfeksi malware.
+- **SIEM Live Security Feed**: Pemantauan real-time pencegahan BOLA/IDOR dan anomali HMAC dengan tombol uji coba simulasi serangan.
+- **Incident Center (Observabilitas Teknis)**: Resolusi tiket kendala pengguna dan pemantauan antrean gagal sinkron (*Failed Sync Queue*) tanpa pernah melihat isi rahasia medis pasien.
 
 ---
 
-## 4. Akun Pengujian Sintetis (Demo Login)
+## 3. Spesifikasi Kriptografi Produk
 
-Aplikasi menyediakan tombol *Quick Demo* pada halaman login (`/`) untuk mempermudah evaluasi:
-
-| Peran | Username | Password | Deskripsi Aksesibilitas Peran |
+| Komponen | Spesifikasi Teknis | Standar Acuan | Fungsi Keamanan |
 | :--- | :--- | :--- | :--- |
-| **Dokter** | `dr_andi` | `doctor123` | Akses pasien bangsal Mawar 01 (Budi Santoso) |
-| **Pasien** | `budi` | `patient123` | Akses melihat & mendekripsi rekam medis pribadi P-101 |
-| **Administrator** | `admin` | `admin123` | Penugasan dokter bangsal & simulasi audit integritas |
+| **Kerahasiaan (Confidentiality)** | AES-256-GCM | NIST SP 800-38D | Enkripsi simetris data klinis SOAP menggunakan kunci 256-bit unik pasien |
+| **Inisialisasi Keacakan (IV)** | 96-bit CSPRNG Nonce | W3C Web Crypto | `crypto.getRandomValues()` 12 bytes unik per rekam medis (Mencegah IV Reuse) |
+| **Keutuhan Data (Integrity)** | HMAC-SHA256 | RFC 2104 | Verifikasi keutuhan ciphertext; tolak dekripsi jika terjadi perubahan 1 bit (*Fail-Closed*) |
+| **Penyimpanan (Storage)** | Zero-Knowledge Store | UU PDP No. 27/2022 | Server dan Admin basis data hanya menyimpan opaque ciphertext |
 
-> *Catatan: Seluruh akun dan rekam medis yang digunakan adalah data sintetis tiruan untuk keperluan pengujian dan tidak memuat data pribadi riil.*
+---
+
+## 4. Akun Pengujian Evaluasi (Quick Demo)
+
+Aplikasi menyediakan tombol *Quick Demo* pada halaman masuk (`/login` dan `/`) untuk kemudahan evaluasi:
+
+| Peran | Identifier / Username | Kata Sandi | Deskripsi Hak Akses Peran |
+| :--- | :--- | :--- | :--- |
+| **Tenaga Medis** | `dr_andi` | `doctor123` | Spesialis Penyakit Dalam di RSUP Dr. Sardjito, akses pemeriksaan SOAP & antrean |
+| **Pasien** | `budi` (atau NIK `3171012304800001`) | `patient123` | Pasien terverifikasi KYC, akses dekripsi mandiri, booking & revoke consent |
+| **Admin Regulator** | `admin` | `admin123` | Pengawas Kemenkes, verifikasi KYC/KYD, SIEM live monitor & kill-switch |
 
 ---
 
 ## 5. Struktur Direktori Repositori
 
-Struktur repositori ditata terorganisir untuk memisahkan domain masing-masing mata kuliah:
-
 ```text
 .
-├── app/                          # Next.js App Router
-│   ├── page.tsx                  # Halaman Login & Quick Demo Peran
-│   ├── beranda/page.tsx          # Hub Utama Multi-Peran (Dokter, Pasien, Admin)
+├── app/
+│   ├── (auth)/                   # Area Autentikasi Publik
+│   │   ├── login/page.tsx        # Login multi-role (Username/Email/NIK + Demo)
+│   │   ├── register/             # Registrasi Pasien (NIK/KTP) & Nakes (STR/SIP)
+│   │   └── verifikasi-pending/   # Pemberitahuan status antrean verifikasi
+│   ├── (dashboard)/              # Area Terproteksi Multi-Role
+│   │   ├── layout.tsx            # Zero-Trust Route Guard, RoleNav, NetworkBanner
+│   │   ├── pasien/               # 8 Rute Portal Pasien (UR-P01 s.d. UR-P08)
+│   │   ├── nakes/                # 5 Rute Stasiun Kerja Nakes (UR-T01 s.d. UR-T06)
+│   │   └── admin/                # 6 Rute Konsol Admin Regulator (UR-A01 s.d. UR-A05)
+│   ├── beranda/page.tsx          # Automatic Session Redirector
 │   ├── layout.tsx                # Root Layout, Tipografi Montserrat & Metadata
-│   └── globals.css               # Konfigurasi Tailwind CSS & Utilitas sr-only
-├── components/                   # Komponen React Reusable Bertipe
-│   ├── ui/                       # StatCard, InputField, StatusBadge, TopHeader, LogoutModal
-│   └── dashboard/                # DokterView, PasienView, AdminView
-├── lib/                          # Logika Bisnis & Utilitas
-│   ├── auth/auth.ts              # Pengelolaan Sesi & Zero-Trust Role Guard
-│   └── crypto/                   # aes.ts (AES-256-GCM) & hmac.ts (HMAC-SHA256)
-├── tests/                        # Pengujian Otomatis Kriptografi
-│   └── crypto.test.ts            # Unit Test Vitest (Positif, Negatif, Batas)
-├── docs/                         # Dokumentasi Terstruktur 3 Mata Kuliah
-│   ├── PAW/                      # Pengembangan Aplikasi Web
-│   │   ├── kebutuhan.md          # Spesifikasi Kebutuhan Antarmuka & Kriteria Penerimaan
-│   │   └── arsitektur.md         # Keputusan Rancangan UI & Struktur Komponen
-│   ├── security/                 # Keamanan Komputasi dan Siber (KKS)
-│   │   ├── asset-inventory.md    # Inventaris 5 Aset Sistem
-│   │   ├── dfd.md                # Data Flow Diagram & Minimal 2 Trust Boundary
-│   │   ├── threat-model.md       # Analisis 10 Ancaman Berbasis STRIDE
-│   │   └── risk-register.md      # 5 Risiko Prioritas & Rencana Mitigasi Kontrol
-│   ├── cryptography/             # Kriptografi
-│   │   └── CRYPTO_SPEC.md        # Spesifikasi Detail Algoritma, Kunci, & Alur Data
-│   └── evidence/                 # Bukti Pengujian Terpadu
-│       └── verification.md       # Laporan Kondisi Uji Lighthouse, Form, & Vitest
-├── KEPUTUSAN.md                  # Architectural Decision Record (ADR) Kriptografi
-├── EVALUASI.md                   # Matriks Evaluasi & Hasil Pengujian Kriptografi
-├── AI_LOG.md                     # Transparansi Rekapitulasi Penggunaan Asisten AI
-├── CHANGELOG.md                  # Riwayat Perubahan Rilis v0.1
-├── ATTRIBUTION.md                # Atribusi Pustaka dan Aset Pihak Ketiga
-├── LICENSE                       # Lisensi Perangkat Lunak (MIT License)
-└── README.md                     # Dokumentasi Utama Produk
+│   └── page.tsx                  # Landing Page Publik Interaktif
+├── components/
+│   ├── shared/                   # RoleNav (Navigasi SVG), NetworkStatusBanner
+│   └── ui/                       # Icons.tsx (Vector Iconset), LogoutModal, StatCard, StatusBadge
+├── lib/
+│   ├── auth/auth.ts              # Pengelolaan Sesi & Normalisasi Peran
+│   ├── crypto/                   # aes.ts (AES-256-GCM) & hmac.ts (HMAC-SHA256)
+│   └── db/mockData.ts            # Entitas Terstandarisasi, Mock Persistence & Storage Helpers
+├── tests/
+│   └── crypto.test.ts            # Pengujian Unit Kriptografi Vitest (4/4 Passed)
+└── docs/                         # Dokumentasi Terstruktur Laporan Tugas Besar
+    ├── PAW/                      # kebutuhan.md & arsitektur.md
+    ├── security/                 # asset-inventory.md, dfd.md, threat-model.md, risk-register.md
+    └── cryptography/             # CRYPTO_SPEC.md
+```
+
+---
+
+## 6. Verifikasi & Pengujian Sistem
+
+- **Kompilasi Antarmuka**: Seluruh 26 rute Next.js terkompilasi bersih tanpa galat TypeScript (`npm run build`).
+- **Pengujian Kriptografi**: Seluruh uji unit (AES-256-GCM, HMAC-SHA256, deteksi *tamper*, dan *fail-closed*) lulus 100% (`npx vitest run`).

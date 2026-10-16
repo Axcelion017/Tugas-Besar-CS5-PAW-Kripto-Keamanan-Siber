@@ -1,128 +1,200 @@
 # Arsitektur Aplikasi & Keputusan Desain Antarmuka — Resilio-Health (PAW)
 
-Dokumen ini mendokumentasikan keputusan rancangan arsitektur, hierarki komponen antarmuka, strategi tata letak responsif, serta kontrak antarmuka (*typed interface contracts*) pada sistem Resilio-Health untuk Milestone 1 (Tag `v0.1`).
+Dokumen ini mendokumentasikan keputusan rancangan arsitektur, hierarki komponen antarmuka, strategi tata letak responsif, arsitektur *Offline-First* PWA, serta kontrak antarmuka bertipe (*strictly typed interfaces*) pada sistem Resilio-Health.
 
 ---
 
 ## 1. Keputusan Rancangan Utama (*Architectural Decisions*)
 
-### 1.1 Single-Route Role Hub (`/beranda`)
-- **Keputusan**: Alur navigasi pasca-login tidak menggunakan rute terpisah (misal `/doctor-dashboard`, `/patient-portal`, `/admin-panel`), melainkan menggunakan satu rute tunggal: `/beranda`.
+### 1.1 Transformasi dari Monolitik ke Clean Architecture (Next.js App Router)
+- **Keputusan**: Mengganti arsitektur halaman tunggal `/beranda` dengan Route Groups yang memisahkan area publik `(auth)` dan area terproteksi `(dashboard)` dengan segmentasi domain yang terisolasi: `/pasien`, `/nakes`, dan `/admin`.
 - **Alasan**:
-  - Menyederhanakan penanganan *state* sesi dan perlindungan rute (*route guard*).
-  - Merender komponen tampilan (*View Component*) secara kondisional di sisi klien berdasarkan atribut `session.role`.
-  - Mencegah pengguna biasa mengakses URL panel lain secara langsung melalui *address bar*.
+  - Menegakkan prinsip **Separation of Duties** dan **Least Privilege** secara struktural di tingkat rute peramban.
+  - Menghilangkan *cascading render* dan kerentanan kebocoran antarmuka peran lain.
+  - Memfasilitasi skalabilitas kode: penambahan fitur klinis nakes tidak mengganggu modul kontrol consent pasien atau konsol regulasi admin.
 
-### 1.2 Sistem Komponen Bertipe (*Strictly Typed Components*)
-- **Keputusan**: Seluruh komponen UI antarmuka wajib mendefinisikan kontrak TypeScript eksplisit (`interface Props`) dan dilarang menggunakan tipe `any` pada props publik.
+### 1.2 Ketahanan Offline PWA (*Offline-First Resilience Architecture*)
+- **Keputusan**: Mengadopsi arsitektur *Offline-First* menggunakan Service Worker, cache aset statis, dan media penyimpanan lokal peramban IndexedDB (`resilio_offline_queue`).
 - **Alasan**:
-  - Menjamin kode lolos pemeriksaan `npx tsc --noEmit` tanpa galat.
-  - Menjaga konsistensi data antar komponen (misal: format session, record rekam medis, badge status).
+  - Mengatasi permasalahan **Downtime Chaos** di rumah sakit: ketika koneksi internet ke server pusat (seperti SATUSEHAT) mati atau diserang ransomware, stasiun kerja nakes tetap dapat membuka data antrean dan menginput formulir pemeriksaan klinis tanpa kehilangan data sedikit pun.
+  - Data yang diinput dalam mode *offline* langsung diamankan dengan enkripsi simetris AES-256-GCM dan diberi tag integritas HMAC-SHA256 di memori klien sebelum masuk ke IndexedDB, lalu disinkronkan otomatis ke server saat jaringan pulih.
 
-### 1.3 Pemisahan Server Component dan Client Component (Next.js App Router)
+### 1.3 Zero-Knowledge Client-Side Cryptography
+- **Keputusan**: Seluruh data klinis rekam medis (keluhan, tanda vital, diagnosa, dan resep) dienkripsi di peramban menggunakan W3C Web Crypto API sebelum dikirim ke jaringan atau media penyimpanan lokal.
+- **Alasan**:
+  - **Zero-Knowledge Storage**: Admin regulator dan pihak penyedia infrastruktur *cloud* tidak memiliki kunci simetris untuk membaca isi penyakit pasien.
+  - Mencegah kebocoran data riwayat medis pasien (*Information Disclosure*) meskipun basis data pusat diretas atau disalin pihak luar.
+
+### 1.4 Sistem Komponen Bersih & Aksesibilitas Enterprise (WCAG 2.1 AA)
 - **Keputusan**:
-  - `app/layout.tsx` bertindak sebagai **Server Component** murni yang bertanggung jawab terhadap metadata dokumen HTML, konfigurasi font Google Montserrat, dan tag `lang="id"`.
-  - `app/page.tsx` dan `app/beranda/page.tsx` dideklarasikan sebagai **Client Component** (`"use client"`) karena membutuhkan akses *hooks* reaktif (`useState`, `useEffect`, `useRouter`, dan API peramban `localStorage`).
+  - Menghilangkan seluruh karakter emoji kasual dan menggantinya dengan ikon vektor SVG monokrom standar enterprise (`components/ui/Icons.tsx`) yang fleksibel dan beradaptasi dengan warna teks (`currentColor`).
+  - Mengikat setiap kontrol formulir (`<input>`, `<select>`, `<textarea>`) secara eksplisit dengan elemen `<label htmlFor="...">`.
+  - Menggunakan tipografi Google Fonts Montserrat yang dioptimalkan melalui `next/font/google` untuk efisiensi pemuatan.
 
 ---
 
-## 2. Struktur Komponen & Aliran Data (*Component Hierarchy*)
+## 2. Struktur Rute & Hierarki Komponen (*Component Hierarchy*)
 
 ```text
-app/layout.tsx (Server Component: HTML Shell, Montserrat Font, Global CSS)
+app/
+├── layout.tsx                     # Root Layout: Server Component, Montserrat font, lang="id"
+├── page.tsx                       # Landing Page Publik (Hero, Integrasi 3 Mata Kuliah, Quick Demo)
+├── beranda/page.tsx               # Automatic Session Redirector (Mendistribusikan ke rute peran)
 │
-├── app/page.tsx (Client Component: Formulir Login & Tombol Quick Demo)
+├── (auth)/                        # Route Group: Autentikasi & Registrasi Publik
+│   ├── login/page.tsx             # Login multi-role (Username/Email/NIK 16 digit + Quick Demo)
+│   ├── register/
+│   │   ├── pasien/page.tsx        # UR-P01: Pendaftaran Pasien NIK, Biodata, Alergi & Unggah KTP
+│   │   └── nakes/page.tsx         # UR-T01: Pendaftaran Dokter NIK, Nomor STR, SIP & Dokumen Kemenkes
+│   └── verifikasi-pending/page.tsx# Landing Page Pemberitahuan Kepatuhan Verifikasi KYC/KYD
 │
-└── app/beranda/page.tsx (Role-Based Dynamic Hub)
-    ├── components/ui/TopHeader.tsx (Header Navigasi Atas + Kartu Profil Aktif)
-    │     └── components/ui/LogoutModal.tsx (Dialog Konfirmasi Keluar Aksesibel)
+└── (dashboard)/                   # Route Group: Area Terproteksi Multi-Role
+    ├── layout.tsx                 # Dashboard Layout: Zero-Trust Route Guard, RoleNav, NetworkBanner
     │
-    ├── [Role: 'dokter'] ──▶ components/dashboard/DokterView.tsx
-    │     ├── components/ui/InputField.tsx (Input Berlabel Aksesibel)
-    │     ├── Form Input Klinis (Keluhan, Vital, Diagnosa, Resep)
-    │     ├── Visualisasi Grafik Fluktuasi Tanda Vital
-    │     └── Panel Bukti Kriptografi (Ciphertext AES-GCM + Digest HMAC)
+    ├── pasien/                    # Domain: PASIEN (UR-P01 s.d. UR-P08)
+    │   ├── page.tsx               # Ringkasan Kesehatan, Emergency Card, Alert Alergi & Antrean
+    │   ├── faskes/
+    │   │   ├── page.tsx           # UR-P02: Pencarian Faskes Pintar (Filter Gejala/Penyakit & Poli)
+    │   │   └── [faskesId]/page.tsx# UR-P03: Profil Faskes, Dokter Praktik, Jadwal & Kuota Harian
+    │   ├── booking/page.tsx       # UR-P04: Pemesanan Jadwal Periksa & Penerbitan Auto-Consent
+    │   ├── rekam-medis/
+    │   │   ├── page.tsx           # UR-P06: Linimasa RME, Grafik Tensi Sistolik/Diastolik, Dekripsi Kripto
+    │   │   └── [recordId]/page.tsx# Detail Bukti Hukum RME & Modul Pengujian Tamper Kripto
+    │   ├── consent/page.tsx       # UR-P05 & UR-P07: Manajemen Hak Akses, 1-Click Revoke & Transfer RME
+    │   ├── audit-log/page.tsx     # UR-P07: Transparansi Jejak Audit Siapa & Kapan Akses Data (UU PDP)
+    │   └── tiket-kendala/page.tsx # UR-P08: Pelaporan Masalah & Ketidaksesuaian Data Medis
     │
-    ├── [Role: 'pasien'] ──▶ components/dashboard/PasienView.tsx
-    │     ├── Kartu Identitas & Kamar Pasien
-    │     ├── Daftar Riwayat Rekam Medis Terenkripsi
-    │     └── Tombol Dekripsi On-Demand & Verifikasi HMAC
+    ├── nakes/                     # Domain: TENAGA KESEHATAN (UR-T01 s.d. UR-T06)
+    │   ├── page.tsx               # UR-T02: Stasiun Kerja, Status Praktik, Antrean Pasien Hari Ini
+    │   ├── periksa/[bookingId]/
+    │   │   └── page.tsx           # UR-T04: Pemeriksaan Klinis (SOAP, ICD-10, AES-GCM + HMAC Sign)
+    │   ├── pasien-lookup/page.tsx # UR-T03: Lookup Pasien NIK dengan Pertahanan BOLA/IDOR Gate
+    │   ├── rujukan/page.tsx       # UR-T06: Penerbitan Surat Rujukan Digital Lintas Faskes
+    │   └── offline-sync/page.tsx  # UR-T05 & T06: Status Antrean Sinkronisasi IndexedDB Offline
     │
-    └── [Role: 'admin']  ──▶ components/dashboard/AdminView.tsx
-          ├── Tabel Delegasi Penugasan Dokter ke Pasien Bangsal
-          ├── Modul Simulasi Manipulasi Data (HMAC Tamper Test)
-          └── Audit Log Aktivitas Keamanan
+    └── admin/                     # Domain: ADMIN REGULATOR (UR-A01 s.d. UR-A05)
+        ├── page.tsx               # Ringkasan Eksekutif, Status Sistem & Agregat Keamanan
+        ├── verifikasi-kyc/page.tsx# UR-A01: Antrean Verifikasi KTP/NIK Pasien (Approve / Reject)
+        ├── verifikasi-kyd/page.tsx# UR-A02: Verifikasi STR & SIP Dokter Konsil Kedokteran
+        ├── faskes/page.tsx        # UR-A03: Master Direktori Faskes & Ransomware Kill-Switch
+        ├── siem-monitor/page.tsx  # UR-A04: SIEM Live Security Feed (IDOR, HMAC Alarms, Probe Test)
+        └── incident-center/page.tsx# UR-A05: Failed Sync Queue & Penanganan Tiket Masalah Teknis
 ```
 
-3. Kontrak Antarmuka Komponen (TypeScript Interface Contracts)
-3.1 Kontrak Sesi Pengguna (lib/auth/auth.ts)
-typescript
+---
+
+## 3. Komponen Bersama (*Shared Components*)
+
+1. **`RoleNav.tsx` (`components/shared/RoleNav.tsx`)**:
+   - Sidebar navigasi adaptif yang secara otomatis memuat menu tautan spesifik sesuai peran aktif pengguna (Pasien, Nakes, Admin).
+   - Menggunakan ikon SVG vektor monokrom (`components/ui/Icons.tsx`) untuk menjamin tampilan bersih, profesional, dan bebas dari emoji.
+   - Terintegrasi dengan modal konfirmasi keluar sesi (`LogoutModal.tsx`).
+2. **`NetworkStatusBanner.tsx` (`components/shared/NetworkStatusBanner.tsx`)**:
+   - Indikator status jaringan waktu nyata (Hijau = Terhubung Server Pusat; Kuning = Mode Offline IndexedDB).
+   - Dilengkapi tombol simulasi pemutus jaringan dan *badge counter* jumlah berkas rekam medis yang sedang mengantre di IndexedDB.
+3. **`LogoutModal.tsx` (`components/ui/LogoutModal.tsx`)**:
+   - Dialog konfirmasi keluar sesi aksesibel yang membersihkan seluruh kunci sesi dan kredensial sementara di memori peramban.
+
+---
+
+## 4. Kontrak Tipe Data TypeScript (*TypeScript Typed Contracts*)
+
+### 4.1 Sesi Pengguna & Autentikasi (`lib/auth/auth.ts`)
+```typescript
+export type UserRole = "doctor" | "patient" | "admin" | "nakes" | "pasien";
+
 export interface UserSession {
-  id: string;              // Contoh: "DOC-01", "P-101", "ADM-01"
-  username: string;        // Contoh: "dr_andi", "budi", "admin"
-  name: string;            // Contoh: "dr. Andi Pratama, Sp.PD"
-  role: "dokter" | "pasien" | "admin";
-  specialization?: string; // Khusus dokter
-  room?: string;           // Khusus pasien
+  id: string;              // "DOC-01", "P-101", "ADM-01"
+  name: string;            // Nama lengkap dan gelar
+  username: string;        // Nama pengguna unik
+  role: UserRole;          // Peran pengguna
+  nik?: string;            // Nomor Induk Kependudukan 16 digit
+  strNumber?: string;      // Nomor Surat Tanda Registrasi (Nakes)
+  sipNumber?: string;      // Nomor Surat Izin Praktik (Nakes)
+  specialization?: string; // Spesialisasi dokter
+  faskesId?: string;       // ID fasilitas kesehatan bertugas
+  faskesName?: string;     // Nama faskes bertugas
+  status?: "VERIFIED" | "PENDING" | "REJECTED";
+  allergies?: string[];    // Riwayat alergi obat/makanan kritis
+  bloodType?: string;      // Golongan darah
+  phone?: string;          // Nomor kontak
+  encryptionKeyHex?: string; // Kunci enkripsi simetris 256-bit klien
+}
+```
+
+### 4.2 Dokumen Rekam Medis Klinis (SOAP & Kriptografi)
+```typescript
+export interface VitalSigns {
+  systolic: number;        // Batas normal: 90 - 180 mmHg
+  diastolic: number;       // Batas normal: 60 - 120 mmHg
+  heartRate: number;       // Batas normal: 50 - 150 bpm
+  temperature: number;     // Batas normal: 35.0 - 41.0 °C
+  respiratoryRate?: number;// Laju pernapasan per menit
+  spo2: number;            // Saturasi oksigen (%)
 }
 
-3.2 Kontrak Entitas Rekam Medis Terenkripsi
-typescript
 export interface EncryptedMedicalRecord {
-  recordId: string;        // ID unik record (misal: "REC-1728876543")
-  patientId: string;       // ID pasien pemilik record
-  doctorId: string;        // ID dokter pembuat diagnosa
-  timestamp: string;       // Waktu ISO-8601 pembuatan record
+  recordId: string;        // "REC-2026-001"
+  patientId: string;       // ID pasien pemilik rekam medis
+  patientName: string;     // Nama lengkap pasien
+  faskesId: string;        // ID faskes pemeriksaan
+  faskesNama: string;      // Nama faskes pemeriksaan
+  dokterStr: string;       // Atribusi nomor STR dokter pemeriksa
+  dokterNama: string;      // Nama dokter pemeriksa
+  primaryIcd10: string;    // Kode standar internasional (misal: "I10", "J06.9")
+  diagnosisShort: string;  // Deskripsi ringkas diagnosis
   encryptedPayload: string;// Ciphertext heksadesimal hasil AES-256-GCM
-  ivHex: string;           // Initialization Vector 96-bit (24 karakter hex)
-  hmacDigest: string;      // Digest autentikasi HMAC-SHA256
-  vitals: {
-    sistolik: number;
-    diastolik: number;
-    suhuTubuh: number;
-    detakJantung: number;
-  };
+  ivHex: string;           // Initialization Vector acak 96-bit (24 hex chars)
+  hmacDigest: string;      // Tag integritas HMAC-SHA256 (64 hex chars)
+  timestamp: string;       // Waktu pemeriksaan
+  isOfflineCreated?: boolean; // Penanda dibuat saat offline mode
+  version: number;         // Versi revisi addendum (immutable)
 }
-3.3 Kontrak Komponen Reusable UI (components/ui/)
+```
 
-InputField:
-typescript
-interface InputFieldProps extends React.InputHTMLAttributes<HTMLInputElement> {
-  id: string;
-  label: string;
-  error?: string;
-  helperText?: string;
+### 4.3 Izin Akses & Kedaulatan Pasien (Consent Management)
+```typescript
+export interface AccessGrant {
+  id: string;              // "GRANT-01"
+  pasienId: string;        // ID pasien pemberi izin
+  pasienNama: string;      // Nama pasien
+  entityId: string;        // ID dokter atau ID faskes terotorisasi
+  entityNama: string;      // Nama dokter atau faskes
+  entityType: "DOKTER" | "FASKES";
+  scope: string;           // Lingkup izin medis (misal: "Konsultasi Kardiologi")
+  validUntil: string;      // Tanggal dan waktu berakhir izin
+  isRevoked: boolean;      // Status pencabutan 1-Click Revoke
+  createdAt: string;       // Waktu penerbitan izin
 }
-StatCard:
-typescript
-interface StatCardProps {
-  title: string;
-  value: string | number;
-  description?: string;
-  trend?: "up" | "down" | "neutral";
-  icon?: React.ReactNode;
+```
+
+### 4.4 Audit Keamanan & SIEM Event Log
+```typescript
+export interface SecurityAuditLog {
+  id: string;              // "LOG-01"
+  timestamp: string;       // Waktu kejadian ISO/Lokal
+  actorId: string;         // ID pengguna pelaku aksi
+  actorName: string;       // Nama pelaku aksi
+  actorRole: "PASIEN" | "NAKES" | "ADMIN" | "GATEWAY";
+  action: "LOGIN" | "VIEW_RME" | "WRITE_RME" | "IDOR_BLOCKED" | "HMAC_VERIFIED" | "HMAC_MISMATCH" | "REVOKE_CONSENT" | "QUARANTINE_FASKES";
+  targetResource: string;  // Resource URL (misal: "/api/rme/record-P101-01")
+  ipAddress: string;       // Alamat IP klien
+  userAgent: string;       // Informasi peramban/klien
+  severity: "INFO" | "WARN" | "CRITICAL";
+  detail: string;          // Kronologi dan alasan mitigasi
 }
-StatusBadge:
-typescript
-interface StatusBadgeProps {
-  variant: "success" | "warning" | "danger" | "neutral";
-  label: string;
-  size?: "sm" | "md";
-}
+```
 
-![alt text](image.png)
+---
 
-5. Strategi Aksesibilitas Web (WCAG 2.1 AA)
+## 5. Strategi Aksesibilitas Web (WCAG 2.1 AA)
 
-Semantik HTML5:
-Penggunaan elemen landmark standar: <header>, <main>, <aside>, <nav>, dan <footer>.
-
-Keterikatan Kontrol Formulir:
-Seluruh elemen masukan (<input>, <textarea>, <select>) terikat secara eksplisit dengan elemen <label> melalui pasangan atribut htmlFor dan id.
-
-Kontras Warna Teruji:
-Teks gelap di atas latar belakang terang menggunakan palet Slate-900 dan Slate-600 untuk memenuhi rasio kontras ≥4.5:1 terhadap latar belakang Slate-50 dan Putih.
-
-Navigasi Keyboard & ARIA:
-Elemen interaktif memiliki focus indicator yang jelas (focus:ring-2 focus:ring-red-500).
-Kontrol tanpa teks visual dilengkapi atribut aria-label deskriptif.
+1. **Semantik HTML5**:
+   - Penggunaan elemen landmark struktural yang tepat: `<header>`, `<main>`, `<aside>`, `<nav>`, dan `<footer>`.
+2. **Keterikatan Kontrol Formulir**:
+   - Seluruh elemen kontrol formulir (`<input>`, `<select>`, `<textarea>`) terikat secara eksplisit dengan elemen `<label>` melalui pasangan atribut `htmlFor` dan `id` yang unik.
+3. **Kontras Warna Teruji**:
+   - Teks gelap di atas latar belakang terang menggunakan palet Slate-900 dan Slate-600 untuk memenuhi rasio kontras $\ge 4.5:1$ terhadap latar belakang `#F8FAFC` dan Putih.
+4. **Navigasi Keyboard & Indikator Fokus**:
+   - Elemen interaktif memiliki *focus indicator* yang tegas (`focus:ring-2 focus:ring-blue-500` atau `focus:ring-emerald-500`).
+   - Kontrol tanpa teks visual dilengkapi atribut `aria-label` deskriptif.

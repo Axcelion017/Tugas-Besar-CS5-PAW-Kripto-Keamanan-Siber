@@ -4,12 +4,12 @@ import React from "react";
 
 interface LogoutModalProps {
   isOpen: boolean;
-  userName?: string; // Menghilangkan garis merah userName
+  userName?: string;
   username?: string;
   name?: string;
   onClose: () => void;
   onConfirm: () => void;
-  [key: string]: any; // Fleksibel untuk properti tambahan
+  [key: string]: unknown;
 }
 
 export function LogoutModal({

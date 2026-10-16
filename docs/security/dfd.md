@@ -1,39 +1,43 @@
 # Data Flow Diagram (DFD) — Resilio-Health
 
-Dokumen ini memetakan arsitektur aliran data, batas kepercayaan (*Trust Boundaries*), proses komputasi, dan penyimpanan data pada sistem Resilio-Health sesuai ketentuan Tugas 1 Keamanan Komputasi dan Siber (Penanda `sec-0.1`).
+Dokumen ini memetakan arsitektur aliran data, batas kepercayaan (*Trust Boundaries*), proses komputasi, dan penyimpanan data pada sistem Resilio-Health sesuai ketentuan Tugas 1 Keamanan Komputasi dan Siber (Penanda `sec-0.1` dan `sec-0.2`).
 
 ---
 
 ## 1. Katalog Elemen Diagram Alir Data
 
 ### 1.1 Entitas Eksternal (*External Entities*)
-| ID Entitas | Nama Entitas | Deskripsi Peran & Tingkat Kepercayaan |
+| ID Entitas | Nama Entitas | Deskripsi Peran & Hak Akses |
 | :--- | :--- | :--- |
-| **EXT-01** | **Dokter (Clinician)** | Tenaga medis terotentikasi yang menginput keluhan, diagnosa, resep, dan tanda vital pasien. |
-| **EXT-02** | **Pasien (Patient)** | Pemilik data medis yang mengakses riwayat rekam medis pribadi dan memegang kunci dekripsi. |
-| **EXT-03** | **Administrator** | Pengelola sistem yang mendelegasikan penugasan dokter-pasien dan mengawasi audit integritas. |
+| **EXT-01** | **Pasien (Patient)** | Pemilik sah data medis yang mengontrol izin akses (*Consent*), mencari faskes, memesan jadwal, dan mendekripsi rekam medis pribadi via kunci privat. |
+| **EXT-02** | **Tenaga Kesehatan (Dokter/Perawat)** | Tenaga medis berlisensi (STR/SIP) yang memeriksa pasien, menginput data SOAP, menerbitkan rujukan, dan mengoperasikan sistem baik saat *online* maupun *offline*. |
+| **EXT-03** | **Admin Regulator (Kemenkes)** | Pengawas sistem yang memvalidasi identitas kependudukan (KYC), lisensi dokter (KYD), memantau log SIEM, dan mengaktifkan saklar darurat *kill-switch* isolasi faskes. |
 
 ### 1.2 Proses Komputasi (*Processes*)
 | ID Proses | Nama Proses | Deskripsi Operasi |
 | :--- | :--- | :--- |
-| **PRC-01** | **Client Form Validation & Sanitization** | Memvalidasi kelengkapan teks, tipe data, dan batas fisiologis tanda vital di memori peramban. |
-| **PRC-02** | **Zero-Trust Access Gateway** | Memeriksa apakah dokter aktif memiliki hak penugasan terhadap pasien bangsal yang dipilih. |
-| **PRC-03** | **Cryptographic Engine (Encrypt & Sign)** | Membangkitkan IV 96-bit (CSPRNG), mengenkripsi payload via AES-256-GCM, dan membuat digest HMAC-SHA256. |
-| **PRC-04** | **Decryption & HMAC Verification Engine** | Memverifikasi keutuhan ciphertext via HMAC-SHA256 dan mendekripsi data menggunakan kunci pasien. |
-| **PRC-05** | **Assignment & Session Manager** | Mengelola sesi login pengguna aktif dan pembaruan relasi penugasan dokter-pasien bangsal. |
+| **PRC-01** | **KYC & KYD Identity Verification Gateway** | Memvalidasi keaslian dokumen NIK/KTP pasien dan lisensi STR/SIP dokter sebelum status akun diaktifkan. |
+| **PRC-02** | **Zero-Trust BOLA / IDOR Gatekeeper** | Memeriksa kepemilikan data dan keabsahan tiket izin akses aktif (`access_grants`) sebelum mengembalikan rekam medis pasien. Akses tanpa izin diblokir 403 Forbidden. |
+| **PRC-03** | **SOAP Clinical & Client Encryption Engine** | Memvalidasi input SOAP (ICD-10, vital signs), membangkitkan IV 96-bit (CSPRNG), mengenkripsi payload via AES-256-GCM, dan membuat digest HMAC-SHA256 di browser. |
+| **PRC-04** | **Decryption & HMAC Integrity Verifier** | Memverifikasi keutuhan ciphertext via HMAC-SHA256 (Fail-Closed) dan mendekripsi plaintext klinis hanya di browser pasien/dokter berizin. |
+| **PRC-05** | **Offline Queue & Background Sync Manager** | Menangkap kegagalan jaringan via Service Worker, mengantrekan ciphertext terenkripsi di IndexedDB, dan mengirimkannya ke server saat online. |
+| **PRC-06** | **SIEM Logger & Faskes Kill-Switch Engine** | Mencatat log keamanan (IDOR, HMAC failure, login) dan mengeksekusi karantina faskes untuk mengisolasi faskes yang terinfeksi ransomware. |
 
 ### 1.3 Penyimpanan Data (*Data Stores*)
-| ID Penyimpanan | Nama Penyimpanan | Tipe Media | Klasifikasi Data & Status Proteksi Kriptografi |
+| ID Penyimpanan | Nama Penyimpanan | Tipe Media | Klasifikasi Data & Proteksi |
 | :--- | :--- | :--- | :--- |
-| **DS-01** | `resilio_records` | Local Storage / Persistensi Web | **Sangat Rahasia [DILINDUNGI KRIPTOGRAFI]**<br>Hanya menyimpan ciphertext heksadesimal, IV, digest HMAC, dan metadata waktu (Zero-Knowledge Admin). |
-| **DS-02** | `resilio_patients` | Local Storage / Persistensi Web | **Internal Terbatas**<br>Menyimpan data identitas pasien, kamar rawat inap, dan ID dokter yang ditugaskan (`assignedDoctorId`). |
-| **DS-03** | `resilio_session` | Local Storage / Session Memory | **Rahasia**<br>Menyimpan token sesi aktif, ID pengguna, peran (*role*), dan nama pengguna yang sedang masuk. |
+| **DS-01** | `resilio_records` | Basis Data Server / PostgreSQL | **Sangat Rahasia [TERENKRIPSI]**<br>Hanya menyimpan ciphertext AES-256-GCM, IV heksadesimal, HMAC digest, dan metadata ICD-10 (Zero-Knowledge Admin). |
+| **DS-02** | `resilio_patients` & `appointments` | Basis Data Server / PostgreSQL | **Internal Terbatas**<br>Menyimpan data identitas pasien, NIK, golongan darah, riwayat alergi, dan jadwal antrean. |
+| **DS-03** | `resilio_access_grants` | Basis Data Server / PostgreSQL | **Rahasia**<br>Tabel relasi izin akses medis aktif antara pasien dan dokter/faskes (pondasi pertahanan BOLA/IDOR). |
+| **DS-04** | `resilio_offline_queue` | IndexedDB Browser Lokal | **Sangat Rahasia [TERENKRIPSI]**<br>Antrean data rekam medis terenkripsi yang disimpan lokal di komputer klinik saat offline mode. |
+| **DS-05** | `resilio_security_logs` & `faskes` | Storage / SIEM Stream | **Internal Kritis**<br>Jejak audit keamanan sistem, anomali serangan IDOR, dan status isolasi faskes (`ACTIVE` / `QUARANTINED`). |
 
 ### 1.4 Batas Kepercayaan (*Trust Boundaries*)
-| ID Boundary | Nama Batas Kepercayaan | Deskripsi & Garis Demarkasi |
+| ID Boundary | Nama Batas Kepercayaan | Deskripsi Garis Demarkasi |
 | :--- | :--- | :--- |
-| **TB-1** | **User-to-Client Interface Boundary** | Memisahkan pengguna fisik eksternal (di luar peramban) dengan runtime aplikasi React/Next.js di memori peramban. Rentan terhadap kesalahan input pengguna (*User Input Error*). |
-| **TB-2** | **Memory-to-Storage Boundary (Untrusted Storage Zone)** | Memisahkan memori aplikasi terpercaya (*Trusted Client Memory*) dengan media penyimpanan persisten (`localStorage` / transit jaringan). **Seluruh data yang melintasi TB-2 wajib dalam bentuk terenkripsi (Ciphertext + HMAC)**. |
+| **TB-1** | **User-to-Client Interface Boundary** | Memisahkan pengguna fisik di luar browser dengan runtime antarmuka React/Next.js. Rentan terhadap masukan berbahaya (XSS / malformed data). |
+| **TB-2** | **Memory-to-Local Storage Boundary** | Memisahkan memori aplikasi terpercaya dengan media penyimpanan browser (`localStorage` / `IndexedDB`). **Data rekam medis wajib dalam bentuk Ciphertext + HMAC**. |
+| **TB-3** | **Client-to-Server Network Boundary** | Jalur transmisi internet/LAN faskes ke server pusat cloud. Rentan terhadap Man-in-the-Middle (MitM) dan pemadaman jaringan (*Downtime*). |
 
 ---
 
@@ -43,9 +47,9 @@ Dokumen ini memetakan arsitektur aliran data, batas kepercayaan (*Trust Boundari
 flowchart TD
     %% Entitas Eksternal
     subgraph External_Entities ["Entitas Eksternal (Untrusted Zone)"]
-        EXT01["EXT-01: Dokter"]
-        EXT02["EXT-02: Pasien"]
-        EXT03["EXT-03: Administrator"]
+        EXT01["EXT-01: Pasien"]
+        EXT02["EXT-02: Tenaga Kesehatan / Dokter"]
+        EXT03["EXT-03: Admin Regulator Kemenkes"]
     end
 
     %% Trust Boundary 1
@@ -53,59 +57,80 @@ flowchart TD
 
     %% Trusted Client Runtime
     subgraph Trusted_Client_Runtime ["Aplikasi Web Klien (Trusted Runtime Zone)"]
-        PRC01["PRC-01: Client Form Validation & Sanitization"]
-        PRC02["PRC-02: Zero-Trust Access Gateway"]
-        PRC03["PRC-03: Cryptographic Engine\n(AES-256-GCM + HMAC-SHA256)"]
-        PRC04["PRC-04: Decryption & HMAC Integrity Verifier"]
-        PRC05["PRC-05: Assignment & Session Manager"]
+        PRC01["PRC-01: KYC/KYD Identity Verifier"]
+        PRC02["PRC-02: Zero-Trust BOLA/IDOR Gate"]
+        PRC03["PRC-03: SOAP & Client Crypto Engine\n(AES-256-GCM + HMAC-SHA256)"]
+        PRC04["PRC-04: Decryption & HMAC Verifier"]
+        PRC05["PRC-05: Offline Queue & Sync Manager"]
+        PRC06["PRC-06: SIEM Logger & Kill-Switch"]
     end
 
-    %% Trust Boundary 2
-    TB2{{"=== TB-2: Memory-to-Storage Boundary (Untrusted Storage Zone) ==="}}
+    %% Trust Boundary 2 & 3
+    TB2{{"=== TB-2: Memory-to-Local Storage Boundary (IndexedDB) ==="}}
+    TB3{{"=== TB-3: Client-to-Server Network Boundary (REST API) ==="}}
 
     %% Data Stores
-    subgraph Persistent_Storage ["Penyimpanan Data Lokal / Transit"]
-        DS01[("DS-01: resilio_records\n[DILINDUNGI KRIPTOGRAFI:\nCiphertext + IV + HMAC]")]
-        DS02[("DS-02: resilio_patients\n(Relasi Penugasan Bangsal)")]
-        DS03[("DS-03: resilio_session\n(Token Sesi & Status Peran)")]
+    subgraph Storage_Zone ["Penyimpanan Data Server & Lokal"]
+        DS01[("DS-01: resilio_records\n[Zero-Knowledge Ciphertext + HMAC]")]
+        DS02[("DS-02: patients & appointments\n(Data Identitas & Antrean)")]
+        DS03[("DS-03: access_grants\n(Consent Tickets & Revoke)")]
+        DS04[("DS-04: resilio_offline_queue\n(IndexedDB Antrean Offline)")]
+        DS05[("DS-05: security_logs & faskes\n(SIEM Events & Kill-Switch)")]
     end
 
-    %% Aliran Data Dokter
-    EXT01 -->|"DF-01: Input Klinis (Plaintext)"| TB1
-    TB1 -->|"DF-02: Raw Form Data"| PRC01
-    PRC01 -->|"DF-03: Validated Clinical Data"| PRC02
-    PRC02 -.->|"DF-04: Cek Penugasan Dokter"| DS02
-    PRC02 -->|"DF-05: Approved Payload + Kunci Pasien"| PRC03
-    PRC03 -->|"DF-06: Ciphertext + IV + HMAC Digest"| TB2
-    TB2 -->|"DF-07: Tulis Record Aman"| DS01
+    %% Alur Pasien
+    EXT01 -->|"Registrasi NIK & Unggah KTP"| TB1
+    TB1 -->|"Verifikasi KYC"| PRC01
+    PRC01 -->|"Update Akun Terverifikasi"| DS02
+    EXT01 -->|"Booking & Auto-Consent"| TB1
+    TB1 -->|"Terbitkan Tiket Akses"| DS03
+    EXT01 -->|"Request Rekam Medis Pribadi"| TB1
+    TB1 -->|"Kunci Pasien + Dekripsi"| PRC04
+    DS01 -->|"Ambil Ciphertext + HMAC"| TB3
+    TB3 -->|"Verifikasi HMAC & Dekripsi Klien"| PRC04
+    PRC04 -->|"Plaintext SOAP Terdekripsi"| EXT01
 
-    %% Aliran Data Admin
-    EXT03 -->|"DF-08: Penugasan Dokter Bangsal"| TB1
-    TB1 -->|"DF-09: Update Relasi Penugasan"| PRC05
-    PRC05 -->|"DF-10: Tulis Status Penugasan"| DS02
+    %% Alur Dokter (Nakes)
+    EXT02 -->|"Cari Pasien NIK"| TB1
+    TB1 -->|"Cek Relasi Izin (Anti-IDOR)"| PRC02
+    PRC02 -.->|"Validasi Consent Aktif"| DS03
+    PRC02 -->|"Jika Ilegal: Blokir 403 & Log SIEM"| PRC06
+    PRC06 -->|"Catat Anomali IDOR"| DS05
+    EXT02 -->|"Input SOAP & ICD-10"| TB1
+    TB1 -->|"Enkripsi AES-GCM + Sign HMAC"| PRC03
+    PRC03 -->|"Jika Offline: Simpan ke Antrean Lokal"| TB2
+    TB2 -->|"Antrean Offline"| DS04
+    PRC03 -->|"Jika Online: Kirim Ciphertext"| TB3
+    TB3 -->|"Simpan RME Terenkripsi"| DS01
 
-    %% Aliran Data Pasien
-    EXT02 -->|"DF-11: Permintaan Rekam Medis Pribadi"| TB1
-    TB1 -->|"DF-12: Kunci Pasien + Permintaan Dekripsi"| PRC04
-    DS01 -->|"DF-13: Baca Ciphertext + HMAC Digest"| TB2
-    TB2 -->|"DF-14: Verifikasi & Dekripsi"| PRC04
-    PRC04 -->|"DF-15: Plaintext Diagnosa Terverifikasi"| EXT02
+    %% Alur Admin
+    EXT03 -->|"Validasi Berkas STR/SIP Dokter"| TB1
+    TB1 -->|"Aktivasi Akun Dokter (KYD)"| PRC01
+    EXT03 -->|"Monitor Live SIEM Log"| TB1
+    TB1 -->|"Ambil Audit Trail"| DS05
+    EXT03 -->|"Aktivasi Kill-Switch Faskes"| TB1
+    TB1 -->|"Karantina Jaringan Faskes"| PRC06
+    PRC06 -->|"Update Status Faskes QUARANTINED"| DS05
 
     %% Styling
     classDef cryptoProtected fill:#dcfce7,stroke:#16a34a,stroke-width:2px;
     classDef boundary fill:#fee2e2,stroke:#dc2626,stroke-width:2px,stroke-dasharray: 5 5;
-    class DS01 cryptoProtected;
-    class TB1,TB2 boundary;
+    class DS01,DS04 cryptoProtected;
+    class TB1,TB2,TB3 boundary;
 ```
-3. Matriks Aliran Data (Data Flow Matrix)
-    ![alt text](dataflowmatrix.png)
 
-4. Titik Penegakan Keamanan Kriptografi (Cryptographic Enforcement Points)
-Titik Enkripsi (Enforcement Point 1 — PRC-03):
-Terjadi tepat sebelum data klinis menembus TB-2 menuju DS-01.
-Menggunakan algoritma AES-256-GCM dengan pembangkitan IV baru per record menggunakan CSPRNG crypto.getRandomValues().
-Titik Integritas (Enforcement Point 2 — PRC-03 & PRC-04):
-Digest HMAC-SHA256 dihitung atas string ciphertext.
-Saat pembacaan data di PRC-04, digest dihitung ulang dan dicocokkan; jika terdapat perbedaan, proses dekripsi dibatalkan seketika (Fail-Closed).
-Titik Isolasi Kunci (Enforcement Point 3 — Memory Isolation):
-Kunci enkripsi pasien tidak pernah disimpan secara permanen bersama ciphertext di DS-01, melainkan dikelola terpisah di sisi klien.
+---
+
+## 3. Titik Penegakan Keamanan Kriptografi (*Enforcement Points*)
+
+1. **Titik Enkripsi Sisi Klien (Enforcement Point 1 — PRC-03)**:
+   - Terjadi di browser dokter sebelum data klinis menembus `TB-2` (ke IndexedDB) atau `TB-3` (ke server pusat).
+   - Menggunakan AES-256-GCM dengan pembangkitan IV baru per rekam medis melalui CSPRNG `window.crypto.getRandomValues()`.
+2. **Titik Integritas Data (Enforcement Point 2 — PRC-03 & PRC-04)**:
+   - Tag HMAC-SHA256 dihitung langsung atas string ciphertext.
+   - Saat pembacaan data di PRC-04, tag dihitung ulang dan dicocokkan; jika terdapat perbedaan sekecil 1 bit, proses dekripsi langsung dibatalkan (*Fail-Closed*).
+3. **Titik Pertahanan BOLA / IDOR (Enforcement Point 3 — PRC-02)**:
+   - Terjadi di pintu gerbang pemanggilan API data pasien.
+   - Gateway secara atomik memeriksa tabel `access_grants`; jika tidak ditemukan tiket izin aktif yang cocok dengan ID dokter, sistem menolak pengembalian ciphertext dan mengirim notifikasi alert ke SIEM.
+4. **Titik Karantina Faskes (Enforcement Point 4 — PRC-06)**:
+   - Berfungsi sebagai saklar pembeku (*Kill-Switch*) yang memutus seluruh komunikasi API dari faskes yang terinfeksi ransomware.
