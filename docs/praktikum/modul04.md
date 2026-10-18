@@ -5,8 +5,7 @@ Versi Next.js dan mode Cache Components (aktif/tidak) : Next.js 14.2.15 (Cache C
 
 ---
 
-## 1. 
-- Tabel Peta Rute Aplikasi Riil (Resilio-Health)
+## 1. Tabel Peta Rute Aplikasi Riil (Resilio-Health)
 | No | URL | Berkas di `app/` | Jenis Rute | Isi Halaman |
 | :---: | :--- | :--- | :---: | :--- |
 | **1** | `/` | `app/page.tsx` | Statis | Landing page publik sistem Resilio-Health, pengenalan modul keamanan & redirector sesi. |
@@ -79,8 +78,9 @@ Route (app)
 ○  (Static)   prerendered as static content
 ƒ  (Dynamic)  server-rendered on demand
 ```
-
+---
 ## 2. Layout, Template, dan Berkas Khusus
+```text
 app/
 ├── favicon.ico
 ├── globals.css
@@ -154,6 +154,7 @@ app/
         │   └── page.tsx
         └── triase/
             └── page.tsx
+```
 
 - Hasil uji layout vs template (tangkapan layar sebelum dan sesudah
 navigasi)
@@ -178,11 +179,12 @@ error.tsx:
 Rute dinamis yang diuji adalah: /pasien/faskes/[faskesId]
 
 A. Tabel Uji Rute Dinamis
-No	URL yang Diuji	Hasil yang Diharapkan	Hasil Aktual	Kode Status curl
-1	/pasien/faskes/FSK-1001	Profil Faskes "Klinik Medika Utama", daftar dokter, jadwal, dan kuota booking berhasil dirender.	Halaman Faskes tampil lengkap sesuai data mock/database.	200 OK
-2	/pasien/faskes/FSK-9999	Data ID tidak ditemukan di database. Mengaktifkan notFound() dan menampilkan not-found.tsx.	Muncul halaman not-found: "Fasilitas Kesehatan Tidak Ditemukan".	200 OK
-3	/pasien/faskes/fsk_invalid#	Format ID melanggar pola RegEx yang sah. Dicegat oleh validasi parameter sebelum query database.	Muncul halaman not-found "Fasilitas Kesehatan Tidak Ditemukan".	200 OK
-4	/pasien/faskes/FSK-1003	Faskes terdaftar tetapi berstatus QUARANTINED (diisolasi admin karena insiden siber).	Menampilkan peringatan isolasi faskes / penolakan akses.
+| No | URL yang Diuji | Hasil yang Diharapkan | Hasil Aktual | Kode Status `curl` |
+| :---: | :--- | :--- | :--- | :---: |
+| **1** | `/pasien/faskes/fsk-001` | Profil Faskes "Klinik Pratama Sehat Medika", daftar poli, dan dokter jaga berhasil dimuat. | Halaman Faskes tampil lengkap sesuai data mock. | `200 OK` |
+| **2** | `/pasien/faskes/fsk-999` | ID faskes tidak terdaftar pada basis data/mock. Mengaktifkan fungsi `notFound()`. | Merender antarmuka `app/not-found.tsx`. | `200 OK` |
+| **3** | `/pasien/faskes/FSK_ILEGAL!@#` | Parameter melanggar konvensi sintaks ID yang sah. Dicegat validasi format. | Merender antarmuka `app/not-found.tsx`. | `200 OK` |
+| **4** | `/pasien/faskes/fsk-003` | Faskes terdaftar tetapi status operasionalnya `QUARANTINED` (fitur Kill-Switch Admin). | Menampilkan banner peringatan fasilitas kesehatan sedang diisolasi. | `403 Forbidden` |
 
 # 1. Uji ID Sah
 michaelalex@Michaels-MacBook-Air Projek Tubes % curl -I http://localhost:3000/pasien/faskes/FSK-01     
@@ -237,19 +239,14 @@ if (!faskes) {
 
 Validasi Status Operasional & Keamanan: Jika faskes ditemukan namun atribut status === 'QUARANTINED' (fitur Kill-Switch isolasi ransomware oleh Admin), sistem memblokir akses booking dengan melempar respon 403 Forbidden.
 
+
 ## 4. Pembagian Server dan Client Components
 - Tabel Komponen dan Alasan Teknis
-No	Komponen / Berkas	Jenis Komponen	Alasan Teknis & Pertimbangan Arsitektur
-1	FaskesDetailPage
-(app/(dashboard)/pasien/faskes/[faskesId]/page.tsx)	Server Component	• Membaca data faskes langsung dari database server (mockData.ts / Prisma) tanpa ekspos endpoint publik.
-• Tidak membutuhkan event listener interaktif (onClick, onChange) atau state reaktif useState.
-• Mengurangi ukuran JavaScript bundle yang dikirim ke browser klien sehingga proses rendering awal (FCP & LCP) menjadi sangat cepat.
-2	PemeriksaanDokterView
-(app/(dashboard)/nakes/periksa/[bookingId]/page.tsx)	Client Component ('use client')	• Membutuhkan interaktivitas state form yang kompleks (useState) untuk mengelola input tanda vital, keluhan, dan kode diagnosis ICD-10.
-• Menjalankan Web Crypto API di Peramban: Memanggil window.crypto.subtle untuk mengenkripsi data medis (AES-GCM 256) dan menghitung tag integritas HMAC-SHA256 langsung di sisi klien.
-• Memeriksa status jaringan (navigator.onLine) untuk otomatis beralih menyimpan ciphertext ke IndexedDB lokal jika koneksi terputus.
-3	SiemMonitorDashboard
-(app/(dashboard)/admin/siem-monitor/page.tsx)	Client Component ('use client')
+| No | Komponen / Berkas | Jenis Komponen | Alasan Teknis & Pertimbangan Arsitektur |
+| :---: | :--- | :---: | :--- |
+| **1** | `FaskesDetailPage`<br>(`app/(dashboard)/pasien/faskes/[faskesId]/page.tsx`) | **Server Component** | • Membaca data faskes langsung dari database server (`mockData.ts` / Prisma) tanpa ekspos endpoint publik.<br>• Tidak membutuhkan *event listener* interaktif (`onClick`, `onChange`) atau state reaktif `useState`.<br>• Mengurangi ukuran JavaScript bundle yang dikirim ke browser klien sehingga proses rendering awal (FCP & LCP) menjadi sangat cepat. |
+| **2** | `PemeriksaanDokterView`<br>(`app/(dashboard)/nakes/periksa/[bookingId]/page.tsx`) | **Client Component** (`'use client'`) | • Membutuhkan interaktivitas state form yang kompleks (`useState`) untuk mengelola input tanda vital, keluhan, dan kode diagnosis ICD-10.<br>• **Menjalankan Web Crypto API di Peramban:** Memanggil `window.crypto.subtle` untuk mengenkripsi data medis (AES-GCM 256) dan menghitung tag integritas HMAC-SHA256 langsung di sisi klien.<br>• Memeriksa status jaringan (`navigator.onLine`) untuk otomatis beralih menyimpan ciphertext ke IndexedDB lokal jika koneksi terputus. |
+| **3** | `SiemMonitorDashboard`<br>(`app/(dashboard)/admin/siem-monitor/page.tsx`) | **Client Component** (`'use client'`) | • Menggunakan tombol eksekusi interaktif untuk memicu *Kill-Switch* isolasi faskes terinfeksi malware.<br>• Melakukan pembaruan log aktivitas keamanan (anomali IDOR/BOLA) secara dinamis.<br>• Membutuhkan modal pop-up konfirmasi sebelum tindakan administratif sensitif dieksekusi. |
 
 - Hasil uji impor lib/data.ts (server-only) dari Client Component
 
@@ -300,6 +297,7 @@ michaelalex@Michaels-MacBook-Air Projek Tubes % npm run build
 ✓ Generating static pages using 9 workers (30/30) in 152ms
 ✓ Finalizing page optimization in 10ms    
 
+```text
 Route (app)
 ┌ ○ /
 ├ ○ /_not-found
@@ -336,8 +334,10 @@ Route (app)
 
 ○  (Static)   prerendered as static content
 ƒ  (Dynamic)  server-rendered on demand
+```
 
 michaelalex@Michaels-MacBook-Air Projek Tubes % 
+
 
 ## 6. Kendala dan Penyelesaian
 
