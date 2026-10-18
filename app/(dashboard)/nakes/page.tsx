@@ -8,31 +8,53 @@ import {
   MOCK_APPOINTMENTS,
   MOCK_PATIENTS,
   getStorageData,
-  setStorageData,
   Appointment,
   Patient,
 } from "@/lib/db/mockData";
+import { DashboardSkeleton, SkeletonDisruptionNotice } from "@/components/ui/Skeleton";
 
 export default function NakesDashboardPage() {
   const router = useRouter();
   const [session, setSession] = useState<UserSession | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [isPracticing, setIsPracticing] = useState(true);
+  const [isOfflineMode, setIsOfflineMode] = useState(false);
 
   useEffect(() => {
-    const s = getUserSession();
-    if (s) {
-      setSession(s);
-      const allApts = getStorageData<Appointment[]>("resilio_appointments", MOCK_APPOINTMENTS);
-      // Filter janji temu yang ditujukan ke dokter ini atau dokter demo
-      const myApts = allApts.filter(
-        (a) => a.dokterId === s.id || a.dokterId === "DOC-01"
-      );
-      setAppointments(myApts);
-    }
+    const timer = setTimeout(() => {
+      const mode = localStorage.getItem("resilio_network_mode");
+      setIsOfflineMode(mode === "offline");
+    }, 0);
+    const checkOffline = () => {
+      const mode = localStorage.getItem("resilio_network_mode");
+      setIsOfflineMode(mode === "offline");
+    };
+    window.addEventListener("storage", checkOffline);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("storage", checkOffline);
+    };
   }, []);
 
-  if (!session) return null;
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const s = getUserSession();
+      if (s) {
+        setSession(s);
+        const allApts = getStorageData<Appointment[]>("resilio_appointments", MOCK_APPOINTMENTS);
+        // Filter janji temu yang ditujukan ke dokter ini atau dokter demo
+        const myApts = allApts.filter(
+          (a) => a.dokterId === s.id || a.dokterId === "DOC-01"
+        );
+        setAppointments(myApts);
+      }
+    }, 0);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (!session) {
+    return <DashboardSkeleton noticeText="Memuat profil dokter dan antrean pasien klinis..." />;
+  }
 
   const totalPatients = appointments.length;
   const inProgressCount = appointments.filter((a) => a.status === "IN_PROGRESS").length;
@@ -43,8 +65,13 @@ export default function NakesDashboardPage() {
 
   return (
     <div className="space-y-8">
+      {/* Notice ketika terjadi gangguan jaringan / mode offline */}
+      {isOfflineMode && (
+        <SkeletonDisruptionNotice message="Mode Offline Terdeteksi: Dokter tetap dapat melakukan pemeriksaan fisik dan menginput rekam medis terenkripsi via IndexedDB." />
+      )}
+
       {/* Profil Dokter & Kontrol Praktik */}
-      <div className="p-8 rounded-3xl bg-white border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6">
+      <div className="p-6 sm:p-8 rounded-3xl bg-white border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
           <div className="flex items-center gap-2">
             <span className="text-xs font-black uppercase tracking-wider text-emerald-700">
@@ -60,13 +87,13 @@ export default function NakesDashboardPage() {
           <p className="text-xs text-slate-500 font-medium mt-0.5">
             {session.specialization || "Spesialis Penyakit Dalam"} • {session.faskesName || "RSUP Dr. Sardjito"}
           </p>
-          <p className="text-[10px] text-slate-400 font-mono mt-1">
+          <p className="text-[10px] text-slate-400 font-mono mt-1 break-words">
             Nomor STR: <span className="text-slate-700 font-bold">{session.strNumber || "31.1.1.100.2.22.123456"}</span> • Nomor SIP:{" "}
             <span className="text-slate-700 font-bold">{session.sipNumber || "446/SIP-D/2023/001"}</span>
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2 p-2 bg-slate-50 border border-slate-200 rounded-2xl">
             <span
               className={`w-3 h-3 rounded-full ${

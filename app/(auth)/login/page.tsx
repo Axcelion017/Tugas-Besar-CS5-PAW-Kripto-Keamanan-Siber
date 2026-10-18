@@ -37,8 +37,21 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] flex flex-col justify-center items-center p-4 font-sans text-slate-800 antialiased">
-      <div className="max-w-md w-full bg-white rounded-3xl shadow-xl border border-slate-200 p-8 space-y-6">
+    <div className="min-h-screen bg-[#F8FAFC] flex flex-col justify-center items-center p-4 sm:p-6 font-sans text-slate-800 antialiased">
+      <div className="max-w-md w-full bg-white rounded-3xl shadow-xl border border-slate-200 p-6 sm:p-8 space-y-6">
+        {/* Navigation back to landing */}
+        <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+          <Link
+            href="/"
+            className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-900 transition"
+          >
+            ← Kembali ke Beranda
+          </Link>
+          <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+            Sistem Siap
+          </span>
+        </div>
+
         {/* Brand Header */}
         <div className="text-center">
           <div className="w-14 h-14 bg-red-600 rounded-2xl mx-auto flex items-center justify-center text-white font-black text-2xl shadow-lg shadow-red-200 mb-3">
@@ -102,13 +115,20 @@ export default function LoginPage() {
           <p className="text-[11px] font-bold text-slate-400 uppercase text-center mb-3">
             Akses Cepat Pengujian Role (Demo)
           </p>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             <button
               type="button"
               onClick={() => handleQuickDemo("dr_andi", "doctor123")}
               className="py-2.5 px-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-xl text-xs font-black transition border border-emerald-200 text-center cursor-pointer"
             >
-              Dokter
+              Dokter (DPJP)
+            </button>
+            <button
+              type="button"
+              onClick={() => handleQuickDemo("suster_maya", "nurse123")}
+              className="py-2.5 px-2 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded-xl text-xs font-black transition border border-amber-200 text-center cursor-pointer"
+            >
+              Staf Triase
             </button>
             <button
               type="button"

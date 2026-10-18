@@ -27,30 +27,42 @@ Resilio-Health menyelesaikan permasalahan tersebut dengan:
 
 ## 2. Arsitektur Domain & Peran Pengguna (Role Segregation)
 
-Sistem menerapkan arsitektur modular Next.js App Router dengan pemisahan wilayah publik `(auth)` dan wilayah terproteksi `(dashboard)` yang terbagi ke dalam 3 domain peran:
+Sistem menerapkan arsitektur modular Next.js App Router dengan pemisahan wilayah publik `(auth)` dan wilayah terproteksi `(dashboard)` yang terbagi ke dalam 4 domain peran:
 
-### 1. Portal Mandiri Pasien (`app/(dashboard)/pasien/`) — UR-P01 s.d. UR-P08
+### 1. Portal Mandiri Pasien (`app/(dashboard)/pasien/`) — UR-P01 s.d. UR-P12
 - **Ringkasan Kesehatan & Kartu Darurat**: Kartu Resilio ID darurat berstatus KYC terverifikasi Dukcapil dan indikator riwayat alergi berbahaya.
 - **Pencarian Faskes Pintar**: Menemukan RS, klinik, atau puskesmas berdasarkan keluhan gejala penyakit (Hipertensi, Jantung, Gigi, ISPA) atau spesialisasi.
 - **Eksplorasi Profil Faskes & Dokter**: Meninjau jadwal dokter, nomor SIP terverifikasi, dan kuota antrean harian.
-- **Pemesanan Jadwal & Auto-Consent**: Memesan antrean dengan penerbitan tiket izin akses digital otomatis berbatas waktu bagi dokter pemeriksa.
+- **Pemesanan Jadwal, PIN & Auto-Consent**: Memesan antrean dengan penerbitan tiket izin akses digital otomatis dan 6-digit PIN persetujuan DPJP.
 - **Linimasa RME & Grafik Tanda Vital**: Visualisasi tren fluktuasi tekanan darah sistolik/diastolik serta fitur dekripsi mandiri menggunakan kunci privat pasien.
+- **Akses Citra Medis Terdekripsi**: Menampilkan hasil foto Rontgen, USG, atau scan lab terenkripsi yang diverifikasi dengan HMAC-SHA256.
+- **Akun Tanggungan Keluarga**: Beralih akun untuk memantau rekam medis anak atau orang tua (Family Proxy Access).
 - **Kedaulatan Izin (Consent Manager)**: Pemberian izin rujukan lintas faskes dan pencabutan hak akses instan (*1-Click Revoke*).
 - **Audit Trail Pribadi & Laporan Kendala**: Transparansi log siapa dan kapan data medis dibuka (UU PDP) serta pelaporan kendala teknis ke Admin.
 
-### 2. Stasiun Kerja Tenaga Kesehatan (`app/(dashboard)/nakes/`) — UR-T01 s.d. UR-T06
+### 2. Meja Staf Nakes Faskes (`app/(dashboard)/staf/`) — UR-S01 s.d. UR-S04 [ROLE BARU]
+- **Admisi & Check-in Antrean**: Memvalidasi kedatangan pasien booking dan mendaftarkan pasien walk-in via NIK langsung ke loket.
+- **Triase & Tanda Vital Awal**: Perawat menginput tensi, suhu, berat/tinggi badan, dan memilah kegawatan pasien (Hijau/Kuning/Merah).
+- **Penugasan DPJP (Active Encounter)**: Mengarahkan pasien ke dokter penanggung jawab poli dan menerbitkan tiket enkripsi sesi.
+- **Administrasi Rujukan Faskes**: Memproses surat rujukan keluar dan menerima berkas rujukan masuk dari faskes lain.
+
+### 3. Stasiun Kerja Dokter DPJP (`app/(dashboard)/nakes/`) — UR-T01 s.d. UR-T10
 - **Antrean Pasien & Jadwal Harian**: Daftar periksa harian dengan status periksa (Menunggu, Sedang Diperiksa, Selesai) dan peringatan alergi kritis.
 - **Pemeriksaan Klinis (SOAP Standar)**: Formulir anamnesis (S), tanda vital fisik (O), kode diagnosis internasional ICD-10 (A), dan *e-Prescription* (P) dengan enkripsi AES-256-GCM + tag HMAC-SHA256.
-- **Pencarian Pasien via NIK (BOLA Guard)**: Validasi izin akses sebelum data dibuka; percobaan akses tanpa izin langsung diblokir 403 Forbidden dan dicatat ke SIEM.
+- **Lampiran Citra Medis Biner**: Mengunggah foto Rontgen, USG, scan lab, dan EKG terenkripsi di IndexedDB berkapasitas besar.
+- **Peringatan Kontraindikasi Alergi Obat**: Peringatan otomatis mencolok jika resep obat yang diketik memicu alergi pasien.
+- **Koreksi RME Berbasis Addendum**: Mekanisme revisi catatan medis bertingkat tanpa menghapus data lama (Permenkes 24/2022).
+- **Pencarian Pasien via NIK (BOLA Guard)**: Validasi izin akses sebelum data dibuka; percobaan akses tanpa izin langsung diblokir 403 Forbidden.
+- **Protokol Darurat IGD (Break-Glass)**: Akses darurat berstandar ISO 27799 / HIPAA untuk pasien koma/kritis di IGD dengan audit prioritas tinggi.
 - **Ketahanan Offline (IndexedDB Engine)**: Operasional penuh saat internet faskes mati; data diantrekan secara terenkripsi di memori lokal.
 - **Background Sync & Surat Rujukan**: Sinkronisasi otomatis ke server pusat setelah verifikasi HMAC lolos serta penerbitan surat rujukan digital antar faskes.
 
-### 3. Konsol Pengawas Regulasi Admin (`app/(dashboard)/admin/`) — UR-A01 s.d. UR-A05
+### 4. Konsol Pengawas Regulasi Admin (`app/(dashboard)/admin/`) — UR-A01 s.d. UR-A07
 - **Ringkasan Eksekutif & Status Sistem**: Agregat antrean KYC/KYD, tingkat ancaman siber, dan status kesehatan faskes terintegrasi.
-- **Verifikasi Kependudukan Pasien (KYC)**: Antrean verifikasi kecocokan nomor NIK dengan dokumen foto fisik KTP asli.
-- **Verifikasi Kredensial Dokter (KYD)**: Validasi nomor STR (Konsil Kedokteran) dan nomor SIP dokter sebelum wewenang penginputan RME diaktifkan.
+- **Verifikasi Visual e-KYC Pasien**: Antrean verifikasi kecocokan nomor NIK dengan dokumen foto fisik KTP asli ber-watermark otomatis dan swafoto wajah (liveness check).
+- **Verifikasi Kredensial Dokter (e-KYD)**: Validasi nomor STR (Konsil Kedokteran) dan nomor SIP dokter sebelum wewenang penginputan RME diaktifkan.
 - **Master Faskes & Ransomware Kill-Switch**: Pengelolaan direktori faskes dan tombol saklar darurat untuk mengisolasi faskes yang terinfeksi malware.
-- **SIEM Live Security Feed**: Pemantauan real-time pencegahan BOLA/IDOR dan anomali HMAC dengan tombol uji coba simulasi serangan.
+- **SIEM Live Security Feed**: Pemantauan real-time pencegahan BOLA/IDOR, anomali HMAC, dan audit aktivasi darurat Break-Glass.
 - **Incident Center (Observabilitas Teknis)**: Resolusi tiket kendala pengguna dan pemantauan antrean gagal sinkron (*Failed Sync Queue*) tanpa pernah melihat isi rahasia medis pasien.
 
 ---
@@ -59,22 +71,23 @@ Sistem menerapkan arsitektur modular Next.js App Router dengan pemisahan wilayah
 
 | Komponen | Spesifikasi Teknis | Standar Acuan | Fungsi Keamanan |
 | :--- | :--- | :--- | :--- |
-| **Kerahasiaan (Confidentiality)** | AES-256-GCM | NIST SP 800-38D | Enkripsi simetris data klinis SOAP menggunakan kunci 256-bit unik pasien |
+| **Kerahasiaan (Confidentiality)** | AES-256-GCM | NIST SP 800-38D | Enkripsi simetris data klinis SOAP & Citra Medis menggunakan kunci 256-bit unik pasien |
 | **Inisialisasi Keacakan (IV)** | 96-bit CSPRNG Nonce | W3C Web Crypto | `crypto.getRandomValues()` 12 bytes unik per rekam medis (Mencegah IV Reuse) |
 | **Keutuhan Data (Integrity)** | HMAC-SHA256 | RFC 2104 | Verifikasi keutuhan ciphertext; tolak dekripsi jika terjadi perubahan 1 bit (*Fail-Closed*) |
 | **Penyimpanan (Storage)** | Zero-Knowledge Store | UU PDP No. 27/2022 | Server dan Admin basis data hanya menyimpan opaque ciphertext |
 
 ---
 
-## 4. Akun Pengujian Evaluasi (Quick Demo)
+## 4. Akun Pengujian Evaluasi (4-Role Quick Demo)
 
 Aplikasi menyediakan tombol *Quick Demo* pada halaman masuk (`/login` dan `/`) untuk kemudahan evaluasi:
 
 | Peran | Identifier / Username | Kata Sandi | Deskripsi Hak Akses Peran |
 | :--- | :--- | :--- | :--- |
-| **Tenaga Medis** | `dr_andi` | `doctor123` | Spesialis Penyakit Dalam di RSUP Dr. Sardjito, akses pemeriksaan SOAP & antrean |
-| **Pasien** | `budi` (atau NIK `3171012304800001`) | `patient123` | Pasien terverifikasi KYC, akses dekripsi mandiri, booking & revoke consent |
-| **Admin Regulator** | `admin` | `admin123` | Pengawas Kemenkes, verifikasi KYC/KYD, SIEM live monitor & kill-switch |
+| **Dokter (DPJP)** | `dr_andi` | `doctor123` | Spesialis Penyakit Dalam di RSUP Dr. Sardjito, akses SOAP, citra medis, Break-Glass, & Addendum |
+| **Staf Nakes (Triase)** | `suster_maya` | `nurse123` | Perawat Triase & Admisi, check-in antrean, input triase fisik, & penetapan DPJP |
+| **Pasien** | `budi` (atau NIK `3171012304800001`) | `patient123` | Pasien terverifikasi KYC, akses dekripsi mandiri RME & Rontgen, PIN DPJP, proxy keluarga |
+| **Admin Regulator** | `admin` | `admin123` | Pengawas Kemenkes, verifikasi visual e-KYC/KYD, SIEM live monitor & kill-switch |
 
 ---
 
@@ -84,14 +97,15 @@ Aplikasi menyediakan tombol *Quick Demo* pada halaman masuk (`/login` dan `/`) u
 .
 ├── app/
 │   ├── (auth)/                   # Area Autentikasi Publik
-│   │   ├── login/page.tsx        # Login multi-role (Username/Email/NIK + Demo)
-│   │   ├── register/             # Registrasi Pasien (NIK/KTP) & Nakes (STR/SIP)
+│   │   ├── login/page.tsx        # Login multi-role (Username/Email/NIK + 4-Role Demo)
+│   │   ├── register/             # Registrasi Pasien (NIK/KTP/Selfie e-KYC) & Nakes (STR/SIP e-KYD)
 │   │   └── verifikasi-pending/   # Pemberitahuan status antrean verifikasi
 │   ├── (dashboard)/              # Area Terproteksi Multi-Role
 │   │   ├── layout.tsx            # Zero-Trust Route Guard, RoleNav, NetworkBanner
-│   │   ├── pasien/               # 8 Rute Portal Pasien (UR-P01 s.d. UR-P08)
-│   │   ├── nakes/                # 5 Rute Stasiun Kerja Nakes (UR-T01 s.d. UR-T06)
-│   │   └── admin/                # 6 Rute Konsol Admin Regulator (UR-A01 s.d. UR-A05)
+│   │   ├── pasien/               # 8 Rute Portal Pasien (UR-P01 s.d. UR-P12)
+│   │   ├── nakes/                # 5 Rute Stasiun Kerja Dokter DPJP (UR-T01 s.d. UR-T10)
+│   │   ├── staf/                 # 4 Rute Staf Nakes Triase & Admisi (UR-S01 s.d. UR-S04)
+│   │   └── admin/                # 6 Rute Konsol Admin Regulator (UR-A01 s.d. UR-A07)
 │   ├── beranda/page.tsx          # Automatic Session Redirector
 │   ├── layout.tsx                # Root Layout, Tipografi Montserrat & Metadata
 │   └── page.tsx                  # Landing Page Publik Interaktif
@@ -99,7 +113,7 @@ Aplikasi menyediakan tombol *Quick Demo* pada halaman masuk (`/login` dan `/`) u
 │   ├── shared/                   # RoleNav (Navigasi SVG), NetworkStatusBanner
 │   └── ui/                       # Icons.tsx (Vector Iconset), LogoutModal, StatCard, StatusBadge
 ├── lib/
-│   ├── auth/auth.ts              # Pengelolaan Sesi & Normalisasi Peran
+│   ├── auth/auth.ts              # Pengelolaan Sesi 4-Role & Normalisasi Peran
 │   ├── crypto/                   # aes.ts (AES-256-GCM) & hmac.ts (HMAC-SHA256)
 │   └── db/mockData.ts            # Entitas Terstandarisasi, Mock Persistence & Storage Helpers
 ├── tests/
@@ -114,5 +128,5 @@ Aplikasi menyediakan tombol *Quick Demo* pada halaman masuk (`/login` dan `/`) u
 
 ## 6. Verifikasi & Pengujian Sistem
 
-- **Kompilasi Antarmuka**: Seluruh 26 rute Next.js terkompilasi bersih tanpa galat TypeScript (`npm run build`).
+- **Kompilasi Antarmuka**: Seluruh 30 rute Next.js terkompilasi bersih tanpa galat TypeScript (`npm run build`).
 - **Pengujian Kriptografi**: Seluruh uji unit (AES-256-GCM, HMAC-SHA256, deteksi *tamper*, dan *fail-closed*) lulus 100% (`npx vitest run`).

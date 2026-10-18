@@ -1,20 +1,12 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { getUserSession, loginUser, normalizeRole, UserSession } from "@/lib/auth/auth";
+import { loginUser, normalizeRole } from "@/lib/auth/auth";
 
 export default function HomePage() {
   const router = useRouter();
-  const [activeSession, setActiveSession] = useState<UserSession | null>(null);
-
-  useEffect(() => {
-    const s = getUserSession();
-    if (s) {
-      setActiveSession(s);
-    }
-  }, []);
 
   const handleQuickDemo = (user: string, pass: string) => {
     const session = loginUser(user, pass);
@@ -28,45 +20,34 @@ export default function HomePage() {
     <div className="min-h-screen bg-[#F8FAFC] text-slate-800 font-sans antialiased flex flex-col justify-between">
       {/* Navigation Bar */}
       <header className="bg-white/80 backdrop-blur-md border-b border-slate-200 sticky top-0 z-30 px-6 py-4">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-red-600 rounded-xl flex items-center justify-center text-white font-black text-xl shadow-md shadow-red-200">
+            <div className="w-10 h-10 bg-red-600 rounded-xl flex items-center justify-center text-white font-black text-xl shadow-md shadow-red-200 shrink-0">
               R
             </div>
             <div>
-              <span className="font-black text-slate-900 tracking-tight text-lg">
+              <span className="font-black text-slate-900 tracking-tight text-base sm:text-lg">
                 RESILIO<span className="text-red-600">-HEALTH</span>
               </span>
-              <p className="text-[10px] text-slate-500 font-bold tracking-wider uppercase">
+              <p className="text-[9px] sm:text-[10px] text-slate-500 font-bold tracking-wider uppercase truncate">
                 Zero-Trust Hospital Information System
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            {activeSession ? (
-              <Link
-                href={`/${normalizeRole(activeSession.role)}`}
-                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md transition"
-              >
-                Buka Dashboard ({activeSession.name}) →
-              </Link>
-            ) : (
-              <>
-                <Link
-                  href="/login"
-                  className="px-4 py-2 text-slate-700 hover:text-slate-900 text-xs font-bold transition"
-                >
-                  Masuk
-                </Link>
-                <Link
-                  href="/login"
-                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md transition"
-                >
-                  Portal Masuk →
-                </Link>
-              </>
-            )}
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            <Link
+              href="/login"
+              className="px-3 sm:px-4 py-2 text-slate-700 hover:text-slate-900 text-xs font-bold transition whitespace-nowrap"
+            >
+              Masuk
+            </Link>
+            <Link
+              href="/login"
+              className="px-3 sm:px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md transition whitespace-nowrap"
+            >
+              Halaman Login →
+            </Link>
           </div>
         </div>
       </header>
@@ -87,26 +68,59 @@ export default function HomePage() {
             Resilio-Health adalah Sistem Informasi Rumah Sakit berbasis web yang melindungi data klinis pasien dengan <strong>Enkripsi Sisi Klien (AES-256-GCM)</strong>, jaminan keutuhan <strong>HMAC-SHA256</strong>, ketahanan <strong>Offline-First (PWA & IndexedDB)</strong>, serta <strong>Zero-Trust BOLA/IDOR Defense</strong>.
           </p>
 
+          {/* Primary Action Buttons */}
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+            <Link
+              href="/login"
+              className="w-full sm:w-auto px-8 py-3.5 bg-red-600 hover:bg-red-700 text-white rounded-2xl text-xs font-black uppercase tracking-wider shadow-lg shadow-red-600/30 transition text-center"
+            >
+              Masuk ke Halaman Login →
+            </Link>
+            <Link
+              href="/register/pasien"
+              className="w-full sm:w-auto px-6 py-3.5 bg-white hover:bg-slate-50 text-slate-800 rounded-2xl text-xs font-black uppercase tracking-wider border border-slate-300 shadow-sm transition text-center"
+            >
+              Registrasi Pasien Baru
+            </Link>
+          </div>
+
           {/* Quick Demo Action Buttons */}
           <div className="pt-4 p-6 bg-white rounded-3xl border border-slate-200 shadow-xl space-y-4">
             <p className="text-xs font-black uppercase tracking-wider text-slate-400">
-              Pilih Akses Cepat Evaluasi Peran Pengguna (Quick Demo):
+              Pilih Akses Cepat Evaluasi Peran Pengguna (4-Role Quick Demo):
             </p>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               <button
                 type="button"
                 onClick={() => handleQuickDemo("dr_andi", "doctor123")}
                 className="p-4 rounded-2xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-left transition group cursor-pointer"
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-mono font-bold text-emerald-800">ROLE: NAKES</span>
+                  <span className="text-xs font-mono font-bold text-emerald-800">ROLE: DOKTER</span>
                   <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-200 text-emerald-800">
-                    Tenaga Medis
+                    DPJP
                   </span>
                 </div>
                 <h3 className="text-sm font-bold text-slate-900 mt-2">dr. Andi Pratama, Sp.PD</h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Input SOAP, ICD-10, Enkripsi RME, & Offline Sync
+                  SOAP, Rontgen Enkripsi, Break-Glass & Addendum
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleQuickDemo("suster_maya", "nurse123")}
+                className="p-4 rounded-2xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-left transition group cursor-pointer"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-mono font-bold text-amber-800">ROLE: STAF</span>
+                  <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-200 text-amber-800">
+                    Triase & Admisi
+                  </span>
+                </div>
+                <h3 className="text-sm font-bold text-slate-900 mt-2">Ners Maya Kartika</h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Check-in, Triase Tanda Vital & Assign DPJP
                 </p>
               </button>
 
@@ -123,7 +137,7 @@ export default function HomePage() {
                 </div>
                 <h3 className="text-sm font-bold text-slate-900 mt-2">Budi Santoso (NIK)</h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Dekripsi Pribadi, Cari Faskes, Booking & Revoke
+                  Dekripsi RME & Rontgen, Proxy Keluarga, PIN DPJP
                 </p>
               </button>
 
@@ -135,12 +149,12 @@ export default function HomePage() {
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-mono font-bold text-purple-800">ROLE: ADMIN</span>
                   <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-purple-200 text-purple-800">
-                    Admin Regulator
+                    Regulator
                   </span>
                 </div>
                 <h3 className="text-sm font-bold text-slate-900 mt-2">Administrator Kemenkes</h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Verifikasi KYC/KYD, SIEM Monitor & Kill-Switch
+                  Visual e-KYC/KYD, Break-Glass Audit & Kill-Switch
                 </p>
               </button>
             </div>

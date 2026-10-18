@@ -107,3 +107,14 @@ Pengujian unit otomatis diimplementasikan pada `tests/crypto.test.ts` menggunaka
 | **UJI-02** | Validasi integritas HMAC-SHA256 data utuh | Positif | `verifyHMAC()` mengembalikan nilai `true` | **PASSED** |
 | **UJI-03** | Deteksi pemalsuan data (manipulasi 1 bit ciphertext) | Negatif | `verifyHMAC()` mengembalikan nilai `false` (Tamper Detected) | **PASSED** |
 | **UJI-04** | Dekripsi dengan IV korup / salah | Batas (Boundary) | Sistem menolak dekripsi secara aman (*throws error Fail-Closed*) | **PASSED** |
+
+---
+
+## 5. Enkripsi Citra Medis Biner (IndexedDB Blob Engine)
+
+Untuk mendukung lampiran gambar klinis berukuran besar (Foto Rontgen, USG, hasil scan laboratorium, dan grafik EKG) tanpa terbentur batas 5 MB `localStorage`:
+1. File gambar dikonversi menjadi biner `ArrayBuffer` atau `Blob` di memori peramban.
+2. File biner dienkripsi menggunakan `crypto.subtle.encrypt("AES-GCM", key, binaryBuffer)` menghasilkan `encryptedBlobHex`.
+3. Keaslian citra dilindungi dengan `crypto.subtle.sign("HMAC", key, encryptedBlob)`.
+4. Berkas terenkripsi disimpan pada media penyimpanan lokal **IndexedDB** berkapasitas besar (mendukung ratusan MB hingga GB) sebagai kesiapan *Offline-First*, dan diunggah ke server saat koneksi internet pulih.
+5. Jika ada manipulasi pada citra (misal penghapusan bayangan tumor atau penggantian file citra oleh malware), nilai HMAC akan rusak dan peramban menolak menampilkan citra medis.

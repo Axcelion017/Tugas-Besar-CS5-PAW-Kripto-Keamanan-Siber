@@ -5,7 +5,30 @@ import Link from "next/link";
 import { getUserSession } from "@/lib/auth/auth";
 import { decryptAES } from "@/lib/crypto/aes";
 import { verifyHMAC } from "@/lib/crypto/hmac";
-import { getStorageData, EncryptedMedicalRecord } from "@/lib/db/mockData";
+import {
+  getStorageData,
+  EncryptedMedicalRecord,
+  MOCK_ENCRYPTED_RECORDS,
+} from "@/lib/db/mockData";
+
+interface DecryptedSoapData {
+  subjective?: string;
+  vitalSigns?: {
+    systolic?: number;
+    diastolic?: number;
+    heartRate?: number;
+    temperature?: number;
+  };
+  assessment?: {
+    icd10?: string;
+    desc?: string;
+  };
+  plan?: {
+    resep?: string[];
+    tindakan?: string;
+  };
+  [key: string]: unknown;
+}
 
 export default function RecordDetailPage({
   params,
@@ -14,17 +37,88 @@ export default function RecordDetailPage({
 }) {
   const { recordId } = use(params);
   const [record, setRecord] = useState<EncryptedMedicalRecord | null>(null);
-  const [decryptedData, setDecryptedData] = useState<any | null>(null);
+  const [decryptedData, setDecryptedData] = useState<DecryptedSoapData | null>(null);
   const [isHmacValid, setIsHmacValid] = useState<boolean | null>(null);
   const [isTampered, setIsTampered] = useState(false);
+  const [notFound, setNotFound] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const records = getStorageData<EncryptedMedicalRecord[]>("resilio_records", []);
-    const found = records.find((r) => r.recordId === recordId);
-    if (found) {
-      setRecord(found);
-    }
+    const timer = setTimeout(() => {
+      const records = getStorageData<EncryptedMedicalRecord[]>("resilio_records", MOCK_ENCRYPTED_RECORDS);
+      const found = records.find((r) => r.recordId === recordId);
+      if (found) {
+        setRecord(found);
+      } else {
+        setNotFound(true);
+      }
+      setIsLoading(false);
+    }, 0);
+    return () => clearTimeout(timer);
   }, [recordId]);
+
+  if (notFound) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-2 text-xs font-bold text-blue-600 uppercase tracking-wider">
+          <Link href="/pasien" className="hover:underline">
+            Portal Pasien
+          </Link>
+          <span>/</span>
+          <Link href="/pasien/rekam-medis" className="hover:underline">
+            Rekam Medis
+          </Link>
+          <span>/</span>
+          <span>Berkas Tidak Ditemukan</span>
+        </div>
+
+        <div className="p-8 md:p-12 rounded-3xl bg-white border border-red-200 shadow-xl max-w-2xl mx-auto my-8 text-center space-y-5">
+          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600 font-black text-2xl">
+            !
+          </div>
+          <div className="space-y-1">
+            <span className="text-[10px] font-mono font-black uppercase px-2.5 py-1 rounded-full bg-red-100 text-red-800 border border-red-200">
+              404 - REKAM MEDIS TIDAK DITEMUKAN
+            </span>
+            <h2 className="text-2xl font-black text-slate-900 tracking-tight pt-2">
+              Berkas Rekam Medis Tidak Ditemukan
+            </h2>
+            <p className="text-xs text-slate-500 font-medium">
+              Berkas rekam medis dengan nomor <span className="font-mono font-bold text-slate-800">{recordId}</span> tidak terdaftar dalam catatan medis terenkripsi Anda.
+            </p>
+          </div>
+          <div className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-4 rounded-2xl border border-slate-200 text-left font-mono">
+            Sistem <strong>Zero-Knowledge</strong> menolak mengalihkan ke berkas milik pasien lain saat ID tidak valid demi menjaga kerahasiaan data medis.
+          </div>
+          <div className="flex flex-col sm:flex-row justify-center gap-3 pt-2">
+            <Link
+              href="/pasien/rekam-medis"
+              className="px-6 py-3 bg-slate-900 hover:bg-black text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md transition text-center"
+            >
+              ← Kembali ke Daftar Rekam Medis
+            </Link>
+            <Link
+              href="/pasien"
+              className="px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold transition text-center"
+            >
+              Dashboard Pasien
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (isLoading || !record) {
+    return (
+      <div className="min-h-[50vh] flex flex-col items-center justify-center font-sans">
+        <div className="w-8 h-8 border-3 border-blue-600 border-t-transparent rounded-full animate-spin mb-3" />
+        <p className="text-xs font-semibold text-slate-500">
+          Memuat berkas rekam medis...
+        </p>
+      </div>
+    );
+  }
 
   const patientKey =
     getUserSession()?.encryptionKeyHex ||

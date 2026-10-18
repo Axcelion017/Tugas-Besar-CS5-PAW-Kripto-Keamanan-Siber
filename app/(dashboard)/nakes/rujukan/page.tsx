@@ -10,9 +10,14 @@ import {
   getStorageData,
   setStorageData,
   AccessGrant,
+  Patient,
 } from "@/lib/db/mockData";
 
-export default function SuratRujukanPage() {
+function generateReferralGrantId(prefix: string) {
+  return `${prefix}-${Date.now().toString().slice(-4)}`;
+}
+
+export default function NakesRujukanPage() {
   const session = getUserSession();
   const [pasienId, setPasienId] = useState("P-101");
   const [faskesTujuanId, setFaskesTujuanId] = useState("FAS-02");
@@ -22,18 +27,28 @@ export default function SuratRujukanPage() {
   );
   const [notif, setNotif] = useState<string | null>(null);
 
-  const allPatients = getStorageData("resilio_patients", MOCK_PATIENTS);
-  const targetPatient = allPatients.find((p) => p.id === pasienId) || allPatients[0];
-  const targetFaskes = MOCK_FASKES.find((f) => f.id === faskesTujuanId) || MOCK_FASKES[1];
+  const allPatients = getStorageData<Patient[]>("resilio_patients", MOCK_PATIENTS);
+  const targetPatient = allPatients.find((p) => p.id === pasienId);
+  const targetFaskes = MOCK_FASKES.find((f) => f.id === faskesTujuanId);
 
   const handleBuatRujukan = (e: React.FormEvent) => {
     e.preventDefault();
     if (!session) return;
 
+    if (!targetPatient) {
+      alert(`Data Pasien dengan ID "${pasienId}" tidak ditemukan dalam sistem.`);
+      return;
+    }
+
+    if (!targetFaskes) {
+      alert(`Fasilitas Kesehatan tujuan dengan ID "${faskesTujuanId}" tidak ditemukan.`);
+      return;
+    }
+
     // Otomatis terbitkan AccessGrant untuk Faskes Tujuan (Seamless Referral)
     const allGrants = getStorageData<AccessGrant[]>("resilio_access_grants", MOCK_ACCESS_GRANTS);
     const newGrant: AccessGrant = {
-      id: `GRANT-REF-${Date.now().toString().slice(-4)}`,
+      id: generateReferralGrantId("GRANT-REF"),
       pasienId: targetPatient.id,
       pasienNama: targetPatient.name,
       entityId: targetFaskes.id,

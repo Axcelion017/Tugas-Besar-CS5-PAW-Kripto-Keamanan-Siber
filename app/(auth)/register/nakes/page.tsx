@@ -48,6 +48,9 @@ export default function RegisterNakesPage() {
       spesialisasi,
       faskesNama,
       dokumenStrUrl: `/uploads/str-${strNumber}.pdf`,
+      fotoProfilUrl: `/uploads/profile-${strNumber}.jpg`,
+      suratTugasUrl: `/uploads/sk-${strNumber}.pdf`,
+      watermarkText: `DOKUMEN KREDENSIAL RESILIO-HEALTH - ${new Date().toLocaleDateString("id-ID")}`,
       submittedAt: new Date().toLocaleString("id-ID"),
       status: "PENDING",
     };

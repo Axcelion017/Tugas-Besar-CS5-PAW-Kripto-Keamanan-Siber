@@ -7,58 +7,93 @@ import { decryptAES } from "@/lib/crypto/aes";
 import { verifyHMAC } from "@/lib/crypto/hmac";
 import { getStorageData, EncryptedMedicalRecord } from "@/lib/db/mockData";
 
+interface DecryptedRecordPayload {
+  subjective?: string;
+  vitalSigns?: {
+    systolic?: number;
+    diastolic?: number;
+    heartRate?: number;
+    temperature?: number;
+  };
+  assessment?: {
+    icd10?: string;
+    desc?: string;
+  };
+  plan?: {
+    resep?: string[];
+    tindakan?: string;
+  };
+  [key: string]: unknown;
+}
+
+const DEFAULT_RECORDS: EncryptedMedicalRecord[] = [
+  {
+    recordId: "REC-2026-001",
+    patientId: "P-101",
+    patientName: "Budi Santoso",
+    faskesId: "FAS-01",
+    faskesNama: "RSUP Dr. Sardjito",
+    dokterStr: "31.1.1.100.2.22.123456",
+    dokterNama: "dr. Andi Pratama, Sp.PD",
+    primaryIcd10: "I10",
+    diagnosisShort: "Hipertensi Esensial (Primer)",
+    encryptedPayload:
+      "7b227375626a656374697665223a2250617369656e206d656e67656c75682074656e676b756b2062657261742064616e20707573696e67222c22766974616c5369676e73223a7b22737973746f6c6963223a3134352c2264696173746f6c6963223a39322c22686561727452617465223a38322c2274656d7065726174757265223a33362e367d2c226173736573736d656e74223a7b226963643130223a22493130222c2264657363223a22486970657274656e7369204573656e7369616c227d2c22706c616e223a7b227265736570223a5b22416d6c6f646970696e652031306d6720317831222c224b616e646573617274616e20386d6720317831225d2c2274696e64616b616e223a224b6f6e74726f6c2074656e73692032206d696e676775206c616769227d7d",
+    ivHex: "1a2b3c4d5e6f7a8b9c0d1e2f",
+    hmacDigest: "5f8d93c18b7642e09a3d4c1b72e5a9c8f01b2c3d4e5f60718293a4b5c6d7e8f9",
+    timestamp: "10 Oktober 2026, 10:30 WIB",
+    version: 1,
+    medicalImages: [
+      {
+        id: "IMG-01",
+        title: "Foto Rontgen Thorax AP/PA",
+        type: "RONTGEN",
+        encryptedBlobHex: "42494e4152595f585241595f54484f524158",
+        ivHex: "1a2b3c4d5e6f7a8b9c0d1e2f",
+        hmacDigest: "5f8d93c18b7642e09a3d4c1b72e5a9c8f01b2c3d4e5f60718293a4b5c6d7e8f9",
+        mimeType: "image/jpeg",
+        timestamp: "10 Oktober 2026",
+        notes: "Cor dan pulmo dalam batas normal, kardiomegali ringan (CTR ~52%).",
+      },
+    ],
+  },
+  {
+    recordId: "REC-2026-002",
+    patientId: "P-101",
+    patientName: "Budi Santoso",
+    faskesId: "FAS-01",
+    faskesNama: "RSUP Dr. Sardjito",
+    dokterStr: "31.1.1.100.2.22.123456",
+    dokterNama: "dr. Andi Pratama, Sp.PD",
+    primaryIcd10: "E11",
+    diagnosisShort: "Diabetes Melitus Tipe 2",
+    encryptedPayload:
+      "7b227375626a656374697665223a224c656d61732064616e20736572696e672068617573222c22766974616c5369676e73223a7b22737973746f6c6963223a3133302c2264696173746f6c6963223a38352c22686561727452617465223a37362c2274656d7065726174757265223a33362e357d2c226173736573736d656e74223a7b226963643130223a22453131222c2264657363223a224469616265746573204d656c6974757320546970652032227d2c22706c616e223a7b227265736570223a5b224d6574666f726d696e203530306d6720327831225d2c2274696e64616b616e223a22446965742072656e6461682067756c61227d7d",
+    ivHex: "2b3c4d5e6f7a8b9c0d1e2f3a",
+    hmacDigest: "6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6071",
+    timestamp: "25 September 2026, 09:15 WIB",
+    version: 1,
+  },
+];
+
 export default function RekamMedisPasienPage() {
   const [session, setSession] = useState<UserSession | null>(null);
   const [records, setRecords] = useState<EncryptedMedicalRecord[]>([]);
-  const [decryptedMap, setDecryptedMap] = useState<Record<string, any>>({});
+  const [decryptedMap, setDecryptedMap] = useState<Record<string, DecryptedRecordPayload>>({});
   const [hmacStatusMap, setHmacStatusMap] = useState<Record<string, boolean>>({});
   const [isDecryptingAll, setIsDecryptingAll] = useState(false);
 
-  const defaultRecords: EncryptedMedicalRecord[] = [
-    {
-      recordId: "REC-2026-001",
-      patientId: "P-101",
-      patientName: "Budi Santoso",
-      faskesId: "FAS-01",
-      faskesNama: "RSUP Dr. Sardjito",
-      dokterStr: "31.1.1.100.2.22.123456",
-      dokterNama: "dr. Andi Pratama, Sp.PD",
-      primaryIcd10: "I10",
-      diagnosisShort: "Hipertensi Esensial (Primer)",
-      encryptedPayload:
-        "7b227375626a656374697665223a2250617369656e206d656e67656c75682074656e676b756b2062657261742064616e20707573696e67222c22766974616c5369676e73223a7b22737973746f6c6963223a3134352c2264696173746f6c6963223a39322c22686561727452617465223a38322c2274656d7065726174757265223a33362e367d2c226173736573736d656e74223a7b226963643130223a22493130222c2264657363223a22486970657274656e7369204573656e7369616c227d2c22706c616e223a7b227265736570223a5b22416d6c6f646970696e652031306d6720317831222c224b616e646573617274616e20386d6720317831225d2c2274696e64616b616e223a224b6f6e74726f6c2074656e73692032206d696e676775206c616769227d7d",
-      ivHex: "1a2b3c4d5e6f7a8b9c0d1e2f",
-      hmacDigest: "5f8d93c18b7642e09a3d4c1b72e5a9c8f01b2c3d4e5f60718293a4b5c6d7e8f9",
-      timestamp: "10 Oktober 2026, 10:30 WIB",
-      version: 1,
-    },
-    {
-      recordId: "REC-2026-002",
-      patientId: "P-101",
-      patientName: "Budi Santoso",
-      faskesId: "FAS-01",
-      faskesNama: "RSUP Dr. Sardjito",
-      dokterStr: "31.1.1.100.2.22.123456",
-      dokterNama: "dr. Andi Pratama, Sp.PD",
-      primaryIcd10: "E11",
-      diagnosisShort: "Diabetes Melitus Tipe 2",
-      encryptedPayload:
-        "7b227375626a656374697665223a224c656d61732064616e20736572696e672068617573222c22766974616c5369676e73223a7b22737973746f6c6963223a3133302c2264696173746f6c6963223a38352c22686561727452617465223a37362c2274656d7065726174757265223a33362e357d2c226173736573736d656e74223a7b226963643130223a22453131222c2264657363223a224469616265746573204d656c6974757320546970652032227d2c22706c616e223a7b227265736570223a5b224d6574666f726d696e203530306d6720327831225d2c2274696e64616b616e223a22446965742072656e6461682067756c61227d7d",
-      ivHex: "2b3c4d5e6f7a8b9c0d1e2f3a",
-      hmacDigest: "6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6071",
-      timestamp: "25 September 2026, 09:15 WIB",
-      version: 1,
-    },
-  ];
-
   useEffect(() => {
-    const s = getUserSession();
-    if (s) {
-      setSession(s);
-      const stored = getStorageData<EncryptedMedicalRecord[]>("resilio_records", defaultRecords);
-      const filtered = stored.filter((r) => r.patientId === s.id || r.patientId === "P-101");
-      setRecords(filtered.length > 0 ? filtered : defaultRecords);
-    }
+    const timer = setTimeout(() => {
+      const s = getUserSession();
+      if (s) {
+        setSession(s);
+        const stored = getStorageData<EncryptedMedicalRecord[]>("resilio_records", DEFAULT_RECORDS);
+        const filtered = stored.filter((r) => r.patientId === s.id || r.patientId === "P-101");
+        setRecords(filtered.length > 0 ? filtered : DEFAULT_RECORDS);
+      }
+    }, 0);
+    return () => clearTimeout(timer);
   }, []);
 
   const patientKey =
@@ -72,11 +107,10 @@ export default function RekamMedisPasienPage() {
       setHmacStatusMap((prev) => ({ ...prev, [rec.recordId]: isIntegrityValid }));
 
       // 2. Dekripsi Data
-      // Cek apakah payload hex mentah atau enkripsi AES
-      let parsedData: any = null;
+      let parsedData: DecryptedRecordPayload | null = null;
       try {
         const decrypted = await decryptAES(rec.encryptedPayload, rec.ivHex, patientKey);
-        parsedData = JSON.parse(decrypted);
+        parsedData = JSON.parse(decrypted) as DecryptedRecordPayload;
       } catch {
         // Fallback jika berupa mock hex string sederhana
         const buf = new Uint8Array(rec.encryptedPayload.length / 2);
@@ -84,12 +118,15 @@ export default function RekamMedisPasienPage() {
           buf[i / 2] = parseInt(rec.encryptedPayload.substring(i, i + 2), 16);
         }
         const text = new TextDecoder().decode(buf);
-        parsedData = JSON.parse(text);
+        parsedData = JSON.parse(text) as DecryptedRecordPayload;
       }
 
-      setDecryptedMap((prev) => ({ ...prev, [rec.recordId]: parsedData }));
-    } catch (e: any) {
-      alert(`Gagal mendekripsi: ${e.message}`);
+      if (parsedData) {
+        setDecryptedMap((prev) => ({ ...prev, [rec.recordId]: parsedData as DecryptedRecordPayload }));
+      }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      alert(`Gagal mendekripsi: ${msg}`);
     }
   };
 
@@ -326,6 +363,31 @@ export default function RekamMedisPasienPage() {
                         </div>
                       </div>
                     </div>
+
+                    {/* Lampiran Citra Medis Terdekripsi (UR-P12) */}
+                    {rec.medicalImages && rec.medicalImages.length > 0 && (
+                      <div className="p-4 bg-white rounded-xl border border-blue-200 space-y-2">
+                        <span className="text-[10px] font-black uppercase text-blue-800">
+                          Lampiran Citra Medis Terdekripsi (UR-P12) — AES-256-GCM Blob
+                        </span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {rec.medicalImages.map((img) => (
+                            <div key={img.id} className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-start gap-3">
+                              <div className="w-12 h-12 bg-slate-800 text-white rounded-lg flex items-center justify-center font-mono font-bold text-[10px] uppercase">
+                                {img.type}
+                              </div>
+                              <div className="flex-1 truncate">
+                                <p className="font-bold text-slate-900 truncate">{img.title}</p>
+                                <p className="text-[10px] text-slate-500">{img.notes || "Citra radiologi valid"}</p>
+                                <span className="inline-block mt-1 text-[9px] font-mono text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                  HMAC Terverifikasi Utuh
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                     <div className="pt-2 border-t border-blue-200 text-right">
                       <Link

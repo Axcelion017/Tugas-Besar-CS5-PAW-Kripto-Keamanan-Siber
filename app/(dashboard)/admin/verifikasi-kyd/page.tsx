@@ -16,13 +16,12 @@ export default function VerifikasiKydPage() {
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [notif, setNotif] = useState<string | null>(null);
 
-  const loadKyd = () => {
-    const list = getStorageData<KydSubmission[]>("resilio_kyd_list", MOCK_KYD_REQUESTS);
-    setKydList(list);
-  };
-
   useEffect(() => {
-    loadKyd();
+    const timer = setTimeout(() => {
+      const list = getStorageData<KydSubmission[]>("resilio_kyd_list", MOCK_KYD_REQUESTS);
+      setKydList(list);
+    }, 0);
+    return () => clearTimeout(timer);
   }, []);
 
   const handleApprove = (item: KydSubmission) => {

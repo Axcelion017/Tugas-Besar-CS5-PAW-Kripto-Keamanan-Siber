@@ -11,6 +11,10 @@ import {
   SecurityAuditLog,
 } from "@/lib/db/mockData";
 
+function generateFaskesLogId(prefix: string) {
+  return `${prefix}-${Date.now().toString().slice(-4)}`;
+}
+
 export default function MasterFaskesAdminPage() {
   const [faskesList, setFaskesList] = useState<Faskes[]>([]);
   const [namaBaru, setNamaBaru] = useState("");
@@ -20,13 +24,12 @@ export default function MasterFaskesAdminPage() {
   const [kontakBaru, setKontakBaru] = useState("");
   const [notif, setNotif] = useState<string | null>(null);
 
-  const loadFaskes = () => {
-    const list = getStorageData<Faskes[]>("resilio_faskes_list", MOCK_FASKES);
-    setFaskesList(list);
-  };
-
   useEffect(() => {
-    loadFaskes();
+    const timer = setTimeout(() => {
+      const list = getStorageData<Faskes[]>("resilio_faskes_list", MOCK_FASKES);
+      setFaskesList(list);
+    }, 0);
+    return () => clearTimeout(timer);
   }, []);
 
   const handleToggleQuarantine = (faskes: Faskes) => {
@@ -56,7 +59,7 @@ export default function MasterFaskesAdminPage() {
     // Catat ke SIEM Log
     const logs = getStorageData<SecurityAuditLog[]>("resilio_security_logs", MOCK_SECURITY_LOGS);
     const newLog: SecurityAuditLog = {
-      id: `LOG-${Date.now().toString().slice(-4)}`,
+      id: generateFaskesLogId("LOG"),
       timestamp: new Date().toLocaleString("id-ID"),
       actorId: "ADM-01",
       actorName: "Administrator Utama",
@@ -64,7 +67,7 @@ export default function MasterFaskesAdminPage() {
       action: "QUARANTINE_FASKES",
       targetResource: `/api/admin/faskes/${faskes.id}`,
       ipAddress: "10.0.1.1 (Admin Terminal)",
-      userAgent: navigator.userAgent,
+      userAgent: typeof navigator !== "undefined" ? navigator.userAgent : "Admin Browser",
       severity: isQuarantining ? "CRITICAL" : "INFO",
       detail: `Kill-Switch: Status faskes ${faskes.nama} diubah menjadi ${
         isQuarantining ? "QUARANTINED (Terisolasi dari Cloud API)" : "ACTIVE"
@@ -160,7 +163,11 @@ export default function MasterFaskesAdminPage() {
             </label>
             <select
               value={tipeBaru}
-              onChange={(e) => setTipeBaru(e.target.value as any)}
+              onChange={(e) =>
+                setTipeBaru(
+                  e.target.value as "Rumah Sakit" | "Klinik Pratama" | "Puskesmas"
+                )
+              }
               className="w-full px-4 py-2.5 rounded-xl border border-slate-300 font-semibold text-sm bg-white"
             >
               <option value="Rumah Sakit">Rumah Sakit</option>

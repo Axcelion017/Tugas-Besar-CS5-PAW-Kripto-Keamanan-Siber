@@ -10,21 +10,30 @@ import {
   TroubleTicket,
 } from "@/lib/db/mockData";
 
+type TicketCategory = "BUG" | "SYNC_FAIL" | "DATA_MISMATCH" | "OTHER";
+
+function generateTicketId(prefix: string) {
+  return `${prefix}-${Date.now().toString().slice(-4)}`;
+}
+
 export default function PasienTiketKendalaPage() {
   const [session, setSession] = useState<UserSession | null>(null);
   const [tickets, setTickets] = useState<TroubleTicket[]>([]);
-  const [kategori, setKategori] = useState<"BUG" | "SYNC_FAIL" | "DATA_MISMATCH" | "OTHER">("DATA_MISMATCH");
+  const [kategori, setKategori] = useState<TicketCategory>("DATA_MISMATCH");
   const [judul, setJudul] = useState("");
   const [deskripsi, setDeskripsi] = useState("");
   const [notif, setNotif] = useState<string | null>(null);
 
   useEffect(() => {
-    const s = getUserSession();
-    if (s) {
-      setSession(s);
-      const all = getStorageData<TroubleTicket[]>("resilio_trouble_tickets", MOCK_TROUBLE_TICKETS);
-      setTickets(all.filter((t) => t.pengirimId === s.id || t.pengirimId === "P-101"));
-    }
+    const timer = setTimeout(() => {
+      const s = getUserSession();
+      if (s) {
+        setSession(s);
+        const all = getStorageData<TroubleTicket[]>("resilio_trouble_tickets", MOCK_TROUBLE_TICKETS);
+        setTickets(all.filter((t) => t.pengirimId === s.id || t.pengirimId === "P-101"));
+      }
+    }, 0);
+    return () => clearTimeout(timer);
   }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -37,7 +46,7 @@ export default function PasienTiketKendalaPage() {
     }
 
     const newTicket: TroubleTicket = {
-      id: `TCK-${Date.now().toString().slice(-4)}`,
+      id: generateTicketId("TCK"),
       pengirimId: session.id,
       pengirimNama: session.name,
       pengirimRole: "PASIEN",
@@ -98,7 +107,7 @@ export default function PasienTiketKendalaPage() {
               </label>
               <select
                 value={kategori}
-                onChange={(e) => setKategori(e.target.value as any)}
+                onChange={(e) => setKategori(e.target.value as TicketCategory)}
                 className="w-full px-4 py-2.5 rounded-xl border border-slate-300 font-semibold text-sm bg-white"
               >
                 <option value="DATA_MISMATCH">Ketidaksesuaian Biodata / Rekam Medis</option>

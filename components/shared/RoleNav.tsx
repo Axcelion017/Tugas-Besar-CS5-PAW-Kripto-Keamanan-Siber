@@ -21,6 +21,7 @@ import {
   IconAlertTriangle,
   IconTool,
   IconLogOut,
+  IconUsers,
 } from "@/components/ui/Icons";
 
 interface RoleNavProps {
@@ -40,7 +41,7 @@ export function RoleNav({ session }: RoleNavProps) {
     router.replace("/login");
   };
 
-  // Navigasi Pasien dengan Icon SVG bersih
+  // 1. Navigasi Pasien
   const pasienLinks = [
     { href: "/pasien", label: "Ringkasan Kesehatan", icon: IconActivity },
     { href: "/pasien/faskes", label: "Pencarian Faskes", icon: IconSearch },
@@ -51,19 +52,27 @@ export function RoleNav({ session }: RoleNavProps) {
     { href: "/pasien/tiket-kendala", label: "Laporan Kendala", icon: IconMessageSquare },
   ];
 
-  // Navigasi Tenaga Medis (Nakes)
+  // 2. Navigasi Tenaga Medis (Dokter DPJP)
   const nakesLinks = [
     { href: "/nakes", label: "Antrean & Jadwal Hari Ini", icon: IconStethoscope },
-    { href: "/nakes/pasien-lookup", label: "Pencarian Pasien (NIK)", icon: IconSearch },
+    { href: "/nakes/pasien-lookup", label: "Pencarian Pasien (NIK & Break-Glass)", icon: IconSearch },
     { href: "/nakes/rujukan", label: "Surat Rujukan Digital", icon: IconSend },
     { href: "/nakes/offline-sync", label: "Status Sinkronisasi Offline", icon: IconRefreshCw },
   ];
 
-  // Navigasi Admin
+  // 3. Navigasi Staf Nakes Faskes (Perawat Triase & Admisi) - ROLE BARU
+  const stafLinks = [
+    { href: "/staf", label: "Admisi & Check-in Antrean", icon: IconCalendar },
+    { href: "/staf/triase", label: "Triase & Tanda Vital Awal", icon: IconActivity },
+    { href: "/staf/assign-dpjp", label: "Pengarahan Dokter (DPJP)", icon: IconUsers },
+    { href: "/staf/rujukan", label: "Administrasi Rujukan Faskes", icon: IconSend },
+  ];
+
+  // 4. Navigasi Admin Regulator (Kemenkes)
   const adminLinks = [
     { href: "/admin", label: "Ringkasan Eksekutif", icon: IconBarChart },
-    { href: "/admin/verifikasi-kyc", label: "Verifikasi KTP Pasien", icon: IconShield },
-    { href: "/admin/verifikasi-kyd", label: "Verifikasi STR/SIP Nakes", icon: IconFileText },
+    { href: "/admin/verifikasi-kyc", label: "Verifikasi Visual e-KYC", icon: IconShield },
+    { href: "/admin/verifikasi-kyd", label: "Verifikasi Dokumen e-KYD", icon: IconFileText },
     { href: "/admin/faskes", label: "Master Faskes & Kill-Switch", icon: IconBuilding },
     { href: "/admin/siem-monitor", label: "SIEM Live Security Feed", icon: IconAlertTriangle },
     { href: "/admin/incident-center", label: "Pusat Kendala & Trouble", icon: IconTool },
@@ -74,6 +83,8 @@ export function RoleNav({ session }: RoleNavProps) {
       ? pasienLinks
       : role === "nakes"
       ? nakesLinks
+      : role === "staf"
+      ? stafLinks
       : adminLinks;
 
   const roleBadgeColor =
@@ -81,13 +92,17 @@ export function RoleNav({ session }: RoleNavProps) {
       ? "bg-blue-100 text-blue-800 border-blue-200"
       : role === "nakes"
       ? "bg-emerald-100 text-emerald-800 border-emerald-200"
+      : role === "staf"
+      ? "bg-amber-100 text-amber-800 border-amber-200"
       : "bg-purple-100 text-purple-800 border-purple-200";
 
   const roleLabel =
     role === "pasien"
       ? "Pasien Terdaftar"
       : role === "nakes"
-      ? "Tenaga Kesehatan"
+      ? "Dokter Penanggung Jawab (DPJP)"
+      : role === "staf"
+      ? "Staf Nakes (Triase & Admisi)"
       : "Admin Regulator (Kemenkes)";
 
   return (
@@ -165,6 +180,11 @@ export function RoleNav({ session }: RoleNavProps) {
               <p className="text-[10px] text-slate-500 mt-0.5 truncate">
                 {session.nik ? `NIK: ${session.nik}` : session.username}
               </p>
+              {session.posisiStaf && (
+                <p className="text-[10px] text-amber-700 font-bold truncate mt-0.5">
+                  {session.posisiStaf}
+                </p>
+              )}
               {session.specialization && (
                 <p className="text-[10px] text-emerald-700 font-medium truncate mt-0.5">
                   {session.specialization}
@@ -186,7 +206,7 @@ export function RoleNav({ session }: RoleNavProps) {
             {currentLinks.map((item) => {
               const IconComp = item.icon;
               const isActive =
-                item.href === `/pasien` || item.href === `/nakes` || item.href === `/admin`
+                item.href === `/pasien` || item.href === `/nakes` || item.href === `/admin` || item.href === `/staf`
                   ? pathname === item.href
                   : pathname?.startsWith(item.href);
 

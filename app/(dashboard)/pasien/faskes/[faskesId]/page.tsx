@@ -2,13 +2,11 @@
 
 import React, { use } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
   MOCK_FASKES,
   MOCK_DOCTORS,
   getStorageData,
   Faskes,
-  AuthorizedDoctor,
 } from "@/lib/db/mockData";
 
 export default function FaskesDetailPage({
@@ -16,11 +14,62 @@ export default function FaskesDetailPage({
 }: {
   params: Promise<{ faskesId: string }>;
 }) {
-  const router = useRouter();
   const { faskesId } = use(params);
 
   const faskesList = getStorageData<Faskes[]>("resilio_faskes_list", MOCK_FASKES);
-  const faskes = faskesList.find((f) => f.id === faskesId) || faskesList[0];
+  const faskes = faskesList.find((f) => f.id === faskesId);
+
+  if (!faskes) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-2 text-xs font-bold text-blue-600 uppercase tracking-wider">
+          <Link href="/pasien" className="hover:underline">
+            Portal Pasien
+          </Link>
+          <span>/</span>
+          <Link href="/pasien/faskes" className="hover:underline">
+            Pencarian Faskes
+          </Link>
+          <span>/</span>
+          <span>Faskes Tidak Ditemukan</span>
+        </div>
+
+        <div className="p-8 md:p-12 rounded-3xl bg-white border border-red-200 shadow-xl max-w-2xl mx-auto my-8 text-center space-y-5">
+          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600 font-black text-2xl shadow-inner">
+            !
+          </div>
+          <div className="space-y-1">
+            <span className="text-[10px] font-mono font-black uppercase px-2.5 py-1 rounded-full bg-red-100 text-red-800 border border-red-200">
+              DATA TIDAK DITEMUKAN
+            </span>
+            <h2 className="text-2xl font-black text-slate-900 tracking-tight pt-2">
+              Fasilitas Kesehatan Tidak Ditemukan
+            </h2>
+            <p className="text-xs text-slate-500 font-medium">
+              Fasilitas kesehatan dengan ID <span className="font-mono font-bold text-slate-800">{faskesId}</span> tidak terdaftar dalam pangkalan data rumah sakit dan klinik nasional.
+            </p>
+          </div>
+          <div className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-4 rounded-2xl border border-slate-200 text-left font-mono">
+            Sistem <strong>Zero-Trust</strong> menolak mengalihkan permintaan ke faskes lain saat ID tidak valid guna menjamin integritas data rujukan dan pemesanan konsultasi dokter.
+          </div>
+          <div className="flex flex-col sm:flex-row justify-center gap-3 pt-2">
+            <Link
+              href="/pasien/faskes"
+              className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md transition text-center"
+            >
+              ← Kembali ke Pencarian Faskes
+            </Link>
+            <Link
+              href="/pasien"
+              className="px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold transition text-center"
+            >
+              Dashboard Pasien
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const doctors = MOCK_DOCTORS.filter((d) => d.faskesId === faskes.id);
 
@@ -167,18 +216,18 @@ export default function FaskesDetailPage({
                       Terisi: {doc.kuotaTerisi} / {doc.kuotaHarian} antrean
                     </span>
 
-                    <button
-                      type="button"
-                      disabled={isPenuh}
-                      onClick={() =>
-                        router.push(
-                          `/pasien/booking?faskesId=${faskes.id}&dokterId=${doc.id}`
-                        )
-                      }
-                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer disabled:bg-slate-300"
-                    >
-                      Pilih & Booking Dokter →
-                    </button>
+                    {isPenuh ? (
+                      <span className="px-4 py-2 bg-slate-200 text-slate-400 rounded-xl text-xs font-black uppercase tracking-wider">
+                        Penuh
+                      </span>
+                    ) : (
+                      <Link
+                        href={`/pasien/booking?faskesId=${faskes.id}&dokterId=${doc.id}`}
+                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition inline-block text-center shadow-xs"
+                      >
+                        Pilih & Booking Dokter →
+                      </Link>
+                    )}
                   </div>
                 </div>
               );

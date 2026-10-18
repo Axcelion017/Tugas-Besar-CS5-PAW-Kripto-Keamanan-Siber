@@ -7,11 +7,13 @@ export function NetworkStatusBanner() {
   const [queueCount, setQueueCount] = useState(0);
 
   useEffect(() => {
-    // Muat state offline dari localStorage
-    const saved = localStorage.getItem("resilio_network_mode");
-    if (saved === "offline") {
-      setIsOnline(false);
-    }
+    const timer = setTimeout(() => {
+      // Muat state offline dari localStorage
+      const saved = localStorage.getItem("resilio_network_mode");
+      if (saved === "offline") {
+        setIsOnline(false);
+      }
+    }, 0);
 
     const checkQueue = () => {
       try {
@@ -29,7 +31,10 @@ export function NetworkStatusBanner() {
 
     checkQueue();
     const interval = setInterval(checkQueue, 2000);
-    return () => clearInterval(interval);
+    return () => {
+      clearTimeout(timer);
+      clearInterval(interval);
+    };
   }, []);
 
   const toggleNetwork = () => {

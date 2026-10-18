@@ -1,5 +1,9 @@
 // lib/db/mockData.ts
-// Modul data tiruan terpadu untuk mendanai antarmuka multi-role Resilio-Health
+// Modul data tiruan terpadu untuk mendanai antarmuka 4-Role Resilio-Health:
+// Pasien, Tenaga Kesehatan (DPJP), Staf Nakes (Triase & Admisi), dan Admin Regulator
+
+export type TriaseLevel = "HIJAU" | "KUNING" | "MERAH";
+
 
 export interface Faskes {
   id: string;
@@ -27,6 +31,15 @@ export interface AuthorizedDoctor {
   kuotaTerisi: number;
   accessStatus: "ACTIVE" | "REVOKED";
   lastAccess: string;
+  fotoProfilUrl?: string;
+}
+
+export interface FamilyMember {
+  id: string;
+  name: string;
+  relation: "Anak" | "Orang Tua" | "Pasangan";
+  nik: string;
+  age: number;
 }
 
 export interface Patient {
@@ -44,7 +57,29 @@ export interface Patient {
   assignedDoctorId?: string;
   encryptionKeyHex: string;
   statusKyc: "VERIFIED" | "PENDING" | "REJECTED";
+  familyMembers?: FamilyMember[];
 }
+
+export interface VitalSigns {
+  systolic: number;
+  diastolic: number;
+  heartRate: number;
+  temperature: number;
+  respiratoryRate: number;
+  spo2: number;
+  beratBadan?: number;
+  tinggiBadan?: number;
+}
+
+export type AppointmentStatus =
+  | "PENDING_ARRIVAL"
+  | "WAITING_TRIAGE"
+  | "WAITING_DOCTOR"
+  | "IN_EXAMINATION"
+  | "WAITING"
+  | "IN_PROGRESS"
+  | "COMPLETED"
+  | "CANCELLED";
 
 export interface Appointment {
   id: string;
@@ -55,21 +90,30 @@ export interface Appointment {
   faskesNama: string;
   dokterId: string;
   dokterNama: string;
+  dpjpId?: string;
+  dpjpNama?: string;
   poli: string;
   tanggal: string;
   jam: string;
   keluhanAwal: string;
-  status: "WAITING" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
+  status: AppointmentStatus;
   consentActive: boolean;
+  consentPin?: string;
+  triaseLevel?: TriaseLevel;
+  triaseVitals?: VitalSigns;
+  checkInTime?: string;
 }
 
-export interface VitalSigns {
-  systolic: number;
-  diastolic: number;
-  heartRate: number;
-  temperature: number;
-  respiratoryRate: number;
-  spo2: number;
+export interface EncryptedMedicalImage {
+  id: string;
+  title: string;
+  type: "RONTGEN" | "USG" | "LAB" | "EKG" | "FOTO_KLINIS";
+  encryptedBlobHex: string;
+  ivHex: string;
+  hmacDigest: string;
+  mimeType: string;
+  timestamp: string;
+  notes?: string;
 }
 
 export interface MedicalRecordSOAP {
@@ -110,28 +154,47 @@ export interface EncryptedMedicalRecord {
   timestamp: string;
   isOfflineCreated?: boolean;
   version: number;
+  parentRecordId?: string;
+  addendumReason?: string;
+  isBreakGlass?: boolean;
+  breakGlassReason?: string;
+  medicalImages?: EncryptedMedicalImage[];
 }
 
 export interface AccessGrant {
   id: string;
   pasienId: string;
   pasienNama: string;
-  entityId: string; // Dokter ID atau Faskes ID
+  entityId: string;
   entityNama: string;
   entityType: "DOKTER" | "FASKES";
   scope: string;
   validUntil: string;
   isRevoked: boolean;
   createdAt: string;
+  isBreakGlass?: boolean;
 }
+
+export type AuditAction =
+  | "LOGIN"
+  | "VIEW_RME"
+  | "WRITE_RME"
+  | "IDOR_BLOCKED"
+  | "HMAC_VERIFIED"
+  | "HMAC_MISMATCH"
+  | "REVOKE_CONSENT"
+  | "QUARANTINE_FASKES"
+  | "BREAK_GLASS_ACCESS"
+  | "CHECK_IN_TRIAGE"
+  | "ASSIGN_DPJP";
 
 export interface SecurityAuditLog {
   id: string;
   timestamp: string;
   actorId: string;
   actorName: string;
-  actorRole: "PASIEN" | "NAKES" | "ADMIN" | "GATEWAY";
-  action: "LOGIN" | "VIEW_RME" | "WRITE_RME" | "IDOR_BLOCKED" | "HMAC_VERIFIED" | "HMAC_MISMATCH" | "REVOKE_CONSENT" | "QUARANTINE_FASKES";
+  actorRole: "PASIEN" | "NAKES" | "ADMIN" | "STAF" | "GATEWAY";
+  action: AuditAction;
   targetResource: string;
   ipAddress: string;
   userAgent: string;
@@ -147,6 +210,8 @@ export interface KycSubmission {
   tanggalLahir: string;
   alamat: string;
   ktpUrl: string;
+  selfieUrl: string;
+  watermarkText: string;
   submittedAt: string;
   status: "PENDING" | "VERIFIED" | "REJECTED";
   alasanPenolakan?: string;
@@ -162,6 +227,9 @@ export interface KydSubmission {
   spesialisasi: string;
   faskesNama: string;
   dokumenStrUrl: string;
+  fotoProfilUrl: string;
+  suratTugasUrl: string;
+  watermarkText: string;
   submittedAt: string;
   status: "PENDING" | "VERIFIED" | "REJECTED";
   alasanPenolakan?: string;
@@ -181,7 +249,7 @@ export interface TroubleTicket {
 }
 
 // -------------------------------------------------------------
-// DATA AWAL
+// DATA AWAL SISTEM RESILIO-HEALTH
 // -------------------------------------------------------------
 
 export const MOCK_FASKES: Faskes[] = [
@@ -192,8 +260,8 @@ export const MOCK_FASKES: Faskes[] = [
     tipe: "Rumah Sakit",
     alamat: "Jl. Kesehatan No. 1, Sendangadi, Sleman",
     kota: "Yogyakarta",
-    spesialisasiList: ["Spesialis Penyakit Dalam", "Spesialis Kardiologi", "Spesialis Anak", "Bedah Umum"],
-    kategoriPenyakit: ["Hipertensi", "Jantung", "Diabetes", "Penyakit Dalam", "ISPA"],
+    spesialisasiList: ["Spesialis Penyakit Dalam", "Spesialis Kardiologi", "Spesialis Anak", "Bedah Umum", "IGD 24 Jam"],
+    kategoriPenyakit: ["Hipertensi", "Jantung", "Diabetes", "Penyakit Dalam", "ISPA", "Trauma Darurat"],
     status: "ACTIVE",
     kontak: "(0274) 587333",
   },
@@ -252,7 +320,8 @@ export const MOCK_DOCTORS: AuthorizedDoctor[] = [
     kuotaHarian: 20,
     kuotaTerisi: 14,
     accessStatus: "ACTIVE",
-    lastAccess: "10 Oktober 2026, 10:14 WIB",
+    lastAccess: "15 Oktober 2026, 10:14 WIB",
+    fotoProfilUrl: "/doctors/dr-andi.jpg",
   },
   {
     id: "DOC-02",
@@ -269,7 +338,8 @@ export const MOCK_DOCTORS: AuthorizedDoctor[] = [
     kuotaHarian: 15,
     kuotaTerisi: 9,
     accessStatus: "ACTIVE",
-    lastAccess: "9 Oktober 2026, 14:30 WIB",
+    lastAccess: "14 Oktober 2026, 14:30 WIB",
+    fotoProfilUrl: "/doctors/dr-ratna.jpg",
   },
   {
     id: "DOC-03",
@@ -285,7 +355,8 @@ export const MOCK_DOCTORS: AuthorizedDoctor[] = [
     kuotaHarian: 25,
     kuotaTerisi: 21,
     accessStatus: "ACTIVE",
-    lastAccess: "8 Oktober 2026, 11:00 WIB",
+    lastAccess: "13 Oktober 2026, 11:00 WIB",
+    fotoProfilUrl: "/doctors/dr-sarah.jpg",
   },
   {
     id: "DOC-04",
@@ -302,6 +373,7 @@ export const MOCK_DOCTORS: AuthorizedDoctor[] = [
     kuotaTerisi: 12,
     accessStatus: "REVOKED",
     lastAccess: "12 Agustus 2026, 09:15 WIB",
+    fotoProfilUrl: "/doctors/dr-rian.jpg",
   },
 ];
 
@@ -321,6 +393,10 @@ export const MOCK_PATIENTS: Patient[] = [
     assignedDoctorId: "DOC-01",
     encryptionKeyHex: "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90",
     statusKyc: "VERIFIED",
+    familyMembers: [
+      { id: "FAM-01", name: "Rizky Santoso (Anak)", relation: "Anak", nik: "3171010502150009", age: 11 },
+      { id: "FAM-02", name: "Dewi Sartika (Istri)", relation: "Pasangan", nik: "3171014408820004", age: 44 },
+    ],
   },
   {
     id: "P-102",
@@ -381,12 +457,27 @@ export const MOCK_APPOINTMENTS: Appointment[] = [
     faskesNama: "RSUP Dr. Sardjito",
     dokterId: "DOC-01",
     dokterNama: "dr. Andi Pratama, Sp.PD",
+    dpjpId: "DOC-01",
+    dpjpNama: "dr. Andi Pratama, Sp.PD",
     poli: "Poli Penyakit Dalam",
     tanggal: "2026-10-15",
     jam: "09:00 WIB",
     keluhanAwal: "Kontrol tensi rutin, kepala terasa berat di bagian tengkuk",
-    status: "IN_PROGRESS",
+    status: "IN_EXAMINATION",
     consentActive: true,
+    consentPin: "884120",
+    triaseLevel: "KUNING",
+    triaseVitals: {
+      systolic: 145,
+      diastolic: 92,
+      heartRate: 82,
+      temperature: 36.6,
+      respiratoryRate: 18,
+      spo2: 98,
+      beratBadan: 74,
+      tinggiBadan: 170,
+    },
+    checkInTime: "15 Oktober 2026, 08:35 WIB",
   },
   {
     id: "APT-2026-002",
@@ -397,12 +488,27 @@ export const MOCK_APPOINTMENTS: Appointment[] = [
     faskesNama: "RSUP Dr. Sardjito",
     dokterId: "DOC-01",
     dokterNama: "dr. Andi Pratama, Sp.PD",
+    dpjpId: "DOC-01",
+    dpjpNama: "dr. Andi Pratama, Sp.PD",
     poli: "Poli Penyakit Dalam",
     tanggal: "2026-10-15",
     jam: "10:30 WIB",
     keluhanAwal: "Gula darah puasa tinggi dan lemas",
-    status: "WAITING",
+    status: "WAITING_DOCTOR",
     consentActive: true,
+    consentPin: "551290",
+    triaseLevel: "HIJAU",
+    triaseVitals: {
+      systolic: 128,
+      diastolic: 80,
+      heartRate: 74,
+      temperature: 36.4,
+      respiratoryRate: 16,
+      spo2: 99,
+      beratBadan: 68,
+      tinggiBadan: 165,
+    },
+    checkInTime: "15 Oktober 2026, 09:10 WIB",
   },
   {
     id: "APT-2026-003",
@@ -413,12 +519,65 @@ export const MOCK_APPOINTMENTS: Appointment[] = [
     faskesNama: "RS Harapan Sehat",
     dokterId: "DOC-02",
     dokterNama: "dr. Ratna Juwita, Sp.JP",
+    dpjpId: "DOC-02",
+    dpjpNama: "dr. Ratna Juwita, Sp.JP",
     poli: "Poli Kardiologi",
     tanggal: "2026-10-16",
     jam: "14:00 WIB",
     keluhanAwal: "Sesak napas saat menaiki tangga",
-    status: "WAITING",
+    status: "PENDING_ARRIVAL",
     consentActive: true,
+    consentPin: "319402",
+  },
+];
+
+export const MOCK_ENCRYPTED_RECORDS: EncryptedMedicalRecord[] = [
+  {
+    recordId: "REC-2026-001",
+    patientId: "P-101",
+    patientName: "Budi Santoso",
+    faskesId: "FAS-01",
+    faskesNama: "RSUP Dr. Sardjito",
+    dokterStr: "31.1.1.100.2.22.123456",
+    dokterNama: "dr. Andi Pratama, Sp.PD",
+    primaryIcd10: "I10",
+    diagnosisShort: "Hipertensi Esensial (Primer)",
+    encryptedPayload:
+      "7b227375626a656374697665223a2250617369656e206d656e67656c75682074656e676b756b2062657261742064616e20707573696e67222c22766974616c5369676e73223a7b22737973746f6c6963223a3134352c2264696173746f6c6963223a39322c22686561727452617465223a38322c2274656d7065726174757265223a33362e367d2c226173736573736d656e74223a7b226963643130223a22493130222c2264657363223a22486970657274656e7369204573656e7369616c227d2c22706c616e223a7b227265736570223a5b22416d6c6f646970696e652031306d6720317831222c224b616e646573617274616e20386d6720317831225d2c2274696e64616b616e223a224b6f6e74726f6c2074656e73692032206d696e676775206c616769227d7d",
+    ivHex: "1a2b3c4d5e6f7a8b9c0d1e2f",
+    hmacDigest: "5f8d93c18b7642e09a3d4c1b72e5a9c8f01b2c3d4e5f60718293a4b5c6d7e8f9",
+    timestamp: "10 Oktober 2026, 10:30 WIB",
+    version: 1,
+    medicalImages: [
+      {
+        id: "IMG-01",
+        title: "Foto Rontgen Thorax AP/PA",
+        type: "RONTGEN",
+        encryptedBlobHex: "42494e4152595f585241595f54484f524158",
+        ivHex: "1a2b3c4d5e6f7a8b9c0d1e2f",
+        hmacDigest: "5f8d93c18b7642e09a3d4c1b72e5a9c8f01b2c3d4e5f60718293a4b5c6d7e8f9",
+        mimeType: "image/jpeg",
+        timestamp: "10 Oktober 2026",
+        notes: "Cor dan pulmo dalam batas normal, kardiomegali ringan (CTR ~52%).",
+      },
+    ],
+  },
+  {
+    recordId: "REC-2026-002",
+    patientId: "P-101",
+    patientName: "Budi Santoso",
+    faskesId: "FAS-01",
+    faskesNama: "RSUP Dr. Sardjito",
+    dokterStr: "31.1.1.100.2.22.123456",
+    dokterNama: "dr. Andi Pratama, Sp.PD",
+    primaryIcd10: "E11",
+    diagnosisShort: "Diabetes Melitus Tipe 2",
+    encryptedPayload:
+      "7b227375626a656374697665223a224c656d61732064616e20736572696e672068617573222c22766974616c5369676e73223a7b22737973746f6c6963223a3133302c2264696173746f6c6963223a38352c22686561727452617465223a37362c2274656d7065726174757265223a33362e357d2c226173736573736d656e74223a7b226963643130223a22453131222c2264657363223a224469616265746573204d656c6974757320546970652032227d2c22706c616e223a7b227265736570223a5b224d6574666f726d696e203530306d6720327831225d2c2274696e64616b616e223a22446965742072656e6461682067756c61227d7d",
+    ivHex: "2b3c4d5e6f7a8b9c0d1e2f3a",
+    hmacDigest: "6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6071",
+    timestamp: "25 September 2026, 09:15 WIB",
+    version: 1,
   },
 ];
 
@@ -430,10 +589,10 @@ export const MOCK_ACCESS_GRANTS: AccessGrant[] = [
     entityId: "DOC-01",
     entityNama: "dr. Andi Pratama, Sp.PD",
     entityType: "DOKTER",
-    scope: "Baca & Tulis Rekam Medis (Aktif Pemeriksaan)",
+    scope: "DPJP Aktif: Baca & Tulis Rekam Medis (SOAP + Citra Medis)",
     validUntil: "2026-10-16 23:59 WIB",
     isRevoked: false,
-    createdAt: "2026-10-15 08:00 WIB",
+    createdAt: "2026-10-15 08:35 WIB",
   },
   {
     id: "GRANT-02",
@@ -473,7 +632,7 @@ export const MOCK_SECURITY_LOGS: SecurityAuditLog[] = [
     ipAddress: "192.168.1.88",
     userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
     severity: "CRITICAL",
-    detail: "BOLA Guard: Izin akses pasien P-101 telah dicabut oleh pasien (Status: REVOKED). Akses diblokir.",
+    detail: "BOLA Guard: Izin akses pasien P-101 telah dicabut oleh pasien (Status: REVOKED). Akses dokter non-DPJP diblokir.",
   },
   {
     id: "LOG-02",
@@ -486,10 +645,23 @@ export const MOCK_SECURITY_LOGS: SecurityAuditLog[] = [
     ipAddress: "192.168.1.42",
     userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
     severity: "INFO",
-    detail: "Verifikasi tanda tangan digital HMAC-SHA256 berhasil. Integritas data terkonfirmasi.",
+    detail: "Verifikasi tanda tangan digital HMAC-SHA256 berhasil. Integritas data klinis dan citra Rontgen terkonfirmasi.",
   },
   {
     id: "LOG-03",
+    timestamp: "15 Oktober 2026, 08:35:10 WIB",
+    actorId: "STF-01",
+    actorName: "Ners Maya Kartika, S.Kep",
+    actorRole: "STAF",
+    action: "ASSIGN_DPJP",
+    targetResource: "/api/encounters/APT-2026-001",
+    ipAddress: "192.168.1.15 (Meja Triase)",
+    userAgent: "Chrome 129.0 on Windows",
+    severity: "INFO",
+    detail: "Triase Selesai (KUNING). Pasien Budi Santoso diarahkan ke dr. Andi Pratama, Sp.PD (DPJP Aktif). Active Encounter diterbitkan.",
+  },
+  {
+    id: "LOG-04",
     timestamp: "14 Oktober 2026, 17:35:19 WIB",
     actorId: "ADM-01",
     actorName: "Administrator Utama",
@@ -502,7 +674,7 @@ export const MOCK_SECURITY_LOGS: SecurityAuditLog[] = [
     detail: "Simulasi isolasi karantina faskes FAS-04 berhasil dipicu.",
   },
   {
-    id: "LOG-04",
+    id: "LOG-05",
     timestamp: "14 Oktober 2026, 11:05:40 WIB",
     actorId: "P-101",
     actorName: "Budi Santoso",
@@ -525,6 +697,8 @@ export const MOCK_KYC_REQUESTS: KycSubmission[] = [
     tanggalLahir: "14 Juni 1998",
     alamat: "Jl. Mawar Bodas No. 12, Bandung",
     ktpUrl: "/ktp-mock-dewi.jpg",
+    selfieUrl: "/selfie-mock-dewi.jpg",
+    watermarkText: "HANYA UNTUK VERIFIKASI RESILIO-HEALTH - 14 OKT 2026",
     submittedAt: "14 Oktober 2026, 16:20 WIB",
     status: "PENDING",
   },
@@ -536,6 +710,8 @@ export const MOCK_KYC_REQUESTS: KycSubmission[] = [
     tanggalLahir: "10 Mei 1982",
     alamat: "Jl. Kaliurang KM 5, Sleman",
     ktpUrl: "/ktp-mock-bambang.jpg",
+    selfieUrl: "/selfie-mock-bambang.jpg",
+    watermarkText: "HANYA UNTUK VERIFIKASI RESILIO-HEALTH - 15 OKT 2026",
     submittedAt: "15 Oktober 2026, 07:15 WIB",
     status: "PENDING",
   },
@@ -552,6 +728,9 @@ export const MOCK_KYD_REQUESTS: KydSubmission[] = [
     spesialisasi: "Spesialis Bedah Umum",
     faskesNama: "RSUP Dr. Sardjito",
     dokumenStrUrl: "/str-mock-hendro.pdf",
+    fotoProfilUrl: "/doctors/dr-hendro.jpg",
+    suratTugasUrl: "/sk-tugas-hendro.pdf",
+    watermarkText: "DOKUMEN KREDENSIAL RESILIO-HEALTH KEMENKES - 14 OKT 2026",
     submittedAt: "14 Oktober 2026, 10:00 WIB",
     status: "PENDING",
   },
@@ -564,8 +743,8 @@ export const MOCK_TROUBLE_TICKETS: TroubleTicket[] = [
     pengirimNama: "dr. Andi Pratama, Sp.PD",
     pengirimRole: "NAKES",
     kategori: "SYNC_FAIL",
-    judul: "Antrean offline 3 berkas gagal disinkronkan saat jaringan pulih",
-    deskripsi: "Saat internet pulih di poli, 3 batch rekam medis memberi pesan HMAC payload timeout.",
+    judul: "Antrean offline citra Rontgen gagal disinkronkan saat internet pulih",
+    deskripsi: "Pemeriksaan radiologi berukuran 4 MB di IndexedDB memberi status timeout saat background sync ke server pusat.",
     faskesTerkait: "RSUP Dr. Sardjito",
     status: "OPEN",
     createdAt: "15 Oktober 2026, 08:30 WIB",
@@ -583,10 +762,7 @@ export const MOCK_TROUBLE_TICKETS: TroubleTicket[] = [
   },
 ];
 
-// -------------------------------------------------------------
-// HELPER STORAGE PERSISTENCE
-// -------------------------------------------------------------
-
+// Helper Storage Persistence
 export function getStorageData<T>(key: string, defaultValue: T): T {
   if (typeof window === "undefined") return defaultValue;
   try {

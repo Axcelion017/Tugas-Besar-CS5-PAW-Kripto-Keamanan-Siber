@@ -1,4 +1,4 @@
-export type UserRole = "doctor" | "patient" | "admin" | "nakes" | "pasien";
+export type UserRole = "doctor" | "patient" | "admin" | "nakes" | "pasien" | "staf";
 
 export interface UserSession {
   id: string;
@@ -16,6 +16,7 @@ export interface UserSession {
   bloodType?: string;
   phone?: string;
   encryptionKeyHex?: string;
+  posisiStaf?: "Perawat Triase" | "Staf Admisi" | "Kepala Ruangan";
 }
 
 export interface DemoUserAccount extends UserSession {
@@ -29,9 +30,10 @@ export interface DemoUserCollection extends Array<DemoUserAccount> {
   admin: DemoUserAccount;
   nakes: DemoUserAccount;
   pasien: DemoUserAccount;
+  staf: DemoUserAccount;
 }
 
-// Data Pengguna Demo Terstandarisasi
+// Data Pengguna Demo Terstandarisasi 4-Role
 const BASE_USERS: DemoUserAccount[] = [
   {
     id: "DOC-01",
@@ -43,7 +45,7 @@ const BASE_USERS: DemoUserAccount[] = [
     nik: "3171011102830001",
     strNumber: "31.1.1.100.2.22.123456",
     sipNumber: "446/SIP-D/2023/001",
-    specialization: "Spesialis Penyakit Dalam",
+    specialization: "Spesialis Penyakit Dalam (DPJP)",
     faskesId: "FAS-01",
     faskesName: "RSUP Dr. Sardjito",
     status: "VERIFIED",
@@ -72,6 +74,20 @@ const BASE_USERS: DemoUserAccount[] = [
     nik: "3171099901850099",
     status: "VERIFIED",
   },
+  {
+    id: "STF-01",
+    name: "Ners Maya Kartika, S.Kep",
+    username: "suster_maya",
+    email: "maya.nurse@sardjito.id",
+    password: "nurse123",
+    role: "staf",
+    nik: "3171028809930005",
+    strNumber: "31.2.2.400.1.21.776655",
+    posisiStaf: "Perawat Triase",
+    faskesId: "FAS-01",
+    faskesName: "RSUP Dr. Sardjito",
+    status: "VERIFIED",
+  },
 ];
 
 const demoArray = [...BASE_USERS] as DemoUserCollection;
@@ -80,6 +96,7 @@ demoArray.patient = demoArray[1];
 demoArray.admin = demoArray[2];
 demoArray.nakes = demoArray[0];
 demoArray.pasien = demoArray[1];
+demoArray.staf = demoArray[3];
 
 export const DEMO_USERS: DemoUserCollection = demoArray;
 export const MOCK_USERS = DEMO_USERS;
@@ -91,10 +108,11 @@ export function saveSession(session: UserSession): void {
   }
 }
 
-// Normalisasi Peran untuk kemudahan routing
-export function normalizeRole(role: UserRole): "nakes" | "pasien" | "admin" {
+// Normalisasi Peran untuk kemudahan routing Next.js
+export function normalizeRole(role: UserRole): "nakes" | "pasien" | "admin" | "staf" {
   if (role === "doctor" || role === "nakes") return "nakes";
   if (role === "patient" || role === "pasien") return "pasien";
+  if (role === "staf") return "staf";
   return "admin";
 }
 
@@ -102,7 +120,6 @@ export function normalizeRole(role: UserRole): "nakes" | "pasien" | "admin" {
 export function loginUser(identifier: string, password: string): UserSession | null {
   const cleanId = identifier.trim().toLowerCase();
   
-  // Periksa pengguna lokal / demo
   const user = DEMO_USERS.find(
     (u) =>
       (u.username.toLowerCase() === cleanId ||
@@ -129,13 +146,14 @@ export function loginUser(identifier: string, password: string): UserSession | n
     bloodType: user.bloodType,
     phone: user.phone,
     encryptionKeyHex: user.encryptionKeyHex,
+    posisiStaf: user.posisiStaf,
   };
 
   saveSession(session);
   return session;
 }
 
-// Pengambilan sesi (mendukung getUserSession dan getSession)
+// Pengambilan sesi aktif
 export function getUserSession(): UserSession | null {
   if (typeof window === "undefined") return null;
   const stored = localStorage.getItem("resilio_session");
@@ -149,7 +167,7 @@ export function getUserSession(): UserSession | null {
 
 export const getSession = getUserSession;
 
-// Menghapus sesi saat logout (mendukung logoutUser, clearSession, logout)
+// Menghapus sesi saat logout
 export function logoutUser(): void {
   if (typeof window !== "undefined") {
     localStorage.removeItem("resilio_session");

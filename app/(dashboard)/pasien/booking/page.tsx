@@ -31,14 +31,19 @@ function BookingContent() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
 
   useEffect(() => {
-    const s = getUserSession();
-    if (s) {
-      setSession(s);
-      const allApts = getStorageData<Appointment[]>("resilio_appointments", MOCK_APPOINTMENTS);
-      setAppointments(allApts.filter((a) => a.pasienId === s.id || a.pasienNik === s.nik));
-    }
+    const timer = setTimeout(() => {
+      const s = getUserSession();
+      if (s) {
+        setSession(s);
+        const allApts = getStorageData<Appointment[]>("resilio_appointments", MOCK_APPOINTMENTS);
+        setAppointments(allApts.filter((a) => a.pasienId === s.id || (s.nik && a.pasienNik === s.nik)));
+      }
+    }, 0);
+    return () => clearTimeout(timer);
   }, []);
 
+  const requestedFaskesNotFound =
+    !!searchParams.get("faskesId") && !MOCK_FASKES.some((f) => f.id === searchParams.get("faskesId"));
   const currentFaskes = MOCK_FASKES.find((f) => f.id === faskesId) || MOCK_FASKES[0];
   const availableDoctors = MOCK_DOCTORS.filter((d) => d.faskesId === currentFaskes.id);
   const currentDoctor =
@@ -53,7 +58,7 @@ function BookingContent() {
       return;
     }
 
-    const newAptId = `APT-2026-${Date.now().toString().slice(-4)}`;
+    const newAptId = generateId("APT-2026");
     const newAppointment: Appointment = {
       id: newAptId,
       pasienId: session.id,
@@ -74,13 +79,13 @@ function BookingContent() {
     const allApts = getStorageData<Appointment[]>("resilio_appointments", MOCK_APPOINTMENTS);
     const updatedApts = [newAppointment, ...allApts];
     setStorageData("resilio_appointments", updatedApts);
-    setAppointments(updatedApts.filter((a) => a.pasienId === session.id || a.pasienNik === session.nik));
+    setAppointments(updatedApts.filter((a) => a.pasienId === session.id || (session.nik && a.pasienNik === session.nik)));
 
     // Jika Auto Consent dicentang, buat tiket izin akses (AccessGrant) untuk dokter
     if (autoConsent) {
       const allGrants = getStorageData<AccessGrant[]>("resilio_access_grants", MOCK_ACCESS_GRANTS);
       const newGrant: AccessGrant = {
-        id: `GRANT-${Date.now().toString().slice(-4)}`,
+        id: generateId("GRANT"),
         pasienId: session.id,
         pasienNama: session.name,
         entityId: currentDoctor.id,
@@ -119,6 +124,17 @@ function BookingContent() {
           Saat jadwal dikonfirmasi, sistem secara otomatis menerbitkan tiket izin akses sementara (Zero-Trust Gate) untuk dokter pemeriksa.
         </p>
       </div>
+
+      {requestedFaskesNotFound && (
+        <div className="p-4 rounded-2xl bg-amber-50 border border-amber-300 text-amber-900 text-xs font-bold flex items-center justify-between">
+          <span>
+            Peringatan: Fasilitas kesehatan dengan ID &quot;{searchParams.get("faskesId")}&quot; tidak terdaftar. Sistem mengarahkan ke faskes resmi: {currentFaskes.nama}.
+          </span>
+          <span className="text-[10px] font-mono uppercase bg-amber-200 px-2 py-0.5 rounded">
+            Faskes Dialihkan
+          </span>
+        </div>
+      )}
 
       {notification && (
         <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold">
@@ -296,7 +312,11 @@ function BookingContent() {
   );
 }
 
-export default function BookingPage() {
+function generateId(prefix: string) {
+  return `${prefix}-${Date.now().toString().slice(-4)}`;
+}
+
+export default function PasienBookingPage() {
   return (
     <Suspense fallback={<div className="text-slate-500 text-sm">Memuat halaman booking...</div>}>
       <BookingContent />
