@@ -242,6 +242,7 @@ Validasi Status Operasional & Keamanan: Jika faskes ditemukan namun atribut stat
 
 ## 4. Pembagian Server dan Client Components
 - Tabel Komponen dan Alasan Teknis
+
 | No | Komponen / Berkas | Jenis Komponen | Alasan Teknis & Pertimbangan Arsitektur |
 | :---: | :--- | :---: | :--- |
 | **1** | `FaskesDetailPage`<br>(`app/(dashboard)/pasien/faskes/[faskesId]/page.tsx`) | **Server Component** | • Membaca data faskes langsung dari database server (`mockData.ts` / Prisma) tanpa ekspos endpoint publik.<br>• Tidak membutuhkan *event listener* interaktif (`onClick`, `onChange`) atau state reaktif `useState`.<br>• Mengurangi ukuran JavaScript bundle yang dikirim ke browser klien sehingga proses rendering awal (FCP & LCP) menjadi sangat cepat. |
