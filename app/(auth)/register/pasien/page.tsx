@@ -16,8 +16,15 @@ export default function RegisterPasienPage() {
   const [golDarah, setGolDarah] = useState("O+");
   const [alergi, setAlergi] = useState("");
   const [ktpFileName, setKtpFileName] = useState("");
+  const [selfieFileName, setSelfieFileName] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+
+  const watermarkString = `HANYA UNTUK VERIFIKASI RESILIO-HEALTH - ${new Date().toLocaleDateString("id-ID", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).toUpperCase()}`;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,6 +41,11 @@ export default function RegisterPasienPage() {
       return;
     }
 
+    if (!selfieFileName) {
+      setErrorMsg("Swafoto (selfie) wajah memegang KTP (Liveness Check) wajib diunggah.");
+      return;
+    }
+
     setIsSubmitting(true);
 
     const newKyc: KycSubmission = {
@@ -44,6 +56,8 @@ export default function RegisterPasienPage() {
       tanggalLahir,
       alamat,
       ktpUrl: `/uploads/ktp-${nik}.jpg`,
+      selfieUrl: `/uploads/selfie-${nik}.jpg`,
+      watermarkText: watermarkString,
       submittedAt: new Date().toLocaleString("id-ID"),
       status: "PENDING",
     };
@@ -69,10 +83,10 @@ export default function RegisterPasienPage() {
             </div>
             <div>
               <h1 className="text-2xl font-black text-slate-900 tracking-tight">
-                Pendaftaran Pasien (Portal Satu Identitas NIK)
+                Pendaftaran Pasien (e-KYC Satu Identitas NIK)
               </h1>
               <p className="text-xs text-slate-500 font-medium">
-                Pendaftaran berbasis NIK untuk portabilitas rekam medis digital nasional.
+                Pendaftaran berbasis NIK dan swafoto wajah ber-watermark otomatis (UR-P01 & UR-P09).
               </p>
             </div>
           </div>
@@ -208,29 +222,68 @@ export default function RegisterPasienPage() {
             />
           </div>
 
-          {/* Upload Dokumen KYC */}
-          <div className="p-4 rounded-2xl bg-slate-50 border-2 border-dashed border-slate-300 text-center space-y-2">
-            <p className="text-xs font-bold text-slate-700">Unggah Foto Fisik KTP Asli (KYC)</p>
-            <p className="text-[11px] text-slate-500">
-              Format JPG, PNG atau PDF (Maks. 5 MB). Diperlukan untuk validasi kesesuaian NIK oleh Admin Regulator.
+          {/* Area Unggah Dokumen e-KYC: KTP + Selfie */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+            {/* Foto KTP */}
+            <div className="p-4 rounded-2xl bg-slate-50 border-2 border-dashed border-slate-300 text-center space-y-2">
+              <p className="text-xs font-bold text-slate-700">1. Foto Fisik KTP Asli</p>
+              <p className="text-[10px] text-slate-500">
+                Pencocokan NIK Dukcapil oleh Admin Kemenkes.
+              </p>
+              <input
+                type="file"
+                id="ktpFile"
+                className="hidden"
+                accept="image/*"
+                onChange={(e) => {
+                  if (e.target.files && e.target.files[0]) {
+                    setKtpFileName(e.target.files[0].name);
+                  }
+                }}
+              />
+              <label
+                htmlFor="ktpFile"
+                className="inline-block px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-800 text-xs font-bold rounded-xl border border-slate-300 cursor-pointer shadow-xs transition"
+              >
+                {ktpFileName ? `KTP: ${ktpFileName}` : "Pilih Berkas KTP"}
+              </label>
+            </div>
+
+            {/* Selfie Wajah (Liveness Check) */}
+            <div className="p-4 rounded-2xl bg-slate-50 border-2 border-dashed border-slate-300 text-center space-y-2">
+              <p className="text-xs font-bold text-slate-700">2. Swafoto Wajah Memegang KTP</p>
+              <p className="text-[10px] text-slate-500">
+                Liveness check membuktikan Anda adalah pemilik sah KTP.
+              </p>
+              <input
+                type="file"
+                id="selfieFile"
+                className="hidden"
+                accept="image/*"
+                onChange={(e) => {
+                  if (e.target.files && e.target.files[0]) {
+                    setSelfieFileName(e.target.files[0].name);
+                  }
+                }}
+              />
+              <label
+                htmlFor="selfieFile"
+                className="inline-block px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-800 text-xs font-bold rounded-xl border border-slate-300 cursor-pointer shadow-xs transition"
+              >
+                {selfieFileName ? `Swafoto: ${selfieFileName}` : "Pilih Swafoto Wajah"}
+              </label>
+            </div>
+          </div>
+
+          {/* Banner Watermarking Otomatis (Perlindungan Kebocoran Identitas) */}
+          <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-900 space-y-1">
+            <span className="font-bold text-[10px] uppercase text-blue-700">
+              Perlindungan Privasi Siber (Auto-Watermark di Sisi Klien):
+            </span>
+            <p className="text-[11px] leading-relaxed">
+              Berkas identitas Anda secara otomatis dibubuhi tanda air digital transparan:{" "}
+              <strong className="font-mono text-blue-800">&quot;{watermarkString}&quot;</strong> untuk mencegah penyalahgunaan KTP di luar sistem Resilio-Health.
             </p>
-            <input
-              type="file"
-              id="ktpFile"
-              className="hidden"
-              accept="image/*,.pdf"
-              onChange={(e) => {
-                if (e.target.files && e.target.files[0]) {
-                  setKtpFileName(e.target.files[0].name);
-                }
-              }}
-            />
-            <label
-              htmlFor="ktpFile"
-              className="inline-block px-4 py-2 bg-white hover:bg-slate-100 text-slate-800 text-xs font-bold rounded-xl border border-slate-300 cursor-pointer shadow-xs transition"
-            >
-              {ktpFileName ? `Terpilih: ${ktpFileName}` : "Pilih Berkas KTP"}
-            </label>
           </div>
 
           <button
@@ -238,7 +291,7 @@ export default function RegisterPasienPage() {
             disabled={isSubmitting}
             className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md shadow-blue-600/30 transition cursor-pointer disabled:bg-slate-400"
           >
-            {isSubmitting ? "Mengirimkan Berkas KYC..." : "Kirim Pengajuan Pendaftaran Pasien"}
+            {isSubmitting ? "Mengirimkan Berkas e-KYC..." : "Kirim Pengajuan e-KYC Pasien"}
           </button>
         </form>
       </div>

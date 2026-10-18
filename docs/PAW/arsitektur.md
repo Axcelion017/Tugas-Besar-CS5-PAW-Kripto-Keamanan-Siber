@@ -38,46 +38,57 @@ Dokumen ini mendokumentasikan keputusan rancangan arsitektur, hierarki komponen 
 ```text
 app/
 ├── layout.tsx                     # Root Layout: Server Component, Montserrat font, lang="id"
+├── loading.tsx                    # Root Suspense Shimmer Skeleton
+├── error.tsx                      # Root Application Error Boundary
+├── not-found.tsx                  # Global 404 Intelligent Page (Mempertahankan sesi aktif pengguna)
 ├── page.tsx                       # Landing Page Publik (Hero, Integrasi 3 Mata Kuliah, Quick Demo)
 ├── beranda/page.tsx               # Automatic Session Redirector (Mendistribusikan ke rute peran)
 │
 ├── (auth)/                        # Route Group: Autentikasi & Registrasi Publik
 │   ├── login/page.tsx             # Login multi-role (Username/Email/NIK 16 digit + Quick Demo)
 │   ├── register/
-│   │   ├── pasien/page.tsx        # UR-P01: Pendaftaran Pasien NIK, Biodata, Alergi & Unggah KTP
+│   │   ├── pasien/page.tsx        # UR-P01, UR-P09: Pendaftaran Pasien NIK, Biodata, Alergi & e-KYC Watermark
 │   │   └── nakes/page.tsx         # UR-T01: Pendaftaran Dokter NIK, Nomor STR, SIP & Dokumen Kemenkes
 │   └── verifikasi-pending/page.tsx# Landing Page Pemberitahuan Kepatuhan Verifikasi KYC/KYD
 │
 └── (dashboard)/                   # Route Group: Area Terproteksi Multi-Role
     ├── layout.tsx                 # Dashboard Layout: Zero-Trust Route Guard, RoleNav, NetworkBanner
+    ├── loading.tsx                # Dashboard Suspense Skeleton Shimmer
+    ├── error.tsx                  # In-Dashboard Error Boundary (Menangkap error tanpa memutus sesi)
     │
-    ├── pasien/                    # Domain: PASIEN (UR-P01 s.d. UR-P08)
-    │   ├── page.tsx               # Ringkasan Kesehatan, Emergency Card, Alert Alergi & Antrean
+    ├── pasien/                    # Domain: PASIEN (UR-P01 s.d. UR-P12)
+    │   ├── page.tsx               # UR-P10, P11: Ringkasan, Family Proxy, Active Encounter PIN
     │   ├── faskes/
     │   │   ├── page.tsx           # UR-P02: Pencarian Faskes Pintar (Filter Gejala/Penyakit & Poli)
-    │   │   └── [faskesId]/page.tsx# UR-P03: Profil Faskes, Dokter Praktik, Jadwal & Kuota Harian
+    │   │   └── [faskesId]/page.tsx# UR-P03: Profil Faskes, Dokter Praktik, Jadwal & Kuota Harian (404-safe)
     │   ├── booking/page.tsx       # UR-P04: Pemesanan Jadwal Periksa & Penerbitan Auto-Consent
     │   ├── rekam-medis/
-    │   │   ├── page.tsx           # UR-P06: Linimasa RME, Grafik Tensi Sistolik/Diastolik, Dekripsi Kripto
-    │   │   └── [recordId]/page.tsx# Detail Bukti Hukum RME & Modul Pengujian Tamper Kripto
+    │   │   ├── page.tsx           # UR-P06, P12: Linimasa RME, Grafik Tensi, Dekripsi Citra Medis
+    │   │   └── [recordId]/page.tsx# Detail Bukti Hukum RME & Modul Pengujian Tamper Kripto (404-safe)
     │   ├── consent/page.tsx       # UR-P05 & UR-P07: Manajemen Hak Akses, 1-Click Revoke & Transfer RME
     │   ├── audit-log/page.tsx     # UR-P07: Transparansi Jejak Audit Siapa & Kapan Akses Data (UU PDP)
     │   └── tiket-kendala/page.tsx # UR-P08: Pelaporan Masalah & Ketidaksesuaian Data Medis
     │
-    ├── nakes/                     # Domain: TENAGA KESEHATAN (UR-T01 s.d. UR-T06)
+    ├── nakes/                     # Domain: DOKTER (DPJP) (UR-T01 s.d. UR-T10)
     │   ├── page.tsx               # UR-T02: Stasiun Kerja, Status Praktik, Antrean Pasien Hari Ini
     │   ├── periksa/[bookingId]/
-    │   │   └── page.tsx           # UR-T04: Pemeriksaan Klinis (SOAP, ICD-10, AES-GCM + HMAC Sign)
-    │   ├── pasien-lookup/page.tsx # UR-T03: Lookup Pasien NIK dengan Pertahanan BOLA/IDOR Gate
+    │   │   └── page.tsx           # UR-T04, T07, T09, T10: SOAP, Citra Medis, Addendum & Alergi (404-safe)
+    │   ├── pasien-lookup/page.tsx # UR-T03 & T08: Lookup NIK, BOLA Gate & Break-Glass IGD
     │   ├── rujukan/page.tsx       # UR-T06: Penerbitan Surat Rujukan Digital Lintas Faskes
     │   └── offline-sync/page.tsx  # UR-T05 & T06: Status Antrean Sinkronisasi IndexedDB Offline
     │
-    └── admin/                     # Domain: ADMIN REGULATOR (UR-A01 s.d. UR-A05)
+    ├── staf/                      # Domain: STAF NAKES (TRIASE & ADMISI) (UR-S01 s.d. UR-S04)
+    │   ├── page.tsx               # UR-S01: Penerimaan Pasien (Check-in) & Antrean Walk-in Loket
+    │   ├── triase/page.tsx        # UR-S02: Input Triase Awal & Tanda Vital (Hijau/Kuning/Merah)
+    │   ├── assign-dpjp/page.tsx   # UR-S03: Penugasan Dokter DPJP & Active Encounter Ticket
+    │   └── rujukan/page.tsx       # UR-S04: Pengelolaan Administrasi Rujukan Masuk & Keluar
+    │
+    └── admin/                     # Domain: ADMIN REGULATOR (UR-A01 s.d. UR-A07)
         ├── page.tsx               # Ringkasan Eksekutif, Status Sistem & Agregat Keamanan
-        ├── verifikasi-kyc/page.tsx# UR-A01: Antrean Verifikasi KTP/NIK Pasien (Approve / Reject)
+        ├── verifikasi-kyc/page.tsx# UR-A01 & A06: Antrean Verifikasi Visual KTP Ber-watermark + Selfie
         ├── verifikasi-kyd/page.tsx# UR-A02: Verifikasi STR & SIP Dokter Konsil Kedokteran
         ├── faskes/page.tsx        # UR-A03: Master Direktori Faskes & Ransomware Kill-Switch
-        ├── siem-monitor/page.tsx  # UR-A04: SIEM Live Security Feed (IDOR, HMAC Alarms, Probe Test)
+        ├── siem-monitor/page.tsx  # UR-A04 & A07: SIEM Live Feed (IDOR, Break-Glass, HMAC Alarms)
         └── incident-center/page.tsx# UR-A05: Failed Sync Queue & Penanganan Tiket Masalah Teknis
 ```
 
@@ -101,10 +112,10 @@ app/
 
 ### 4.1 Sesi Pengguna & Autentikasi (`lib/auth/auth.ts`)
 ```typescript
-export type UserRole = "doctor" | "patient" | "admin" | "nakes" | "pasien";
+export type UserRole = "doctor" | "patient" | "admin" | "nakes" | "pasien" | "staf";
 
 export interface UserSession {
-  id: string;              // "DOC-01", "P-101", "ADM-01"
+  id: string;              // "DOC-01", "P-101", "ADM-01", "STF-01"
   name: string;            // Nama lengkap dan gelar
   username: string;        // Nama pengguna unik
   role: UserRole;          // Peran pengguna
@@ -114,6 +125,7 @@ export interface UserSession {
   specialization?: string; // Spesialisasi dokter
   faskesId?: string;       // ID fasilitas kesehatan bertugas
   faskesName?: string;     // Nama faskes bertugas
+  posisiStaf?: "Perawat Triase" | "Staf Admisi" | "Kepala Ruangan";
   status?: "VERIFIED" | "PENDING" | "REJECTED";
   allergies?: string[];    // Riwayat alergi obat/makanan kritis
   bloodType?: string;      // Golongan darah

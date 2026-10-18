@@ -9,26 +9,29 @@ import {
   SecurityAuditLog,
 } from "@/lib/db/mockData";
 
+function generateSiemLogId(prefix: string) {
+  return `${prefix}-${Date.now().toString().slice(-4)}`;
+}
+
 export default function SiemMonitorPage() {
   const [logs, setLogs] = useState<SecurityAuditLog[]>([]);
   const [severityFilter, setSeverityFilter] = useState<"ALL" | "INFO" | "WARN" | "CRITICAL">("ALL");
 
-  const loadLogs = () => {
-    const all = getStorageData<SecurityAuditLog[]>("resilio_security_logs", MOCK_SECURITY_LOGS);
-    setLogs(all);
-  };
-
   useEffect(() => {
-    loadLogs();
+    const timer = setTimeout(() => {
+      const all = getStorageData<SecurityAuditLog[]>("resilio_security_logs", MOCK_SECURITY_LOGS);
+      setLogs(all);
+    }, 0);
+    return () => clearTimeout(timer);
   }, []);
 
-  const handleSimulateAttack = (type: "IDOR" | "HMAC") => {
+  const handleSimulateAttack = (type: "IDOR" | "HMAC" | "BREAK_GLASS") => {
     const current = getStorageData<SecurityAuditLog[]>("resilio_security_logs", MOCK_SECURITY_LOGS);
     let newEvent: SecurityAuditLog;
 
     if (type === "IDOR") {
       newEvent = {
-        id: `LOG-IDOR-${Date.now().toString().slice(-4)}`,
+        id: generateSiemLogId("LOG-IDOR"),
         timestamp: new Date().toLocaleString("id-ID"),
         actorId: "ACTOR-UNAUTH-77",
         actorName: "dr. Ilegal Sp.An",
@@ -40,9 +43,9 @@ export default function SiemMonitorPage() {
         severity: "CRITICAL",
         detail: "BOLA Guard: Memblokir percobaan akses langsung rekam medis pasien P-102 tanpa consent atau sesi periksa aktif.",
       };
-    } else {
+    } else if (type === "HMAC") {
       newEvent = {
-        id: `LOG-HMAC-${Date.now().toString().slice(-4)}`,
+        id: generateSiemLogId("LOG-HMAC"),
         timestamp: new Date().toLocaleString("id-ID"),
         actorId: "MALWARE-SIM",
         actorName: "Infected Gateway Process",
@@ -53,6 +56,20 @@ export default function SiemMonitorPage() {
         userAgent: "Ransomware Tamper Agent",
         severity: "CRITICAL",
         detail: "Deteksi Kripto: Nilai HMAC-SHA256 korup pada transmisi payload rekam medis. Integritas gagal, sinkronisasi dibatalkan (Fail-Closed).",
+      };
+    } else {
+      newEvent = {
+        id: generateSiemLogId("LOG-BG"),
+        timestamp: new Date().toLocaleString("id-ID"),
+        actorId: "DOC-01",
+        actorName: "dr. Andi Pratama, Sp.PD",
+        actorRole: "NAKES",
+        action: "BREAK_GLASS_ACCESS",
+        targetResource: "/api/rme/break-glass/P-104",
+        ipAddress: "192.168.1.42 (IGD Bed 01)",
+        userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+        severity: "CRITICAL",
+        detail: "BREAK-GLASS EMERGENCY ACCESS: Dokter membuka rekam medis darurat pasien Dewi Lestari tanpa consent. Alasan klinis: Pasien Koma Syok Anafilaktik. Notifikasi prioritas tinggi diteruskan ke Admin Kemenkes.",
       };
     }
 
@@ -123,6 +140,12 @@ export default function SiemMonitorPage() {
               className="px-3.5 py-2 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-xl text-xs font-bold transition cursor-pointer border border-amber-300"
             >
               Uji HMAC Mismatch
+            </button>
+            <button
+              onClick={() => handleSimulateAttack("BREAK_GLASS")}
+              className="px-3.5 py-2 bg-purple-100 hover:bg-purple-200 text-purple-900 rounded-xl text-xs font-bold transition cursor-pointer border border-purple-300"
+            >
+              Uji Break-Glass IGD
             </button>
             {logs.length > 0 && (
               <button

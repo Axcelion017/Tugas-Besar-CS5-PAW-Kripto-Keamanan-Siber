@@ -14,13 +14,12 @@ export default function IncidentCenterPage() {
   const [filterKategori, setFilterKategori] = useState<string>("ALL");
   const [notif, setNotif] = useState<string | null>(null);
 
-  const loadTickets = () => {
-    const list = getStorageData<TroubleTicket[]>("resilio_trouble_tickets", MOCK_TROUBLE_TICKETS);
-    setTickets(list);
-  };
-
   useEffect(() => {
-    loadTickets();
+    const timer = setTimeout(() => {
+      const list = getStorageData<TroubleTicket[]>("resilio_trouble_tickets", MOCK_TROUBLE_TICKETS);
+      setTickets(list);
+    }, 0);
+    return () => clearTimeout(timer);
   }, []);
 
   const handleUpdateStatus = (

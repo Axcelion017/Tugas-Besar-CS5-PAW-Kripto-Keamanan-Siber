@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { getUserSession } from "@/lib/auth/auth";
 import { verifyHMAC } from "@/lib/crypto/hmac";
 import {
   MOCK_PATIENTS,
@@ -23,9 +22,14 @@ export default function OfflineSyncPage() {
   };
 
   useEffect(() => {
-    loadQueue();
+    const timer = setTimeout(() => {
+      loadQueue();
+    }, 0);
     window.addEventListener("storage", loadQueue);
-    return () => window.removeEventListener("storage", loadQueue);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("storage", loadQueue);
+    };
   }, []);
 
   const handleSyncNow = async () => {
@@ -43,7 +47,12 @@ export default function OfflineSyncPage() {
     const newSyncedRecords: EncryptedMedicalRecord[] = [...existingRecords];
 
     for (const item of queue) {
-      const patient = allPatients.find((p) => p.id === item.patientId) || allPatients[0];
+      const patient = allPatients.find((p) => p.id === item.patientId);
+      if (!patient) {
+        remainingQueue.push(item);
+        logs.push(`[GAGAL] Berkas ${item.recordId} — Pasien ID ${item.patientId} tidak terdaftar di server pusat.`);
+        continue;
+      }
       const key = patient.encryptionKeyHex;
 
       // Verifikasi HMAC sebelum diterima server pusat (Integritas)

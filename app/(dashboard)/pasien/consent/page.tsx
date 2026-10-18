@@ -14,6 +14,10 @@ import {
   SecurityAuditLog,
 } from "@/lib/db/mockData";
 
+function generateConsentId(prefix: string) {
+  return `${prefix}-${Date.now().toString().slice(-4)}`;
+}
+
 export default function ConsentManagerPage() {
   const [session, setSession] = useState<UserSession | null>(null);
   const [grants, setGrants] = useState<AccessGrant[]>([]);
@@ -22,12 +26,15 @@ export default function ConsentManagerPage() {
   const [notif, setNotif] = useState<string | null>(null);
 
   useEffect(() => {
-    const s = getUserSession();
-    if (s) {
-      setSession(s);
-      const all = getStorageData<AccessGrant[]>("resilio_access_grants", MOCK_ACCESS_GRANTS);
-      setGrants(all.filter((g) => g.pasienId === s.id || g.pasienId === "P-101"));
-    }
+    const timer = setTimeout(() => {
+      const s = getUserSession();
+      if (s) {
+        setSession(s);
+        const all = getStorageData<AccessGrant[]>("resilio_access_grants", MOCK_ACCESS_GRANTS);
+        setGrants(all.filter((g) => g.pasienId === s.id || g.pasienId === "P-101"));
+      }
+    }, 0);
+    return () => clearTimeout(timer);
   }, []);
 
   const handleRevoke = (grantId: string, entityNama: string) => {
@@ -39,7 +46,7 @@ export default function ConsentManagerPage() {
     // Tambahkan log audit siber
     const logs = getStorageData<SecurityAuditLog[]>("resilio_security_logs", MOCK_SECURITY_LOGS);
     const newLog: SecurityAuditLog = {
-      id: `LOG-${Date.now().toString().slice(-4)}`,
+      id: generateConsentId("LOG"),
       timestamp: new Date().toLocaleString("id-ID"),
       actorId: session?.id || "P-101",
       actorName: session?.name || "Budi Santoso",
@@ -47,7 +54,7 @@ export default function ConsentManagerPage() {
       action: "REVOKE_CONSENT",
       targetResource: `/api/consent/revoke/${grantId}`,
       ipAddress: "182.253.12.90 (Client IP)",
-      userAgent: navigator.userAgent,
+      userAgent: typeof navigator !== "undefined" ? navigator.userAgent : "Client Browser",
       severity: "INFO",
       detail: `Pasien mencabut izin akses untuk ${entityNama} (1-Click Revoke UU PDP).`,
     };
@@ -72,7 +79,7 @@ export default function ConsentManagerPage() {
     expiryDate.setDate(expiryDate.getDate() + Number(validDays));
 
     const newGrant: AccessGrant = {
-      id: `GRANT-${Date.now().toString().slice(-4)}`,
+      id: generateConsentId("GRANT"),
       pasienId: session.id,
       pasienNama: session.name,
       entityId: selectedEntityId,

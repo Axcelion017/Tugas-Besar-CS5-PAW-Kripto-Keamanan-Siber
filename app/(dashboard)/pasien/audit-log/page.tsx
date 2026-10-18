@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { getUserSession } from "@/lib/auth/auth";
 import {
   MOCK_SECURITY_LOGS,
   getStorageData,
@@ -13,8 +12,11 @@ export default function PasienAuditLogPage() {
   const [logs, setLogs] = useState<SecurityAuditLog[]>([]);
 
   useEffect(() => {
-    const all = getStorageData<SecurityAuditLog[]>("resilio_security_logs", MOCK_SECURITY_LOGS);
-    setLogs(all);
+    const timer = setTimeout(() => {
+      const all = getStorageData<SecurityAuditLog[]>("resilio_security_logs", MOCK_SECURITY_LOGS);
+      setLogs(all);
+    }, 0);
+    return () => clearTimeout(timer);
   }, []);
 
   return (

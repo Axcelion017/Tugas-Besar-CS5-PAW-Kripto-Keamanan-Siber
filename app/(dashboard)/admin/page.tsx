@@ -26,24 +26,27 @@ export default function AdminOverviewPage() {
   const [faskesList, setFaskesList] = useState<Faskes[]>([]);
 
   useEffect(() => {
-    const s = getUserSession();
-    if (s) {
-      setSession(s);
-      const kyc = getStorageData<KycSubmission[]>("resilio_kyc_list", MOCK_KYC_REQUESTS);
-      setKycPending(kyc.filter((k) => k.status === "PENDING").length);
+    const timer = setTimeout(() => {
+      const s = getUserSession();
+      if (s) {
+        setSession(s);
+        const kyc = getStorageData<KycSubmission[]>("resilio_kyc_list", MOCK_KYC_REQUESTS);
+        setKycPending(kyc.filter((k) => k.status === "PENDING").length);
 
-      const kyd = getStorageData<KydSubmission[]>("resilio_kyd_list", MOCK_KYD_REQUESTS);
-      setKydPending(kyd.filter((k) => k.status === "PENDING").length);
+        const kyd = getStorageData<KydSubmission[]>("resilio_kyd_list", MOCK_KYD_REQUESTS);
+        setKydPending(kyd.filter((k) => k.status === "PENDING").length);
 
-      const logs = getStorageData<SecurityAuditLog[]>("resilio_security_logs", MOCK_SECURITY_LOGS);
-      setSecurityEvents(logs);
+        const logs = getStorageData<SecurityAuditLog[]>("resilio_security_logs", MOCK_SECURITY_LOGS);
+        setSecurityEvents(logs);
 
-      const tcks = getStorageData<TroubleTicket[]>("resilio_trouble_tickets", MOCK_TROUBLE_TICKETS);
-      setTroubles(tcks.filter((t) => t.status !== "RESOLVED"));
+        const tcks = getStorageData<TroubleTicket[]>("resilio_trouble_tickets", MOCK_TROUBLE_TICKETS);
+        setTroubles(tcks.filter((t) => t.status !== "RESOLVED"));
 
-      const fas = getStorageData<Faskes[]>("resilio_faskes_list", MOCK_FASKES);
-      setFaskesList(fas);
-    }
+        const fas = getStorageData<Faskes[]>("resilio_faskes_list", MOCK_FASKES);
+        setFaskesList(fas);
+      }
+    }, 0);
+    return () => clearTimeout(timer);
   }, []);
 
   if (!session) return null;
@@ -67,7 +70,7 @@ export default function AdminOverviewPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Link
             href="/admin/siem-monitor"
             className="px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md transition"
