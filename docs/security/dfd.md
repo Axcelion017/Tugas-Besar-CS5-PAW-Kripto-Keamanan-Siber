@@ -19,13 +19,14 @@ Dokumen ini memetakan arsitektur aliran data, batas kepercayaan (*Trust Boundari
 | :--- | :--- | :--- |
 | **PRC-01** | **KYC & KYD Identity Verification Gateway** | Memvalidasi keaslian dokumen NIK/KTP pasien dan lisensi STR/SIP dokter sebelum status akun diaktifkan. |
 | **PRC-02** | **Zero-Trust BOLA / IDOR Gatekeeper** | Memeriksa kepemilikan data dan keabsahan tiket izin akses aktif (`access_grants`) sebelum mengembalikan rekam medis pasien. Akses tanpa izin diblokir 403 Forbidden. |
-| **PRC-03** | **SOAP Clinical & Client Encryption Engine** | Memvalidasi input SOAP (ICD-10, vital signs), membangkitkan IV 96-bit (CSPRNG), mengenkripsi payload via AES-256-GCM, dan membuat digest HMAC-SHA256 di browser. |
+| **PRC-03** | **SOAP Clinical & Client Encryption Engine** | Memvalidasi masukan SOAP via skema Zod v4 (tensi, ICD-10), mengecek kontraindikasi alergi (UR-T10), membangkitkan IV 96-bit CSPRNG, mengenkripsi via AES-256-GCM, dan membuat digest HMAC-SHA256. |
 | **PRC-04** | **Decryption & HMAC Integrity Verifier** | Memverifikasi keutuhan ciphertext via HMAC-SHA256 (Fail-Closed) dan mendekripsi plaintext klinis hanya di browser pasien/dokter berizin. |
 | **PRC-05** | **Offline Queue & Background Sync Manager** | Menangkap kegagalan jaringan via Service Worker, mengantrekan ciphertext terenkripsi di IndexedDB, dan mengirimkannya ke server saat online. |
 | **PRC-06** | **SIEM Logger & Faskes Kill-Switch Engine** | Mencatat log keamanan (IDOR, HMAC failure, login, Break-Glass) dan mengeksekusi karantina faskes untuk mengisolasi faskes yang terinfeksi ransomware. |
 | **PRC-07** | **Client-Side Canvas Auto-Watermarking** | Mencetak watermark teks permanen *"HANYA UNTUK VERIFIKASI RESILIO-HEALTH"* di atas foto KTP dan selfie pada kanvas peramban sebelum berkas diunggah. |
 | **PRC-08** | **Active Encounter Ticket & PIN Gatekeeper** | Memvalidasi 6-digit PIN persetujuan pasien di loket triase untuk menerbitkan tiket enkripsi sesi aktif yang mengunci DPJP bertugas. |
 | **PRC-09** | **Binary Medical Image Encryption Engine** | Mengonversi citra medis (Rontgen/USG/Lab/EKG) menjadi biner Blob terenkripsi AES-256-GCM berkapasitas besar di IndexedDB. |
+| **PRC-10** | **Stateful Cookie Session & Server Action Engine** | Menerbitkan dan memvalidasi cookie HTTP-Only (`resilio_session_token`) via Server Action `lib/actions/auth.ts`, mengelola stateful session store, dan mengeksekusi pembatalan sesi instan. |
 
 ### 1.3 Penyimpanan Data (*Data Stores*)
 | ID Penyimpanan | Nama Penyimpanan | Tipe Media | Klasifikasi Data & Proteksi |

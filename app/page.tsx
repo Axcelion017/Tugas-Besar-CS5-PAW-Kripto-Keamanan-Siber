@@ -3,17 +3,25 @@
 import React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { loginUser, normalizeRole } from "@/lib/auth/auth";
+import { saveSession, normalizeRole } from "@/lib/auth/auth";
+import { loginServerAction } from "@/lib/actions/auth";
 
 export default function HomePage() {
   const router = useRouter();
 
-  const handleQuickDemo = (user: string, pass: string) => {
-    const session = loginUser(user, pass);
-    if (session) {
-      const target = normalizeRole(session.role);
-      router.push(`/${target}`);
+  const handleQuickDemo = async (user: string, pass: string) => {
+    try {
+      const res = await loginServerAction(user, pass);
+      if (res.success && res.session) {
+        saveSession(res.session);
+        const target = res.targetRole || normalizeRole(res.session.role);
+        router.push(`/${target}`);
+        return;
+      }
+    } catch {
+      // Fallback
     }
+    router.push("/login");
   };
 
   return (

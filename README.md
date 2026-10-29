@@ -113,13 +113,17 @@ Aplikasi menyediakan tombol *Quick Demo* pada halaman masuk (`/login` dan `/`) u
 │   ├── shared/                   # RoleNav (Navigasi SVG), NetworkStatusBanner
 │   └── ui/                       # Icons.tsx (Vector Iconset), LogoutModal, StatCard, StatusBadge
 ├── lib/
+│   ├── actions/                  # Next.js Server Actions: clinical.ts (SOAP & UR-T10) & auth.ts (Cookie Auth)
 │   ├── auth/auth.ts              # Pengelolaan Sesi 4-Role & Normalisasi Peran
 │   ├── crypto/                   # aes.ts (AES-256-GCM) & hmac.ts (HMAC-SHA256)
-│   └── db/mockData.ts            # Entitas Terstandarisasi, Mock Persistence & Storage Helpers
+│   ├── db/mockData.ts            # Entitas Terstandarisasi, Mock Persistence & Storage Helpers
+│   └── validations/              # Skema Validasi Tipe Aman Zod v4 (clinical, auth, triage, patient)
 ├── tests/
-│   └── crypto.test.ts            # Pengujian Unit Kriptografi Vitest (4/4 Passed)
+│   ├── crypto.test.ts            # Pengujian Unit Kriptografi Vitest (4/4 Passed)
+│   └── validations.test.ts       # Pengujian Skema Validasi Zod Vitest (15/15 Passed)
 └── docs/                         # Dokumentasi Terstruktur Laporan Tugas Besar
-    ├── PAW/                      # kebutuhan.md & arsitektur.md
+    ├── database.md               # Spesifikasi Basis Data (Entitas, Relasi, CDM, LDM, PDM, DDL & Kamus Data)
+    ├── PAW/                      # kebutuhan.md, arsitektur.md & database.md
     ├── security/                 # asset-inventory.md, dfd.md, threat-model.md, risk-register.md
     └── cryptography/             # CRYPTO_SPEC.md
 ```
@@ -129,4 +133,6 @@ Aplikasi menyediakan tombol *Quick Demo* pada halaman masuk (`/login` dan `/`) u
 ## 6. Verifikasi & Pengujian Sistem
 
 - **Kompilasi Antarmuka**: Seluruh 30 rute Next.js terkompilasi bersih tanpa galat TypeScript (`npm run build`).
-- **Pengujian Kriptografi**: Seluruh uji unit (AES-256-GCM, HMAC-SHA256, deteksi *tamper*, dan *fail-closed*) lulus 100% (`npx vitest run`).
+- **Pengujian Unit Otomatis**: Sebanyak 19 skenario uji unit (4 kriptografi AES/HMAC + 15 validasi skema Zod v4) lulus 100% (`npx vitest run`).
+- **Analisis Kualitas Kode**: Lolos analisis statis ESLint dengan 0 error dan 0 warning (`npm run lint`).
+- **Keamanan Sesi & Cookie HTTP-Only**: Penerbitan cookie sesi `resilio_session_token` (`HttpOnly`, `SameSite=Lax`, `Max-Age=14400`) via Server Action `lib/actions/auth.ts` terverifikasi aktif pada peramban.

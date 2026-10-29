@@ -16,8 +16,10 @@ Aplikasi Resilio-Health dibangun dengan mengacu pada standar regulasi nasional, 
 
 ## 2. Pustaka Kode & Dependensi Terbuka
 - **Next.js & React (MIT License)**: Kerangka kerja aplikasi web modern berbasis React Server Component & Next.js App Router.
+- **Zod (MIT License)**: Pustaka deklarasi dan validasi skema data TypeScript untuk penegakan integritas data tipe aman di klien dan server (*Server Actions*).
 - **Tailwind CSS v4 (MIT License)**: Kerangka kerja styling berbasis utilitas tinggi.
 - **W3C Web Crypto API**: Implementasi algoritma kriptografi asli peramban (*browser native*) tanpa dependensi eksternal pihak ketiga yang rentan disusupi supply chain attack.
 - **Vitest (MIT License)**: Kerangka kerja pengujian unit kriptografi performa tinggi.
+- **RFC 6265bis**: Standar manajemen cookie HTTP aman (`HttpOnly`, `SameSite=Lax`, `Secure`, `Max-Age`).
 - **Google Font Montserrat (SIL Open Font License 1.1)**: Tipografi modern antarmuka enterprise medis.
 - **Komponen Ikon Vektor Monokrom**: Didefinisikan secara mandiri dalam `components/ui/Icons.tsx` berbasis SVG murni tanpa modul eksternal.

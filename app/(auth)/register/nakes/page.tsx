@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getStorageData, setStorageData, MOCK_KYD_REQUESTS, KydSubmission, MOCK_FASKES } from "@/lib/db/mockData";
+import { RegisterNakesSchema } from "@/lib/validations/auth";
 
 export default function RegisterNakesPage() {
   const router = useRouter();
@@ -21,18 +22,19 @@ export default function RegisterNakesPage() {
     e.preventDefault();
     setErrorMsg("");
 
-    if (!/^\d{16}$/.test(nik)) {
-      setErrorMsg("NIK wajib terdiri dari tepat 16 digit angka.");
-      return;
-    }
+    // Validasi Formulir Pendaftaran Dokter menggunakan Skema Zod
+    const validation = RegisterNakesSchema.safeParse({
+      nik,
+      namaLengkap,
+      strNumber,
+      sipNumber,
+      spesialisasi,
+      faskesNama,
+      strDokumenUploaded: !!dokumenStrFileName,
+    });
 
-    if (!strNumber.trim() || !sipNumber.trim()) {
-      setErrorMsg("Nomor STR dan SIP dokter/nakes wajib diisi.");
-      return;
-    }
-
-    if (!dokumenStrFileName) {
-      setErrorMsg("Dokumen bukti STR / SIP resmi wajib diunggah.");
+    if (!validation.success) {
+      setErrorMsg(validation.error.issues[0]?.message || "Data nakes tidak valid.");
       return;
     }
 

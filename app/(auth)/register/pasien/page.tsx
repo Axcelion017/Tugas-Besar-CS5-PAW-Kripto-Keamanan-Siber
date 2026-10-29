@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getStorageData, setStorageData, MOCK_KYC_REQUESTS, KycSubmission } from "@/lib/db/mockData";
+import { RegisterPasienSchema } from "@/lib/validations/auth";
 
 export default function RegisterPasienPage() {
   const router = useRouter();
@@ -30,19 +31,22 @@ export default function RegisterPasienPage() {
     e.preventDefault();
     setErrorMsg("");
 
-    // Validasi NIK 16 digit
-    if (!/^\d{16}$/.test(nik)) {
-      setErrorMsg("Nomor Induk Kependudukan (NIK) wajib terdiri dari tepat 16 digit angka.");
-      return;
-    }
+    // Validasi Formulir Pendaftaran Pasien menggunakan Skema Zod
+    const validation = RegisterPasienSchema.safeParse({
+      nik,
+      namaLengkap,
+      email,
+      phone,
+      tanggalLahir,
+      alamat,
+      golDarah,
+      alergi,
+      ktpUploaded: !!ktpFileName,
+      selfieUploaded: !!selfieFileName,
+    });
 
-    if (!ktpFileName) {
-      setErrorMsg("Unggahan foto KTP asli diperlukan untuk verifikasi identitas (KYC).");
-      return;
-    }
-
-    if (!selfieFileName) {
-      setErrorMsg("Swafoto (selfie) wajah memegang KTP (Liveness Check) wajib diunggah.");
+    if (!validation.success) {
+      setErrorMsg(validation.error.issues[0]?.message || "Data pendaftaran tidak valid.");
       return;
     }
 

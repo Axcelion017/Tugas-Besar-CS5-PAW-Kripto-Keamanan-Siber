@@ -3,7 +3,9 @@
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { loginUser, normalizeRole } from "@/lib/auth/auth";
+import { saveSession, normalizeRole } from "@/lib/auth/auth";
+import { LoginSchema } from "@/lib/validations/auth";
+import { loginServerAction } from "@/lib/actions/auth";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -12,27 +14,49 @@ export default function LoginPage() {
   const [errorMsg, setErrorMsg] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
     setErrorMsg("");
 
-    const session = loginUser(identifier, password);
-    if (session) {
-      const targetRole = normalizeRole(session.role);
-      router.replace(`/${targetRole}`);
-    } else {
-      setErrorMsg("Kredensial atau NIK tidak valid. Periksa kembali atau gunakan tombol demo.");
+    // Validasi input menggunakan Skema Zod
+    const validation = LoginSchema.safeParse({ identifier, password });
+    if (!validation.success) {
+      setErrorMsg(validation.error.issues[0]?.message || "Input tidak valid.");
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      // Panggil Server Action untuk verifikasi kredensial & penerbitan Cookie HTTP-Only
+      const result = await loginServerAction(identifier, password);
+      if (result.success && result.session) {
+        saveSession(result.session); // Sinkronisasi ke localStorage untuk kompatibilitas klien
+        const targetRole = result.targetRole || normalizeRole(result.session.role);
+        router.replace(`/${targetRole}`);
+      } else {
+        setErrorMsg(result.message || "Kredensial atau NIK tidak valid. Periksa kembali atau gunakan tombol demo.");
+        setIsLoading(false);
+      }
+    } catch {
+      setErrorMsg("Terjadi kendala jaringan saat menghubungkan ke server.");
       setIsLoading(false);
     }
   };
 
-  const handleQuickDemo = (user: string, pass: string) => {
+  const handleQuickDemo = async (user: string, pass: string) => {
     setIsLoading(true);
-    const session = loginUser(user, pass);
-    if (session) {
-      const targetRole = normalizeRole(session.role);
-      router.replace(`/${targetRole}`);
+    setErrorMsg("");
+    try {
+      const result = await loginServerAction(user, pass);
+      if (result.success && result.session) {
+        saveSession(result.session);
+        const targetRole = result.targetRole || normalizeRole(result.session.role);
+        router.replace(`/${targetRole}`);
+      }
+    } catch {
+      setErrorMsg("Gagal melakukan demo login otomatis.");
+      setIsLoading(false);
     }
   };
 

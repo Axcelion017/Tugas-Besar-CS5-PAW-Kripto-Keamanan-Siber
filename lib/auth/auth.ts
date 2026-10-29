@@ -101,10 +101,12 @@ demoArray.staf = demoArray[3];
 export const DEMO_USERS: DemoUserCollection = demoArray;
 export const MOCK_USERS = DEMO_USERS;
 
-// Menyimpan sesi secara manual di localStorage
+// Menyimpan sesi secara manual di localStorage dan cookie peramban
 export function saveSession(session: UserSession): void {
   if (typeof window !== "undefined") {
     localStorage.setItem("resilio_session", JSON.stringify(session));
+    document.cookie = `resilio_user_role=${normalizeRole(session.role)}; path=/; max-age=14400; SameSite=Lax`;
+    document.cookie = `resilio_session_active=true; path=/; max-age=14400; SameSite=Lax`;
   }
 }
 
@@ -171,6 +173,8 @@ export const getSession = getUserSession;
 export function logoutUser(): void {
   if (typeof window !== "undefined") {
     localStorage.removeItem("resilio_session");
+    document.cookie = "resilio_user_role=; path=/; max-age=0";
+    document.cookie = "resilio_session_active=; path=/; max-age=0";
   }
 }
 

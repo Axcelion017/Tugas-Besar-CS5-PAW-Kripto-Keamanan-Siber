@@ -4,7 +4,8 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { UserSession, logoutUser, normalizeRole } from "@/lib/auth/auth";
-import LogoutModal from "@/components/ui/LogoutModal";
+import { logoutServerAction } from "@/lib/actions/auth";
+import { LogoutModal } from "@/components/ui/LogoutModal";
 import {
   IconActivity,
   IconSearch,
@@ -36,7 +37,12 @@ export function RoleNav({ session }: RoleNavProps) {
 
   const role = normalizeRole(session.role);
 
-  const handleConfirmLogout = () => {
+  const handleConfirmLogout = async () => {
+    try {
+      await logoutServerAction();
+    } catch {
+      // Abaikan jika network offline
+    }
     logoutUser();
     router.replace("/login");
   };
