@@ -10,6 +10,7 @@ import {
   Appointment,
   TriaseLevel,
 } from "@/lib/db/mockData";
+import { TriaseSchema } from "@/lib/validations/triage";
 
 export default function TriasePemeriksaanAwalPage() {
   const router = useRouter();
@@ -28,6 +29,7 @@ export default function TriasePemeriksaanAwalPage() {
   const [triaseLevel, setTriaseLevel] = useState<TriaseLevel>("HIJAU");
   const [catatanPerawat, setCatatanPerawat] = useState("");
   const [notif, setNotif] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -45,8 +47,29 @@ export default function TriasePemeriksaanAwalPage() {
 
   const handleSubmitTriase = (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMsg(null);
+
     if (!selectedApt) {
-      alert("Pilih antrean pasien triase yang valid terlebih dahulu.");
+      setErrorMsg("Pilih antrean pasien triase yang valid terlebih dahulu.");
+      return;
+    }
+
+    // Validasi data tanda vital menggunakan Skema Zod
+    const validation = TriaseSchema.safeParse({
+      systolic: Number(systolic),
+      diastolic: Number(diastolic),
+      heartRate: Number(heartRate),
+      temperature: Number(temperature),
+      respiratoryRate: Number(respiratoryRate),
+      spo2: Number(spo2),
+      beratBadan: Number(beratBadan),
+      tinggiBadan: Number(tinggiBadan),
+      triaseLevel,
+      catatanPerawat: catatanPerawat || undefined,
+    });
+
+    if (!validation.success) {
+      setErrorMsg(validation.error.issues[0]?.message || "Data tanda vital tidak valid.");
       return;
     }
 
@@ -107,6 +130,12 @@ export default function TriasePemeriksaanAwalPage() {
       {notif && (
         <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-bold">
           {notif}
+        </div>
+      )}
+
+      {errorMsg && (
+        <div className="p-4 rounded-2xl bg-red-50 border border-red-300 text-red-900 text-xs font-bold">
+          {errorMsg}
         </div>
       )}
 

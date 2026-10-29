@@ -31,6 +31,20 @@ Dokumen ini mendokumentasikan keputusan rancangan arsitektur, hierarki komponen 
   - Mengikat setiap kontrol formulir (`<input>`, `<select>`, `<textarea>`) secara eksplisit dengan elemen `<label htmlFor="...">`.
   - Menggunakan tipografi Google Fonts Montserrat yang dioptimalkan melalui `next/font/google` untuk efisiensi pemuatan.
 
+### 1.5 Validasi Formulir Berlapis & Type-Safe Schema Engine (Zod v4)
+- **Keputusan**: Menerapkan pustaka validasi skema **Zod v4** terpusat di direktori `lib/validations/` (`clinical.ts`, `auth.ts`, `triage.ts`, `patient.ts`).
+- **Alasan**:
+  - **Mencegah Bypass Input Client**: Menghilangkan ketergantungan semata-mata pada atribut HTML5 (`required`, `type="number"`) yang rentan dibypass melalui modifikasi DevTools atau manipulasi request.
+  - **Kepatuhan Medikolegal Permenkes No. 24/2022**: Mengunci batasan fisiologis tanda vital (sistolik 70–250 mmHg, diastolik 40–150 mmHg, suhu 30–45°C), kode diagnosis ICD-10 resmi (`z.enum`), dan pernyataan keabsahan medikolegal sebelum data dapat dienkripsi AES-256-GCM.
+  - **Penanganan Umpan Balik Real-Time**: Menyediakan pemetaan galat spesifik per kolom (`validationErrors[field]`) serta banner peringatan ringkas di antarmuka pengguna tanpa memicu unhandled runtime exception.
+
+### 1.6 Alur Server Actions & Keamanan Cookie Sesi Stateful
+- **Keputusan**: Menerapkan modul Server Action `"use server"` di `lib/actions/` (`clinical.ts` dan `auth.ts`) serta penerbitan cookie sesi HTTP-Only (`resilio_session_token`).
+- **Alasan**:
+  - **Pipeline 6-Tahap Ketat**: Menjalankan alur berurutan: Sesi -> Validasi Bentuk (Zod) -> Validasi Semantik (Alergi UR-T10) -> Mutasi Kripto (AES-GCM/HMAC) -> `revalidatePath` -> `redirect`.
+  - **Keamanan Cookie Sesi HTTP-Only**: Cookie dikonfigurasikan dengan `HttpOnly: true`, `SameSite: "lax"`, `Max-Age: 14400`, dan `Path: "/"` guna melindungi token sesi dari eksfiltrasi XSS di peramban.
+  - **Stateful Invalidation (UU PDP)**: Mendukung pembatalan hak akses instan (*Instant Revocation*) di sisi server saat pasien mencabut persetujuan (*1-Click Revoke*) atau saat pengguna logout.
+
 ---
 
 ## 2. Struktur Rute & Hierarki Komponen (*Component Hierarchy*)
@@ -90,6 +104,21 @@ app/
         ├── faskes/page.tsx        # UR-A03: Master Direktori Faskes & Ransomware Kill-Switch
         ├── siem-monitor/page.tsx  # UR-A04 & A07: SIEM Live Feed (IDOR, Break-Glass, HMAC Alarms)
         └── incident-center/page.tsx# UR-A05: Failed Sync Queue & Penanganan Tiket Masalah Teknis
+
+lib/
+├── actions/                      # Modul Server Actions ("use server")
+│   ├── clinical.ts               # Mutasi SOAP Medis, Validasi Semantik UR-T10, revalidatePath, redirect
+│   └── auth.ts                   # Login, Logout & Pengelolaan Cookie Sesi HttpOnly (resilio_session_token)
+├── auth/auth.ts                  # Autentikasi 4-Role, Normalisasi Sesi & Route Guard
+├── crypto/
+│   ├── aes.ts                    # AES-256-GCM 96-bit CSPRNG IV & Web Crypto Engine
+│   └── hmac.ts                   # HMAC-SHA256 Keutuhan Data & Deteksi Tamper
+├── db/mockData.ts                # Database Mock Komprehensif (4 Peran, 700+ baris)
+└── validations/                  # Skema Validasi Tipe Aman Zod v4
+    ├── clinical.ts               # PemeriksaanKlinisSchema (SOAP, Tensi, ICD-10, Medikolegal)
+    ├── auth.ts                   # LoginSchema, RegisterPasienSchema (e-KYC), RegisterNakesSchema (e-KYD)
+    ├── triage.ts                 # TriaseSchema, WalkInAdmisiSchema, AssignDpjpSchema (PIN)
+    └── patient.ts                # BookingSchema, TroubleTicketSchema, ConsentGrantSchema
 ```
 
 ---

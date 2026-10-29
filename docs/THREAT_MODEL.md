@@ -29,3 +29,7 @@ Dokumen ringkasan eksekutif pemodelan ancaman STRIDE dan analisis risiko sistem 
    - *Mitigasi*: Prinsip Immutable Addendum bertingkat sesuai Permenkes No. 24/2022.
 9. **Kesalahan Fatal Resep Alergenik (RSK-09)**: Peresepan obat yang memicu syok anafilaktik akut.
    - *Mitigasi*: Real-time contraindication text match engine yang memberi peringatan merah berkedip seketika.
+10. **Bypass Validasi Klien & Manipulasi Input (RSK-10)**: Manipulasi form via DevTools/cURL dengan tensi negatif atau kode ICD-10 fiktif.
+   - *Mitigasi*: Validasi skema Zod v4 di sisi server pada Server Action (`lib/actions/clinical.ts`) sebelum data diproses.
+11. **Pembajakan Akun Sesi Nakes / XSS Theft (RSK-11)**: Pencurian token autentikasi di peramban untuk mengambil alih sesi dokter.
+   - *Mitigasi*: Stateful Session Store + Cookie HTTP-Only `resilio_session_token` dengan konfigurasi *HttpOnly*, *Secure*, *SameSite=Lax*, dan *Max-Age=14400*.

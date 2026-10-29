@@ -7,6 +7,18 @@ Semua perubahan besar pada proyek Resilio-Health didokumentasikan di sini.
 ## [v0.2] - 2026-10-17 — Milestone 2 (Transformasi Modular 4 Peran, Zero-Trust & Ketahanan Offline-First)
 
 ### Pengembangan Aplikasi Web (PAW)
+- **Implementasi Server Actions ("use server") & Stateful Session Cookies**:
+  - Pembangunan modul Server Action `lib/actions/clinical.ts`: mengimplementasikan pipeline mutasi klinis 6-tahap (Sesi -> Validasi Bentuk Zod -> Validasi Semantik Alergi UR-T10 -> Mutasi Enkripsi AES-GCM/HMAC -> `revalidatePath` -> `redirect`).
+  - Pembangunan modul Server Action `lib/actions/auth.ts`: autentikasi server dengan penerbitan cookie sesi `resilio_session_token` berstatus `HttpOnly: true`, `SameSite: "lax"`, `Max-Age: 14400` (4 jam) yang terintegrasi dengan *Stateful Session Store* di server (`SERVER_ACTIVE_SESSIONS`) untuk mendukung *Instant Revocation* (UU PDP No. 27/2022).
+  - Penghapusan sesi dan pemusnahan cookie via `logoutServerAction()` saat pengguna keluar.
+- **Implementasi Skema Validasi Tipe Aman Zod v4 (`lib/validations/`)**:
+  - Instalasi pustaka `zod` (^4.6.7) dan implementasi layer skema validasi terpusat:
+    - `clinical.ts`: `PemeriksaanKlinisSchema` memvalidasi keluhan (S) 10–1.000 karakter, batas rentang fisiologis tanda vital (sistolik 70–250, diastolik 40–150, detak 40–220 bpm, suhu 30–45°C, SpO2 50–100%), daftar diagnosis resmi ICD-10 (`z.enum`), dan kotak centang konfirmasi medikolegal sebelum enkripsi.
+    - `auth.ts`: `LoginSchema`, `RegisterPasienSchema` (validasi NIK regex 16 digit & kelengkapan berkas KYC), dan `RegisterNakesSchema` (validasi STR & SIP KKI/Dinkes).
+    - `triage.ts`: `TriaseSchema` (parameter triase nakes), `WalkInAdmisiSchema` (pendaftaran loket), dan `AssignDpjpSchema` (pencocokan 6-digit PIN persetujuan).
+    - `patient.ts`: `BookingSchema`, `TroubleTicketSchema`, dan `ConsentGrantSchema`.
+  - Integrasi validasi formulir sisi klien dengan penanganan galat inline interaktif dan banner kesalahan informatif pada 7 modul utama.
+  - Penambahan berkas uji unit otomatis `tests/validations.test.ts` (15 skenario uji positif, negatif, dan batas; total 19 unit test lulus 100%).
 - **Arsitektur Modular 30 Rute Next.js**:
   - Restrukturisasi total dari prototipe monolitik ke Next.js 15 App Router dengan pemisahan wilayah publik `(auth)` dan 4 domain peran terproteksi `(dashboard)`.
   - Pembangunan subsistem baru: **Staf Nakes Faskes** (`app/(dashboard)/staf/`) yang mencakup admisi antrean walk-in, triase tanda vital fisik (Hijau/Kuning/Merah), penugasan DPJP, dan administrasi rujukan antar faskes.

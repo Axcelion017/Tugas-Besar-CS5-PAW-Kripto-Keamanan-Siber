@@ -9,6 +9,7 @@ import {
   setStorageData,
   TroubleTicket,
 } from "@/lib/db/mockData";
+import { TroubleTicketSchema } from "@/lib/validations/patient";
 
 type TicketCategory = "BUG" | "SYNC_FAIL" | "DATA_MISMATCH" | "OTHER";
 
@@ -23,6 +24,7 @@ export default function PasienTiketKendalaPage() {
   const [judul, setJudul] = useState("");
   const [deskripsi, setDeskripsi] = useState("");
   const [notif, setNotif] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -38,10 +40,18 @@ export default function PasienTiketKendalaPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMsg(null);
     if (!session) return;
 
-    if (!judul.trim() || !deskripsi.trim()) {
-      alert("Judul dan deskripsi kendala wajib diisi.");
+    // Validasi input tiket kendala menggunakan Skema Zod
+    const validation = TroubleTicketSchema.safeParse({
+      kategori,
+      judul,
+      deskripsi,
+    });
+
+    if (!validation.success) {
+      setErrorMsg(validation.error.issues[0]?.message || "Data tiket tidak valid.");
       return;
     }
 
@@ -90,6 +100,12 @@ export default function PasienTiketKendalaPage() {
       {notif && (
         <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-bold">
           {notif}
+        </div>
+      )}
+
+      {errorMsg && (
+        <div className="p-4 rounded-2xl bg-red-50 border border-red-300 text-red-900 text-xs font-bold">
+          {errorMsg}
         </div>
       )}
 

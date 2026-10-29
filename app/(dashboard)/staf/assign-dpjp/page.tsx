@@ -15,6 +15,7 @@ import {
   SecurityAuditLog,
 } from "@/lib/db/mockData";
 import { getUserSession } from "@/lib/auth/auth";
+import { AssignDpjpSchema } from "@/lib/validations/triage";
 
 function generateAssignId(prefix: string) {
   return `${prefix}-${Date.now().toString().slice(-4)}`;
@@ -29,6 +30,7 @@ function AssignDpjpContent() {
   const [selectedDoctorId, setSelectedDoctorId] = useState<string>("DOC-01");
   const [inputPin, setInputPin] = useState("");
   const [notif, setNotif] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -49,18 +51,32 @@ function AssignDpjpContent() {
 
   const handleAssignDpjp = (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMsg(null);
+
+    // Validasi penugasan menggunakan Skema Zod
+    const validation = AssignDpjpSchema.safeParse({
+      aptId: selectedAptId,
+      doctorId: selectedDoctorId,
+      inputPin: inputPin || undefined,
+    });
+
+    if (!validation.success) {
+      setErrorMsg(validation.error.issues[0]?.message || "Data penugasan DPJP tidak valid.");
+      return;
+    }
+
     if (!selectedApt) {
-      alert("Pilih antrean pasien yang valid terlebih dahulu.");
+      setErrorMsg("Pilih antrean pasien yang valid terlebih dahulu.");
       return;
     }
     if (!targetDoctor) {
-      alert("Pilih dokter DPJP yang bertugas.");
+      setErrorMsg("Pilih dokter DPJP yang bertugas.");
       return;
     }
 
     // Validasi PIN atau persetujuan meja admisi
     if (selectedApt.consentPin && inputPin && inputPin !== selectedApt.consentPin) {
-      alert("Kode PIN Persetujuan Pasien salah! Mintalah pasien melihat 6-digit PIN di aplikasi mereka.");
+      setErrorMsg("Kode PIN Persetujuan Pasien salah! Mintalah pasien melihat 6-digit PIN di aplikasi mereka.");
       return;
     }
 
@@ -158,6 +174,12 @@ function AssignDpjpContent() {
       {notif && (
         <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-bold">
           {notif}
+        </div>
+      )}
+
+      {errorMsg && (
+        <div className="p-4 rounded-2xl bg-red-50 border border-red-300 text-red-900 text-xs font-bold">
+          {errorMsg}
         </div>
       )}
 

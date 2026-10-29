@@ -12,6 +12,7 @@ import {
   Patient,
 } from "@/lib/db/mockData";
 import { SkeletonDisruptionNotice } from "@/components/ui/Skeleton";
+import { WalkInAdmisiSchema } from "@/lib/validations/triage";
 
 function generateWalkInId(prefix: string) {
   return `${prefix}-${Date.now().toString().slice(-4)}`;
@@ -81,9 +82,25 @@ export default function StafAdmisiPage() {
     setTimeout(() => setNotif(null), 4000);
   };
 
+  const [walkInError, setWalkInError] = useState<string | null>(null);
+
   const handleRegisterWalkIn = (e: React.FormEvent) => {
     e.preventDefault();
+    setWalkInError(null);
     const cleanNik = walkInNik.trim();
+
+    // Validasi menggunakan Skema Zod
+    const validation = WalkInAdmisiSchema.safeParse({
+      nik: cleanNik,
+      keluhan: walkInKeluhan,
+      poli: walkInPoli,
+    });
+
+    if (!validation.success) {
+      setWalkInError(validation.error.issues[0]?.message || "Data pendaftaran walk-in tidak valid.");
+      return;
+    }
+
     const existingPatient = patients.find((p) => p.nik === cleanNik);
 
     const patientName = existingPatient ? existingPatient.name : "Pasien Umum Walk-in";
@@ -296,6 +313,12 @@ export default function StafAdmisiPage() {
             <p className="text-xs text-slate-500">
               Daftarkan pasien yang datang langsung ke meja loket tanpa booking online terlebih dahulu.
             </p>
+
+            {walkInError && (
+              <div className="p-3 rounded-xl bg-red-50 border border-red-300 text-red-900 text-xs font-bold">
+                {walkInError}
+              </div>
+            )}
 
             <form onSubmit={handleRegisterWalkIn} className="space-y-4 pt-2">
               <div>

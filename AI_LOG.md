@@ -30,6 +30,42 @@ Dokumen pencatatan penggunaan asisten kecerdasan buatan (AI) sesuai kebijakan in
 
 ---
 
+## 2026-10-18 — Implementasi Skema Validasi Tipe Aman Zod v4 & Kontrak Data Modul 5
+
+- **Tool**: Hermes Coding Agent
+- **Tujuan**: Mengadopsi pustaka Zod v4 ke dalam seluruh alur transaksi formulir Resilio-Health, mengimplementasikan skema validasi SOAP klinis medikolegal, autentikasi, triase keperawatan, pendaftaran loket walk-in, dan pemesanan jadwal faskes, serta menyinkronkan seluruh berkas dokumentasi.
+- **Ringkasan Prompt**:
+  1. "Apakah di project ada implementasi form and validation?"
+  2. "Apakah semuanya dalam hal form dan validation sudah mengimplementasikan schema Zod atau yang lain?"
+  3. "Ya boleh nanti dicatat ya perubahan dan hal lainnya ke dalam documents ya."
+- **Bagian yang Dihasilkan / Dimodifikasi**:
+  - Dependensi baru: `zod` (^4.6.7) pada `package.json`.
+  - Pustaka Skema Zod (`lib/validations/`):
+    - `clinical.ts`: `PemeriksaanKlinisSchema` (keluhan 10–1000 kar, rentang tensi fisiologis sistolik 70–250 & diastolik 40–150, ICD-10 enum, resep, dan kotak centang medikolegal).
+    - `auth.ts`: `LoginSchema`, `RegisterPasienSchema` (e-KYC NIK 16 digit), dan `RegisterNakesSchema` (e-KYD STR & SIP).
+    - `triage.ts`: `TriaseSchema` (parameter triase fisik), `WalkInAdmisiSchema` (admisi loket), dan `AssignDpjpSchema` (PIN 6-digit).
+    - `patient.ts`: `BookingSchema`, `TroubleTicketSchema`, dan `ConsentGrantSchema`.
+  - Modul Server Actions & Keamanan Sesi Cookie (`lib/actions/`):
+    - `clinical.ts`: `submitPemeriksaanKlinisAction` (alur 6-tahap: Sesi -> Zod Shape -> Semantik Alergi UR-T10 -> Mutasi AES-GCM/HMAC -> revalidatePath -> redirect).
+    - `auth.ts`: `loginServerAction` (penerbitan cookie HTTP-Only `resilio_session_token` dengan `SameSite=Lax`, `Max-Age=14400`, dan `SERVER_ACTIVE_SESSIONS`) serta `logoutServerAction` (invalidation & pemusnahan cookie).
+  - Formulir Antarmuka Pengguna:
+    - `app/(dashboard)/nakes/periksa/[bookingId]/page.tsx`: Penambahan validasi skema Zod sebelum enkripsi AES-256-GCM, penambahan kotak centang medikolegal, banner galat, dan umpan balik inline.
+    - `app/(auth)/login/page.tsx`: Integrasi pemanggilan `loginServerAction` untuk penerbitan cookie sesi server.
+    - `components/shared/RoleNav.tsx`: Integrasi pemanggilan `logoutServerAction` untuk pemusnahan cookie sesi saat logout.
+    - `app/(auth)/register/pasien/page.tsx`, `app/(auth)/register/nakes/page.tsx`, `app/(dashboard)/staf/triase/page.tsx`, `app/(dashboard)/staf/assign-dpjp/page.tsx`, `app/(dashboard)/staf/page.tsx`, `app/(dashboard)/pasien/booking/page.tsx`, `app/(dashboard)/pasien/tiket-kendala/page.tsx`.
+  - Berkas Pengujian:
+    - `tests/validations.test.ts`: 15 skenario pengujian unit otomatis mencakup uji positif, negatif (keluhan pendek, tensi di luar rentang, ICD-10 invalid, NIK non-16 digit), dan batas (checkbox false). Total 19 tes lulus 100%.
+  - Dokumentasi Basis Data & Sistem:
+    - `docs/database.md` & `docs/PAW/database.md`: Spesifikasi lengkap 16 entitas, relasi, CDM, LDM, PDM, dan skrip DDL SQL PostgreSQL.
+    - `docs/PAW/kebutuhan.md`, `docs/PAW/arsitektur.md`, `docs/keterlacakan.md`, `CHANGELOG.md`, `EVALUASI.md`, `README.md`, `KEPUTUSAN.md`.
+- **Cara Verifikasi**:
+  - `npm run lint`: 0 errors, 0 warnings.
+  - `npx vitest run`: 19/19 unit test lulus 100% (4 crypto + 15 validation).
+  - `npm run build`: 30/30 rute Next.js App Router terkompilasi sukses 100%.
+  - Pengujian live runtime peramban: Verifikasi cookie `resilio_session_token` berstatus `HttpOnly: true` terpasang saat login dan terhapus saat logout.
+
+---
+
 ## 2026-10-13 — Tugas 1 (Tag v0.1 & sec-0.1)
 
 - **Tool**: Google Antigravity (Gemini & Claude Models)

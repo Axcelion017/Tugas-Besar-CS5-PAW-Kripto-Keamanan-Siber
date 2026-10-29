@@ -16,6 +16,7 @@ import {
   EncryptedMedicalRecord,
   EncryptedMedicalImage,
 } from "@/lib/db/mockData";
+import { PemeriksaanKlinisSchema } from "@/lib/validations/clinical";
 
 
 function generateRecordId(prefix: string) {
@@ -53,6 +54,10 @@ export default function ClinicalExaminationPage({
   // Addendum State (UR-T09)
   const [isAddendum, setIsAddendum] = useState(false);
   const [addendumReason, setAddendumReason] = useState("");
+
+  // Konfirmasi Medikolegal & Validasi Skema Zod
+  const [isMedicallyConfirmed, setIsMedicallyConfirmed] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<string | null>(null);
@@ -203,6 +208,34 @@ export default function ClinicalExaminationPage({
 
   const handleSaveAndSign = async (e: React.FormEvent) => {
     e.preventDefault();
+    setValidationErrors({});
+
+    // Validasi Sisi Klien menggunakan Skema Zod
+    const validationResult = PemeriksaanKlinisSchema.safeParse({
+      subjective,
+      systolic: Number(systolic),
+      diastolic: Number(diastolic),
+      heartRate: Number(heartRate),
+      temperature: Number(temperature),
+      spo2: Number(spo2),
+      icd10,
+      planPrescription,
+      planAction: planAction || undefined,
+      isMedicallyConfirmed,
+    });
+
+    if (!validationResult.success) {
+      const formattedErrors: Record<string, string> = {};
+      for (const issue of validationResult.error.issues) {
+        const key = issue.path[0]?.toString() || "form";
+        if (!formattedErrors[key]) {
+          formattedErrors[key] = issue.message;
+        }
+      }
+      setValidationErrors(formattedErrors);
+      return;
+    }
+
     if (detectedAllergies.length > 0) {
       if (
         !confirm(
@@ -389,6 +422,20 @@ export default function ClinicalExaminationPage({
         </div>
       )}
 
+      {/* Banner Galat Validasi Zod */}
+      {Object.keys(validationErrors).length > 0 && (
+        <div className="p-4 rounded-2xl bg-red-50 border border-red-300 text-red-900 text-xs font-medium space-y-1 animate-fade-in">
+          <p className="font-bold text-red-800 uppercase text-[10px] tracking-wider">
+            Terdapat data yang belum memenuhi aturan validasi medis (Skema Zod):
+          </p>
+          <ul className="list-disc list-inside space-y-0.5 text-[11px]">
+            {Object.values(validationErrors).map((msg, idx) => (
+              <li key={idx}>{msg}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {/* Formulir SOAP Klinis */}
       <form onSubmit={handleSaveAndSign} className="bg-white p-6 md:p-8 rounded-3xl border border-slate-200 shadow-sm space-y-6">
         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
@@ -431,10 +478,26 @@ export default function ClinicalExaminationPage({
             required
             rows={3}
             value={subjective}
-            onChange={(e) => setSubjective(e.target.value)}
-            placeholder="Jelaskan keluhan utama pasien, onset kejadian, dan riwayat pengobatan mandiri..."
-            className="w-full px-4 py-2.5 rounded-xl border border-slate-300 font-semibold text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+            onChange={(e) => {
+              setSubjective(e.target.value);
+              if (validationErrors.subjective) {
+                setValidationErrors((prev) => {
+                  const cp = { ...prev };
+                  delete cp.subjective;
+                  return cp;
+                });
+              }
+            }}
+            placeholder="Jelaskan keluhan utama pasien, onset kejadian, dan riwayat pengobatan mandiri (minimal 10 karakter)..."
+            className={`w-full px-4 py-2.5 rounded-xl border font-semibold text-sm focus:outline-none transition ${
+              validationErrors.subjective
+                ? "border-red-400 bg-red-50/20 focus:ring-2 focus:ring-red-400"
+                : "border-slate-300 focus:ring-2 focus:ring-emerald-500"
+            }`}
           />
+          {validationErrors.subjective && (
+            <p className="text-[11px] font-bold text-red-600 mt-1">{validationErrors.subjective}</p>
+          )}
         </div>
 
         {/* 2. Objective (O) - Vital Signs */}
@@ -444,24 +507,34 @@ export default function ClinicalExaminationPage({
           </label>
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
             <div>
-              <span className="text-[10px] font-bold text-slate-500 uppercase">Sistolik (mmHg)</span>
+              <span className="text-[10px] font-bold text-slate-500 uppercase">Sistolik (70-250)</span>
               <input
                 type="number"
                 required
                 value={systolic}
                 onChange={(e) => setSystolic(e.target.value)}
-                className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-300 font-bold text-sm"
+                className={`w-full mt-1 px-3 py-2 rounded-xl border font-bold text-sm ${
+                  validationErrors.systolic ? "border-red-400 bg-red-50/20" : "border-slate-300"
+                }`}
               />
+              {validationErrors.systolic && (
+                <p className="text-[10px] text-red-600 mt-0.5">{validationErrors.systolic}</p>
+              )}
             </div>
             <div>
-              <span className="text-[10px] font-bold text-slate-500 uppercase">Diastolik (mmHg)</span>
+              <span className="text-[10px] font-bold text-slate-500 uppercase">Diastolik (40-150)</span>
               <input
                 type="number"
                 required
                 value={diastolic}
                 onChange={(e) => setDiastolic(e.target.value)}
-                className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-300 font-bold text-sm"
+                className={`w-full mt-1 px-3 py-2 rounded-xl border font-bold text-sm ${
+                  validationErrors.diastolic ? "border-red-400 bg-red-50/20" : "border-slate-300"
+                }`}
               />
+              {validationErrors.diastolic && (
+                <p className="text-[10px] text-red-600 mt-0.5">{validationErrors.diastolic}</p>
+              )}
             </div>
             <div>
               <span className="text-[10px] font-bold text-slate-500 uppercase">Detak Jantung (bpm)</span>
@@ -470,19 +543,29 @@ export default function ClinicalExaminationPage({
                 required
                 value={heartRate}
                 onChange={(e) => setHeartRate(e.target.value)}
-                className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-300 font-bold text-sm"
+                className={`w-full mt-1 px-3 py-2 rounded-xl border font-bold text-sm ${
+                  validationErrors.heartRate ? "border-red-400 bg-red-50/20" : "border-slate-300"
+                }`}
               />
+              {validationErrors.heartRate && (
+                <p className="text-[10px] text-red-600 mt-0.5">{validationErrors.heartRate}</p>
+              )}
             </div>
             <div>
-              <span className="text-[10px] font-bold text-slate-500 uppercase">Suhu Tubuh (°C)</span>
+              <span className="text-[10px] font-bold text-slate-500 uppercase">Suhu (°C)</span>
               <input
                 type="number"
                 step="0.1"
                 required
                 value={temperature}
                 onChange={(e) => setTemperature(e.target.value)}
-                className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-300 font-bold text-sm"
+                className={`w-full mt-1 px-3 py-2 rounded-xl border font-bold text-sm ${
+                  validationErrors.temperature ? "border-red-400 bg-red-50/20" : "border-slate-300"
+                }`}
               />
+              {validationErrors.temperature && (
+                <p className="text-[10px] text-red-600 mt-0.5">{validationErrors.temperature}</p>
+              )}
             </div>
             <div>
               <span className="text-[10px] font-bold text-slate-500 uppercase">Saturasi O2 (%)</span>
@@ -491,8 +574,13 @@ export default function ClinicalExaminationPage({
                 required
                 value={spo2}
                 onChange={(e) => setSpo2(e.target.value)}
-                className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-300 font-bold text-sm"
+                className={`w-full mt-1 px-3 py-2 rounded-xl border font-bold text-sm ${
+                  validationErrors.spo2 ? "border-red-400 bg-red-50/20" : "border-slate-300"
+                }`}
               />
+              {validationErrors.spo2 && (
+                <p className="text-[10px] text-red-600 mt-0.5">{validationErrors.spo2}</p>
+              )}
             </div>
           </div>
         </div>
@@ -590,10 +678,28 @@ export default function ClinicalExaminationPage({
               required
               rows={3}
               value={planPrescription}
-              onChange={(e) => setPlanPrescription(e.target.value)}
+              onChange={(e) => {
+                setPlanPrescription(e.target.value);
+                if (validationErrors.planPrescription) {
+                  setValidationErrors((prev) => {
+                    const cp = { ...prev };
+                    delete cp.planPrescription;
+                    return cp;
+                  });
+                }
+              }}
               placeholder="Contoh:&#10;Amlodipine 10mg tab No. XXX, S 1 dd 1 tab pagi&#10;Kandesartan 8mg tab No. XXX, S 1 dd 1 tab malam"
-              className="w-full px-4 py-2.5 rounded-xl border border-slate-300 font-semibold text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+              className={`w-full px-4 py-2.5 rounded-xl border font-semibold text-sm focus:outline-none transition ${
+                validationErrors.planPrescription
+                  ? "border-red-400 bg-red-50/20 focus:ring-2 focus:ring-red-400"
+                  : "border-slate-300 focus:ring-2 focus:ring-emerald-500"
+              }`}
             />
+            {validationErrors.planPrescription && (
+              <p className="text-[11px] font-bold text-red-600 mt-1">
+                {validationErrors.planPrescription}
+              </p>
+            )}
 
             {/* Clinical Alert: Kontraindikasi Alergi (UR-T10) */}
             {detectedAllergies.length > 0 && (
@@ -617,6 +723,42 @@ export default function ClinicalExaminationPage({
               className="w-full px-4 py-2.5 rounded-xl border border-slate-300 font-semibold text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none"
             />
           </div>
+        </div>
+
+        {/* 5. Kotak Centang Konfirmasi Keabsahan Medikolegal (Skema Zod) */}
+        <div className={`p-4 rounded-2xl border transition ${
+          validationErrors.isMedicallyConfirmed ? "bg-red-50/40 border-red-300" : "bg-emerald-50/40 border-emerald-200"
+        }`}>
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={isMedicallyConfirmed}
+              onChange={(e) => {
+                setIsMedicallyConfirmed(e.target.checked);
+                if (e.target.checked && validationErrors.isMedicallyConfirmed) {
+                  setValidationErrors((prev) => {
+                    const cp = { ...prev };
+                    delete cp.isMedicallyConfirmed;
+                    return cp;
+                  });
+                }
+              }}
+              className="mt-0.5 w-4 h-4 rounded text-emerald-600 cursor-pointer shrink-0"
+            />
+            <div className="space-y-0.5">
+              <span className="text-xs font-bold text-slate-900 block">
+                Konfirmasi Keabsahan Medikolegal & Tanda Tangan (Permenkes No. 24/2022) *
+              </span>
+              <p className="text-[11px] text-slate-500 leading-relaxed">
+                Saya menyatakan dengan sadar bahwa pengkajian klinis SOAP ini didasarkan pada pemeriksaan fisik langsung dan sah untuk dienkripsi serta disahkan menggunakan kunci sesi dokter.
+              </p>
+              {validationErrors.isMedicallyConfirmed && (
+                <p className="text-[11px] font-bold text-red-600 pt-1">
+                  {validationErrors.isMedicallyConfirmed}
+                </p>
+              )}
+            </div>
+          </label>
         </div>
 
         {/* Tombol Simpan Kripto & Tanda Tangan */}

@@ -14,6 +14,7 @@ import {
   Appointment,
   AccessGrant,
 } from "@/lib/db/mockData";
+import { BookingSchema } from "@/lib/validations/patient";
 
 function BookingContent() {
   const searchParams = useSearchParams();
@@ -28,6 +29,7 @@ function BookingContent() {
   const [keluhanAwal, setKeluhanAwal] = useState("");
   const [autoConsent, setAutoConsent] = useState(true);
   const [notification, setNotification] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
 
   useEffect(() => {
@@ -51,10 +53,21 @@ function BookingContent() {
 
   const handleBookingSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMsg(null);
     if (!session) return;
 
-    if (!keluhanAwal.trim()) {
-      alert("Keluhan awal wajib diisi untuk referensi dokter sebelum visit.");
+    // Validasi input booking menggunakan Skema Zod
+    const validation = BookingSchema.safeParse({
+      faskesId: currentFaskes.id,
+      dokterId: currentDoctor.id,
+      tanggal,
+      jam,
+      keluhanAwal,
+      autoConsent,
+    });
+
+    if (!validation.success) {
+      setErrorMsg(validation.error.issues[0]?.message || "Data booking tidak valid.");
       return;
     }
 
@@ -139,6 +152,12 @@ function BookingContent() {
       {notification && (
         <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold">
           {notification}
+        </div>
+      )}
+
+      {errorMsg && (
+        <div className="p-4 rounded-2xl bg-red-50 border border-red-300 text-red-900 text-xs font-bold">
+          {errorMsg}
         </div>
       )}
 
