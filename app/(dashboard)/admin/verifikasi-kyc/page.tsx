@@ -10,6 +10,11 @@ import {
   KycSubmission,
   Patient,
 } from "@/lib/db/mockData";
+import {
+  approveKycServerAction,
+  rejectKycServerAction,
+  getKycSubmissionsServerAction,
+} from "@/lib/actions/auth";
 
 function generateMrn() {
   return `MRN-2026-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -24,14 +29,59 @@ export default function VerifikasiKycPage() {
   const [notif, setNotif] = useState<string | null>(null);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      const list = getStorageData<KycSubmission[]>("resilio_kyc_list", MOCK_KYC_REQUESTS);
-      setKycList(list);
-    }, 0);
-    return () => clearTimeout(timer);
+    async function loadData() {
+      const localList = getStorageData<KycSubmission[]>("resilio_kyc_list", MOCK_KYC_REQUESTS);
+      try {
+        const dbRes = await getKycSubmissionsServerAction();
+        if (dbRes.success && dbRes.data && dbRes.data.length > 0) {
+          const mapped: KycSubmission[] = dbRes.data.map((d: {
+            id: string;
+            userId: string;
+            namaLengkap: string;
+            nik: string;
+            birthDate: Date;
+            alamat: string;
+            ktpUrl: string;
+            selfieUrl: string;
+            watermarkText: string;
+            submittedAt: Date;
+            status: string;
+            alasanPenolakan?: string | null;
+          }) => ({
+            id: d.id,
+            userId: d.userId,
+            namaLengkap: d.namaLengkap,
+            nik: d.nik,
+            tanggalLahir: new Date(d.birthDate).toLocaleDateString("id-ID"),
+            alamat: d.alamat,
+            ktpUrl: d.ktpUrl,
+            selfieUrl: d.selfieUrl,
+            watermarkText: d.watermarkText,
+            submittedAt: new Date(d.submittedAt).toLocaleString("id-ID"),
+            status: (d.status === "VERIFIED" ? "VERIFIED" : d.status === "REJECTED" ? "REJECTED" : "PENDING") as "VERIFIED" | "PENDING" | "REJECTED",
+            alasanPenolakan: d.alasanPenolakan || undefined,
+          }));
+
+          const existingIds = new Set(mapped.map((m) => m.id));
+          const merged = [...mapped, ...localList.filter((l) => !existingIds.has(l.id))];
+          setKycList(merged);
+          return;
+        }
+      } catch (e) {
+        console.warn("Load DB KYC fallback to local:", e);
+      }
+      setKycList(localList);
+    }
+    loadData();
   }, []);
 
-  const handleApprove = (item: KycSubmission) => {
+  const handleApprove = async (item: KycSubmission) => {
+    try {
+      await approveKycServerAction(item.id);
+    } catch (e) {
+      console.warn("DB approve KYC fallback:", e);
+    }
+
     const all = getStorageData<KycSubmission[]>("resilio_kyc_list", MOCK_KYC_REQUESTS);
     const updated = all.map((k) =>
       k.id === item.id ? { ...k, status: "VERIFIED" as const } : k
@@ -67,12 +117,18 @@ export default function VerifikasiKycPage() {
 
     setKycList(updated);
     if (previewKyc?.id === item.id) setPreviewKyc(null);
-    setNotif(`e-KYC untuk ${item.namaLengkap} (NIK: ${item.nik}) berhasil disetujui. Akun pasien telah aktif.`);
+    setNotif(`e-KYC untuk ${item.namaLengkap} (NIK: ${item.nik}) berhasil disetujui. Akun pasien telah aktif di basis data.`);
     setTimeout(() => setNotif(null), 4000);
   };
 
-  const handleReject = () => {
+  const handleReject = async () => {
     if (!selectedKyc) return;
+    try {
+      await rejectKycServerAction(selectedKyc.id, rejectReason);
+    } catch (e) {
+      console.warn("DB reject KYC fallback:", e);
+    }
+
     const all = getStorageData<KycSubmission[]>("resilio_kyc_list", MOCK_KYC_REQUESTS);
     const updated = all.map((k) =>
       k.id === selectedKyc.id

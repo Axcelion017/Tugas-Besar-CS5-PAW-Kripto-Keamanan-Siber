@@ -45,6 +45,13 @@ Dokumen ini mendokumentasikan keputusan rancangan arsitektur, hierarki komponen 
   - **Keamanan Cookie Sesi HTTP-Only**: Cookie dikonfigurasikan dengan `HttpOnly: true`, `SameSite: "lax"`, `Max-Age: 14400`, dan `Path: "/"` guna melindungi token sesi dari eksfiltrasi XSS di peramban.
   - **Stateful Invalidation (UU PDP)**: Mendukung pembatalan hak akses instan (*Instant Revocation*) di sisi server saat pasien mencabut persetujuan (*1-Click Revoke*) atau saat pengguna logout.
 
+### 1.7 Integrasi Basis Data PostgreSQL Riil & Prisma 7 ORM (Clean Architecture Backend)
+- **Keputusan**: Mengintegrasikan basis data PostgreSQL 17 lokal (`localhost:5432/resilio_health`) menggunakan **Prisma 7 ORM** (`@prisma/client@7.10.1`, `@prisma/adapter-pg`, dan connection pool `pg`).
+- **Alasan**:
+  - **Integritas Referensial Medis Kepatuhan Regulasi**: Menegakkan aturan penghapusan `onDelete: Restrict` pada seluruh entitas rekam medis dan master faskes guna mematuhi kewajiban retensi data rekam medis selama 25 tahun sesuai amanat Permenkes No. 24/2022.
+  - **Pemisahan Modular Backend**: Logika database diisolasi di `prisma/` (skema & migrasi fisik SQL) dan `lib/db/prisma.ts` (singleton connection pool) sehingga terpisah jelas dari antarmuka presentasi Next.js.
+  - **Seeder Idempoten Berbasis Upsert**: Mengimplementasikan `prisma/seed.ts` dengan klausul `upsert` yang aman dieksekusi berulang kali tanpa memicu pelanggaran konstrain unik (*Unique Constraint Violation*).
+
 ---
 
 ## 2. Struktur Rute & Hierarki Komponen (*Component Hierarchy*)
@@ -109,16 +116,25 @@ lib/
 ├── actions/                      # Modul Server Actions ("use server")
 │   ├── clinical.ts               # Mutasi SOAP Medis, Validasi Semantik UR-T10, revalidatePath, redirect
 │   └── auth.ts                   # Login, Logout & Pengelolaan Cookie Sesi HttpOnly (resilio_session_token)
-├── auth/auth.ts                  # Autentikasi 4-Role, Normalisasi Sesi & Route Guard
+├── auth/
+│   ├── auth.ts                   # Autentikasi 4-Role, Normalisasi Sesi & Route Guard
+│   └── sessionStore.ts           # Stateful Server Session Map (UU PDP Instant Revocation)
 ├── crypto/
 │   ├── aes.ts                    # AES-256-GCM 96-bit CSPRNG IV & Web Crypto Engine
 │   └── hmac.ts                   # HMAC-SHA256 Keutuhan Data & Deteksi Tamper
-├── db/mockData.ts                # Database Mock Komprehensif (4 Peran, 700+ baris)
+├── db/
+│   ├── prisma.ts                 # PrismaClient Singleton dengan PostgreSQL Pool Adapter
+│   └── mockData.ts               # Mock Data Komprehensif (4 Peran, 700+ baris)
 └── validations/                  # Skema Validasi Tipe Aman Zod v4
     ├── clinical.ts               # PemeriksaanKlinisSchema (SOAP, Tensi, ICD-10, Medikolegal)
     ├── auth.ts                   # LoginSchema, RegisterPasienSchema (e-KYC), RegisterNakesSchema (e-KYD)
     ├── triage.ts                 # TriaseSchema, WalkInAdmisiSchema, AssignDpjpSchema (PIN)
     └── patient.ts                # BookingSchema, TroubleTicketSchema, ConsentGrantSchema
+
+prisma/
+├── schema.prisma                 # Definisi Skema Relasional 16 Model (onDelete: Restrict)
+├── migrations/                   # Riwayat Migrasi Fisik SQL PostgreSQL
+└── seed.ts                       # Seeder Idempoten Berbasis Upsert (17 Tabel Terisi)
 ```
 
 ---

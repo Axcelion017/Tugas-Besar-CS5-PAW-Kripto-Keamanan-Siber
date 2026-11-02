@@ -13,11 +13,12 @@ function bufToHex(buf: ArrayBuffer): string {
     .join("");
 }
 
-// Fungsi Enkripsi AES-256-GCM
+// Fungsi Enkripsi AES-256-GCM dengan dukungan AAD (Authenticated Associated Data)
 export async function encryptAES(
   plaintext: string,
-  keyHex: string
-): Promise<{ ciphertext: string; iv: string }> {
+  keyHex: string,
+  aadText?: string
+): Promise<{ ciphertext: string; iv: string; aad?: string }> {
   const encoder = new TextEncoder();
   const rawKey = hexToBuf(keyHex);
   const iv = crypto.getRandomValues(new Uint8Array(12));
@@ -30,8 +31,18 @@ export async function encryptAES(
     ["encrypt"]
   );
 
+  const algorithmParams: AesGcmParams = {
+    name: "AES-GCM",
+    iv: iv as BufferSource,
+    tagLength: 128, // Standard 128-bit authentication tag
+  };
+
+  if (aadText) {
+    algorithmParams.additionalData = encoder.encode(aadText) as BufferSource;
+  }
+
   const encryptedBuf = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv: iv as BufferSource },
+    algorithmParams,
     cryptoKey,
     encoder.encode(plaintext) as BufferSource
   );
@@ -39,16 +50,19 @@ export async function encryptAES(
   return {
     ciphertext: bufToHex(encryptedBuf),
     iv: bufToHex(iv.buffer),
+    aad: aadText,
   };
 }
 
-// Fungsi Dekripsi AES-256-GCM
+// Fungsi Dekripsi AES-256-GCM dengan verifikasi AAD
 export async function decryptAES(
   ciphertextHex: string,
   ivHex: string,
-  keyHex: string
+  keyHex: string,
+  aadText?: string
 ): Promise<string> {
   const decoder = new TextDecoder();
+  const encoder = new TextEncoder();
   const rawKey = hexToBuf(keyHex);
   const iv = hexToBuf(ivHex);
   const ciphertextBuf = hexToBuf(ciphertextHex);
@@ -61,8 +75,18 @@ export async function decryptAES(
     ["decrypt"]
   );
 
+  const algorithmParams: AesGcmParams = {
+    name: "AES-GCM",
+    iv: iv as BufferSource,
+    tagLength: 128,
+  };
+
+  if (aadText) {
+    algorithmParams.additionalData = encoder.encode(aadText) as BufferSource;
+  }
+
   const decryptedBuf = await crypto.subtle.decrypt(
-    { name: "AES-GCM", iv: iv as BufferSource },
+    algorithmParams,
     cryptoKey,
     ciphertextBuf as BufferSource
   );

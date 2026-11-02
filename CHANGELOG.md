@@ -7,6 +7,58 @@ Semua perubahan besar pada proyek Resilio-Health didokumentasikan di sini.
 ## [v0.2] - 2026-10-17 — Milestone 2 (Transformasi Modular 4 Peran, Zero-Trust & Ketahanan Offline-First)
 
 ### Pengembangan Aplikasi Web (PAW)
+- **Penyelesaian Berkas Bukti Tugas 2 Tiga Mata Kuliah Terintegrasi (PAW, Kriptografi, KKS)**:
+  - **Tugas 2 Kriptografi (Tag `v0.2`, Sub-CPMK 3)**:
+    - Pembangunan laporan resmi `docs/Tugas2/Kriptografi/LaporanTugas2_Kripto.md` (Spesifikasi parameter AES-256-GCM, IV CSPRNG 96-bit, AAD context binding, HMAC-SHA256, panduan demonstrasi 3 menit).
+    - Penyempurnaan `lib/crypto/aes.ts` dengan parameter AAD eksplisit dan pembuktian 5 skenario uji unit otomatis di `tests/crypto.test.ts` (100% lulus).
+  - **Tugas 2 Keamanan Komputasi dan Siber (KKS, Penanda `sec-0.2`, Sub-CPMK 3)**:
+    - Pembangunan berkas bukti pengerasan: `docs/Tugas2/KKS/LaporanTugas2_KKS.md`, `security/access-tests.md` (Matriks RBAC 4 peran & 8 skenario uji akses seimbang), `security/lynis-before.txt` (skor 58) & `security/lynis-after.txt` (skor 74), `security/image-scan-before.txt` (2 critical) & `security/image-scan-after.txt` (0 critical), serta SBOM CycloneDX `security/sbom.cdx.json`.
+    - Integrasi pustaka `bcryptjs` (salt rounds 10) di `lib/actions/auth.ts` untuk slow hashing password di PostgreSQL, penyediaan `Dockerfile` non-root (`USER node`), dan `docker-compose.yml` dengan port database terisolasi.
+    - Penambahan automated test suite matriks akses kontrol di `tests/access-control.test.ts` (8 tes lolos).
+- **Penyempurnaan Halaman Notifikasi Akses Medis (Transformasi Audit Log ke Tampilan Pesan Transparansi)**:
+  - Mengubah antarmuka `/pasien/audit-log` dari tabel log teknis yang kaku menjadi **Kotak Masuk Pesan Pemberitahuan Medis (*Notification Inbox & Message Viewer*)** yang mudah dipahami oleh pasien awam.
+  - Setiap kali dokter membuka rekam medis, perawat menyelesaikan triase, izin akses diberikan, atau ada ancaman akses ilegal diblokir, sistem menampilkan surat pemberitahuan:
+    - **Siapa yang melakukan** (Nama dokter/perawat, jabatan, faskes).
+    - **Apa yang terjadi** (Uraian bahasa manusia yang ramah, bukan kode teknis SIEM).
+    - **Target berkas** dan timestamp kejadian.
+    - **Pilihan aksi**: Tombol pintas untuk langsung mencabut hak akses faskes bersangkutan (*1-Click Revoke*).
+  - Pembangunan Server Action `getPatientAuditLogsServerAction` dan `createAuditLogServerAction` (`lib/actions/audit.ts`) untuk mengambil notifikasi langsung dari tabel `security_audit_logs` di PostgreSQL.
+- **Dokumentasi Pengujian Lengkap & Bukti Milestone 2**:
+  - Pembangunan berkas resmi laporan penugasan di `docs/Tugas2/PAW/LaporanTugas2.md` dan `docs/pengujian-milestone2.md` yang memuat deskripsi produk, perkembangan v0.1 ke v0.2, pemodelan database CDM/LDM Mermaid, bukti implementasi CRUD 2 entitas berelasi, 3 bukti penolakan validasi server Zod v4, tabel 10 skenario pengujian (100% lulus), pembuktian persistensi PostgreSQL, panduan 5 tangkapan layar, dan petunjuk instalasi lokal.
+  - Penyempurnaan tombol aksi CRUD penuh pada antarmuka web:
+    - Entitas `Appointment`: Pasien dapat melakukan *Reschedule* (UPDATE tanggal & jam) dan *Cancel* (DELETE tiket antrean) di `/pasien/booking`.
+    - Entitas `AccessGrant`: Pasien dapat memperpanjang masa berlaku (+48 Jam UPDATE) dan menghapus permanen (DELETE rekaman izin) di `/pasien/consent`.
+- **Penyempurnaan Dokumentasi Sistem (`README.md`)**:
+  - Penambahan tabel rincian **Teknologi yang Digunakan (Tech Stack)** yang memetakan lapisan *Frontend*, *Runtime*, *Styling*, *Typography*, *Server Actions*, *PostgreSQL & Prisma ORM*, *Zod Schema Engine*, *W3C Web Crypto*, *PWA Service Worker*, *Vitest*, dan *ESLint*.
+- **Penyempurnaan Alur Onboarding Cepat, Fitur Edit Data Diri & Restricted Mode Guard**:
+  - **Perbaikan Bug Umur Dinamis**: menghapus nilai umur statis `age: 30`, kini umur dihitung secara dinamis dan presisi berdasarkan kolom `birthDate` dari database fisik (`calculateAge()`). Akun baru yang belum melengkapi tanggal lahir menampilkan status `"Belum diisi"`.
+  - **Pembersihan Kebocoran Data Mock Lintas Akun**: seluruh halaman dasbor (`/pasien`, `/pasien/booking`, `/pasien/consent`, `/pasien/tiket-kendala`, `/nakes`, dan `/staf`) kini mengambil data antrean, izin akses, dan pengaduan murni dari basis data PostgreSQL via Server Actions, sehingga akun baru tidak lagi menampilkan riwayat milik akun lain.
+  - **Standarisasi Ukuran Tulisan & Tipografi Enterprise**: merapikan ukuran font di seluruh kartu dan halaman dasbor, mengganti micro-font tidak terbaca (`text-[9px]`, `text-[10px]`, `text-[11px]`) dengan ukuran terstandar WCAG (`text-xs` 12px dan `text-sm` 14px) yang nyaman dibaca.
+  - Pendaftaran Cepat Pasien Baru (`/register/pasien`): formulir awal disederhanakan hanya memerlukan Username unik, Nama Lengkap, Email, dan Kata Sandi (`RegisterPasienCepatSchema`).
+  - Login Langsung Tanpa Tertahan (`loginServerAction`): akun baru berstatus `PENDING` langsung diizinkan login ke dasbor masing-masing.
+  - Perbaikan Bug *Retrieve Data*: menghapus seluruh fallback statis (NIK Budi Santoso dan ID dokter demo `DOC-01`), pengambilan profil kini secara ketat membaca data unik pengguna aktif via `getPatientProfileServerAction(session.id)`.
+  - Pembangunan Halaman Kelola Profil & e-KYC (`app/(dashboard)/pasien/profil/page.tsx`):
+    - Bagian 1: Data Mandiri (Nomor HP, Golongan Darah, Riwayat Alergi, Kontak Darurat) dapat diubah kapan saja secara langsung ke database via `updatePatientProfileServerAction`.
+    - Bagian 2: Data Sensitif (NIK 16 digit, Nama KTP, Tgl Lahir, Unggah KTP + Selfie ber-watermark) diajukan ke Admin Kemenkes via `submitKycVerificationServerAction`.
+  - Mode Akses Terbatas (*Restricted Mode Guard*): jika akun belum berstatus `VERIFIED`, fitur booking dokter dan linimasa rekam medis dikunci dengan gembok visual dan banner peringatan edukatif.
+- **Integrasi 100% Seluruh Skema Prisma ke Transaksi Basis Data PostgreSQL**:
+  - Pembangunan suite Server Actions lengkap di `lib/actions/`:
+    - `appointment.ts`: `createAppointmentServerAction`, `getAppointmentsServerAction`, `assignDpjpServerAction`, `updateAppointmentStatusServerAction` (tabel `appointments` & `active_encounters`).
+    - `triage.ts`: `submitTriageServerAction` (tabel `triage_assessments`).
+    - `consent.ts`: `getAccessGrantsServerAction`, `grantAccessServerAction`, `revokeAccessServerAction` (tabel `access_grants`).
+    - `faskes.ts`: `getFaskesListServerAction`, `getFaskesDetailServerAction`, `toggleFaskesKillSwitchServerAction` (tabel `faskes`).
+    - `ticket.ts`: `createTroubleTicketServerAction`, `getTroubleTicketsServerAction`, `resolveTroubleTicketServerAction` (tabel `trouble_tickets`).
+  - Seluruh interaksi formulir pengguna di peramban (Booking antrean, Triase fisik, Penugasan DPJP ber-PIN, 1-Click Revoke, Pelaporan kendala, dan Saklar Ransomware Kill-Switch) kini langsung menulis dan membaca ke PostgreSQL fisik.
+- **Alur Pendaftaran Pasien Baru & Siklus e-KYC Terintegrasi Basis Data (`User` & `KycSubmission`)**:
+  - Penambahan kolom masukan **Kata Sandi Akun** dan **Konfirmasi Kata Sandi** (minimal 6 karakter) pada `RegisterPasienSchema` (`lib/validations/auth.ts`) dan form antarmuka `/register/pasien`.
+  - Pembangunan Server Action `registerPasienServerAction`: melakukan mutasi transaksional ke PostgreSQL yang menyimpan akun `User` (dengan status `PENDING`), profil `Patient` (nomor MRN otomatis), dan berkas `KycSubmission` ber-watermark.
+  - Pembangunan Server Action `approveKycServerAction` & `rejectKycServerAction`: saat Admin Kemenkes menyetujui e-KYC di `/admin/verifikasi-kyc`, status akun `User` di PostgreSQL seketika berubah menjadi `VERIFIED`.
+  - Pembaruan `loginServerAction`: memvalidasi kredensial pengguna baru langsung terhadap database PostgreSQL; jika akun masih berstatus `PENDING`, sistem menolak masuk dengan pesan informatif kepatuhan verifikasi Kemenkes.
+- **Integrasi Basis Data PostgreSQL Riil & Prisma 7 ORM (`prisma/` & `lib/db/`)**:
+  - Konfigurasi Prisma 7 ORM (`prisma@7.10.1`, `@prisma/client@7.10.1`, `@prisma/adapter-pg`) dengan connection pool PostgreSQL (`pg`).
+  - Pemodelan skema relasional 16 entitas (`prisma/schema.prisma`) dengan pemisahan folder backend yang terisolasi dari UI (`prisma/`, `lib/db/prisma.ts`, `lib/actions/`).
+  - Eksekusi migrasi fisik SQL (`prisma/migrations/`) ke database PostgreSQL lokal `resilio_health`.
+  - Pembangunan dan eksekusi skrip seeder idempoten (`prisma/seed.ts`) menggunakan pola **`upsert`** pada 16 model entitas untuk memastikan keamanan eksekusi berulang tanpa pelanggaran batasan unik.
 - **Implementasi Server Actions ("use server") & Stateful Session Cookies**:
   - Pembangunan modul Server Action `lib/actions/clinical.ts`: mengimplementasikan pipeline mutasi klinis 6-tahap (Sesi -> Validasi Bentuk Zod -> Validasi Semantik Alergi UR-T10 -> Mutasi Enkripsi AES-GCM/HMAC -> `revalidatePath` -> `redirect`).
   - Pembangunan modul Server Action `lib/actions/auth.ts`: autentikasi server dengan penerbitan cookie sesi `resilio_session_token` berstatus `HttpOnly: true`, `SameSite: "lax"`, `Max-Age: 14400` (4 jam) yang terintegrasi dengan *Stateful Session Store* di server (`SERVER_ACTIVE_SESSIONS`) untuk mendukung *Instant Revocation* (UU PDP No. 27/2022).

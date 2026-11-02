@@ -50,11 +50,12 @@ export function RoleNav({ session }: RoleNavProps) {
   // 1. Navigasi Pasien
   const pasienLinks = [
     { href: "/pasien", label: "Ringkasan Kesehatan", icon: IconActivity },
+    { href: "/pasien/profil", label: "Profil & e-KYC", icon: IconUsers },
     { href: "/pasien/faskes", label: "Pencarian Faskes", icon: IconSearch },
     { href: "/pasien/booking", label: "Booking Pemeriksaan", icon: IconCalendar },
     { href: "/pasien/rekam-medis", label: "Rekam Medis (RME)", icon: IconFileText },
     { href: "/pasien/consent", label: "Izin Akses (Consent)", icon: IconShield },
-    { href: "/pasien/audit-log", label: "Audit Log Akses", icon: IconEye },
+    { href: "/pasien/audit-log", label: "Notifikasi Akses Medis", icon: IconEye },
     { href: "/pasien/tiket-kendala", label: "Laporan Kendala", icon: IconMessageSquare },
   ];
 

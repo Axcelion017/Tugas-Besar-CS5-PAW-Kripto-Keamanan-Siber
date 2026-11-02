@@ -16,6 +16,7 @@ import {
 } from "@/lib/db/mockData";
 import { getUserSession } from "@/lib/auth/auth";
 import { AssignDpjpSchema } from "@/lib/validations/triage";
+import { assignDpjpServerAction, getAppointmentsServerAction } from "@/lib/actions/appointment";
 
 function generateAssignId(prefix: string) {
   return `${prefix}-${Date.now().toString().slice(-4)}`;
@@ -33,15 +34,63 @@ function AssignDpjpContent() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
+    async function loadData() {
+      try {
+        const aptsRes = await getAppointmentsServerAction();
+        if (aptsRes.success && aptsRes.data && aptsRes.data.length > 0) {
+          const mappedApts: Appointment[] = (aptsRes.data as unknown as Array<{
+            id: string;
+            patientId: string;
+            patient?: { name?: string; nik?: string };
+            faskesId: string;
+            doctorId: string;
+            doctor?: { name?: string };
+            poli: string;
+            tanggal: Date | string;
+            jam: string;
+            keluhanAwal: string;
+            status: string;
+            consentActive?: boolean;
+            consentPin?: string | null;
+          }>).map((a) => ({
+            id: a.id,
+            pasienId: a.patientId,
+            pasienNama: a.patient?.name || "Pasien",
+            pasienNik: a.patient?.nik || "-",
+            faskesId: a.faskesId,
+            faskesNama: "RSUP Dr. Sardjito",
+            dokterId: a.doctorId,
+            dokterNama: a.doctor?.name || "Dokter DPJP",
+            poli: a.poli,
+            tanggal: new Date(a.tanggal).toISOString().split("T")[0],
+            jam: a.jam,
+            keluhanAwal: a.keluhanAwal,
+            status: (a.status as Appointment["status"]) || "WAITING_DOCTOR",
+            consentActive: !!a.consentActive,
+            consentPin: a.consentPin || undefined,
+          }));
+          setAppointments(mappedApts);
+          if (!selectedAptId || !mappedApts.some((a) => a.id === selectedAptId)) {
+            const pending = mappedApts.find(
+              (a) => a.status === "WAITING_DOCTOR" || a.status === "PENDING_ARRIVAL"
+            );
+            if (pending) setSelectedAptId(pending.id);
+          }
+          return;
+        }
+      } catch {
+        // fallback
+      }
+
       const allApts = getStorageData<Appointment[]>("resilio_appointments", MOCK_APPOINTMENTS);
       setAppointments(allApts);
       if (!selectedAptId || !allApts.some((a) => a.id === selectedAptId)) {
         const pending = allApts.find((a) => a.status === "WAITING_DOCTOR");
         if (pending) setSelectedAptId(pending.id);
       }
-    }, 0);
-    return () => clearTimeout(timer);
+    }
+
+    loadData();
   }, [selectedAptId]);
 
   const isAptNotFound = !!preselectedAptId && !appointments.some((a) => a.id === preselectedAptId);
@@ -49,7 +98,7 @@ function AssignDpjpContent() {
   const activeDoctors = MOCK_DOCTORS.filter((d) => d.accessStatus === "ACTIVE");
   const targetDoctor = activeDoctors.find((d) => d.id === selectedDoctorId) || activeDoctors[0];
 
-  const handleAssignDpjp = (e: React.FormEvent) => {
+  const handleAssignDpjp = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
 
@@ -78,6 +127,21 @@ function AssignDpjpContent() {
     if (selectedApt.consentPin && inputPin && inputPin !== selectedApt.consentPin) {
       setErrorMsg("Kode PIN Persetujuan Pasien salah! Mintalah pasien melihat 6-digit PIN di aplikasi mereka.");
       return;
+    }
+
+    // 1. Eksekusi Server Action untuk mutasi ke Basis Data PostgreSQL
+    try {
+      const res = await assignDpjpServerAction({
+        aptId: selectedAptId,
+        doctorId: selectedDoctorId,
+        inputPin: inputPin || undefined,
+      });
+      if (!res.success) {
+        setErrorMsg(res.message || "Gagal menyimpan penugasan DPJP ke database.");
+        return;
+      }
+    } catch (err: unknown) {
+      console.warn("DB assign DPJP action fallback:", err);
     }
 
     const session = getUserSession();

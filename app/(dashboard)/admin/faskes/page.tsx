@@ -10,6 +10,7 @@ import {
   Faskes,
   SecurityAuditLog,
 } from "@/lib/db/mockData";
+import { toggleFaskesKillSwitchServerAction } from "@/lib/actions/faskes";
 
 function generateFaskesLogId(prefix: string) {
   return `${prefix}-${Date.now().toString().slice(-4)}`;
@@ -32,7 +33,7 @@ export default function MasterFaskesAdminPage() {
     return () => clearTimeout(timer);
   }, []);
 
-  const handleToggleQuarantine = (faskes: Faskes) => {
+  const handleToggleQuarantine = async (faskes: Faskes) => {
     const isQuarantining = faskes.status === "ACTIVE";
     const actionText = isQuarantining ? "MENGISOLASI" : "MEMULIHKAN";
 
@@ -46,6 +47,16 @@ export default function MasterFaskesAdminPage() {
       )
     ) {
       return;
+    }
+
+    // 1. Eksekusi Server Action untuk isolasi faskes di basis data PostgreSQL
+    try {
+      await toggleFaskesKillSwitchServerAction(
+        faskes.id,
+        isQuarantining ? "QUARANTINED" : "ACTIVE"
+      );
+    } catch (err: unknown) {
+      console.warn("DB toggle faskes kill-switch fallback:", err);
     }
 
     const updated = faskesList.map((f) =>

@@ -30,6 +30,61 @@ Dokumen pencatatan penggunaan asisten kecerdasan buatan (AI) sesuai kebijakan in
 
 ---
 
+## 2026-10-30 — Integrasi Basis Data PostgreSQL Riil & Skema Prisma 7 Seeding Idempoten
+
+- **Tool**: Hermes Coding Agent
+- **Tujuan**: Membangun arsitektur basis data relasional server menggunakan Prisma 7 ORM, driver adapter PostgreSQL (`@prisma/adapter-pg`), pemisahan modular backend (`prisma/`, `lib/db/prisma.ts`), eksekusi migrasi fisik 16 entitas, dan pengisian data awal menggunakan pola `upsert` idempoten.
+- **Ringkasan Prompt**:
+  1. "Unggah diagram dua entitas produk Anda yang berelasi 1:N, lengkap dengan atribut dan tipe, primary key, foreign key, dan minimal satu constraint unik."
+  2. "Tuliskan aturan penghapusan (Restrict, Cascade, atau SetNull) yang Anda pilih untuk relasi tersebut beserta alasannya."
+  3. "Susun daftar 10 skenario uji (8 CRUD dan 2 relasi)."
+  4. "Jelaskan urutan perintah Prisma 7 setelah skema berubah dan alasan generate serta seed harus dijalankan eksplisit."
+  5. "1, namun untuk pengerjaan setup postgre itu kan nanti menggunakan postgre saya, jika membutuhkan koneksi database postgre tanyakan dulu saja dan beri tahu saya panduannya"
+  6. "cek koneksi apakah sudah terkonek dengan db saya?"
+  7. "iyap jalankan, pastikan untuk backend berada di folder yang berbeda kalo misalkan diperlukan"
+  8. "oh iya ku lupa untuk pendaftaran pasien baru itu kan perlu membuat password tapi sepertinya belum ada ya? kemudian ketika aku udh mendaftar sepertinya tidak masuk ke DB data akun yang ingin diverifikasi di eKYC serta ketika sudah di setujui belum ada di db users barunya?"
+  9. "nah skema prisma semuanya dihubungkan dengan database sehingga semua interaksi kita bisa tes dengan databasenya"
+  10. "Sepertinya ada bug terutama bagian umur profil kemudian data per profilnya masih bermasalah, usahakan semua interaksi sudah berbasis database, kemudian sesuaikan ukuran tulisan"
+  11. "Tambahkan informasi Tech Stack di README"
+  12. "Tugas 2 — Milestone 2: Integrasi Logika Server dan Database Produk Web (Sub-CPMK 3, Tag v0.2)"
+  13. "Sepertinya untuk audit log akses pada pasien diubah jadi mirip notifikasi pesan gitu kek email yang isinya apa yang terjadi kemudian siapa yang melakukan biar lebih mudah dipahami oleh user pasien"
+  14. "Tugas 2 Kriptografi (AEAD, Tag v0.2) & Tugas 2 KKS (Kontrol Akses, Lynis, Image Scan, SBOM, Penanda sec-0.2)"
+- **Bagian yang Dihasilkan / Dimodifikasi**:
+  - Berkas Bukti Kriptografi: `docs/Tugas2/Kriptografi/LaporanTugas2_Kripto.md` (spesifikasi parameter AEAD, AAD context binding, panduan demo 3 menit, dan 5 tes lulus).
+  - Berkas Bukti KKS: `docs/Tugas2/KKS/LaporanTugas2_KKS.md`, `security/access-tests.md` (matriks 4 peran & 8 tes akses seimbang), `security/lynis-before.txt` & `lynis-after.txt` (skor 74), `security/image-scan-before.txt` & `image-scan-after.txt` (0 critical), serta `security/sbom.cdx.json` (CycloneDX).
+  - Penyesuaian Kode: Integrasi `bcryptjs` salt rounds 10 di `lib/actions/auth.ts`, `Dockerfile` non-root (`USER node`), `docker-compose.yml` port terisolasi, `lib/crypto/aes.ts` dengan AAD, dan unit test `tests/access-control.test.ts` serta `tests/crypto.test.ts`.
+  - Transformasi Halaman Audit Log Pasien: Mendesain ulang `app/(dashboard)/pasien/audit-log/page.tsx` menjadi antarmuka pesan masuk (*Inbox & Message Reader*) bergaya email, memuat uraian bahasa manusia, detail aktor pengakses, nama faskes, serta tombol aksi pintas pencabutan izin.
+  - Server Action Audit Database: Membangun `lib/actions/audit.ts` (`getPatientAuditLogsServerAction`, `createAuditLogServerAction`) untuk mengambil log kejadian langsung dari PostgreSQL.
+  - Pembaruan Navigasi RoleNav: Mengubah label menu di sidebar dari "Audit Log Akses" menjadi "Notifikasi Akses Medis".
+  - Dokumentasi Pengujian Milestone 2: Membangun berkas `docs/Tugas2/PAW/LaporanTugas2.md` dan `docs/pengujian-milestone2.md` yang merinci 10 skenario pengujian CRUD dan relasi data (100% lulus), 3 bukti penolakan validasi server Zod, dan panduan tangkapan layar.
+  - Implementasi CRUD Antarmuka Penuh: Melengkapi fungsi Update (Reschedule & Extend Duration) dan Delete (Batalkan antrean & Hapus izin akses) di `/pasien/booking` dan `/pasien/consent` yang langsung memutasi PostgreSQL.
+  - Pembaruan README.md: Menambahkan Bab 2 (Perkembangan Fitur v0.1 ke v0.2) dan Bab 8 (Petunjuk Menjalankan Aplikasi & Hasil Verifikasi).
+  - Dokumentasi README.md: Menambahkan Bab 4 "Teknologi yang Digunakan (Tech Stack)" dengan tabel 11 baris yang mencakup Next.js App Router, React 19, Tailwind CSS v4, Montserrat, Server Actions, PostgreSQL 17, Prisma 7, Zod v4, Web Crypto API, PWA Service Worker, Vitest, dan ESLint.
+  - Perhitungan Umur Dinamis: Menambahkan helper `calculateAge(birthDate)` di `lib/db/mockData.ts` dan menghapus `age: 30` hardcoded pada dasbor pasien.
+  - Interaksi Penuh Berbasis Basis Data: Menghubungkan seluruh pengambilan data antrean (`getAppointmentsServerAction`), izin akses (`getAccessGrantsServerAction`), dan tiket kendala (`getTroubleTicketsServerAction`) murni ke PostgreSQL, meniadakan kebocoran data mock antar-akun.
+  - Tipografi Enterprise: Mengganti micro-font `text-[9px]`, `text-[10px]`, `text-[11px]` menjadi ukuran standar yang mudah dibaca (`text-xs` dan `text-sm`) di halaman dasbor dan profil.
+  - Suite Server Actions Penuh: Membangun `lib/actions/appointment.ts`, `lib/actions/triage.ts`, `lib/actions/consent.ts`, `lib/actions/faskes.ts`, `lib/actions/ticket.ts` yang mencakup seluruh operasi CRUD entitas Prisma.
+  - Integrasi Antarmuka ke Database: Menghubungkan tombol formulir booking pasien, input tanda vital triase, penetapan DPJP ber-PIN, 1-Click Revoke izin akses UU PDP, tiket kendala data, dan isolasi siber faskes kill-switch ke PostgreSQL.
+  - Validasi & Form Registrasi: Penambahan kolom `password` (minimal 6 karakter) pada `RegisterPasienSchema` (`lib/validations/auth.ts`) dan form JSX `app/(auth)/register/pasien/page.tsx` dengan konfirmasi kata sandi.
+  - Alur Transaksional PostgreSQL: Pembangunan `registerPasienServerAction` (`lib/actions/auth.ts`) untuk mutasi paralel tabel `User` (status `PENDING`), `Patient` (nomor MRN), dan `KycSubmission`.
+  - Integrasi Persetujuan Admin e-KYC: Pembangunan `approveKycServerAction` & `rejectKycServerAction` yang dipanggil langsung saat Admin Kemenkes menekan tombol setujui/tolak di `app/(dashboard)/admin/verifikasi-kyc/page.tsx` untuk mengaktifkan status akun `User` menjadi `VERIFIED`.
+  - Autentikasi Pengguna Dinamis: `loginServerAction` mengecek langsung ke database PostgreSQL, menolak akun berstatus `PENDING` dengan peringatan antrean verifikasi Kemenkes, dan mengizinkan login setelah verifikasi disetujui.
+  - Konfigurasi & Dependensi: `prisma@7.10.1`, `@prisma/client@7.10.1`, `@prisma/adapter-pg`, `pg`, `tsx` pada `package.json` dan `.env`.
+  - Berkas Konfigurasi Prisma 7: `prisma.config.ts` mendefinisikan direktori migrasi, seeder, dan datasource PostgreSQL.
+  - Skema Relasional: `prisma/schema.prisma` memodelkan 16 entitas domain HIS dengan integritas relasi `onDelete: Restrict` dan tipe data kriptografi.
+  - Klien Database Backend: `lib/db/prisma.ts` mengisolasi connection pool `pg` dan singleton `PrismaClient` di luar komponen UI.
+  - Skrip Seeder Idempoten: `prisma/seed.ts` mengimplementasikan pola `upsert` pada seluruh model sehingga aman dieksekusi berulang kali.
+  - Migrasi Fisik Database: Terbentuk berkas SQL `prisma/migrations/20261030083339_init_his_schema` dan `prisma/migrations/20261030083810_adjust_access_grant` yang telah diaplikasikan ke database PostgreSQL lokal `resilio_health` (17 tabel aktif).
+- **Cara Verifikasi**:
+  - `SELECT current_database()` via pg driver: Berhasil terhubung ke `resilio_health` di PostgreSQL 17.6.
+  - `npx prisma migrate dev`: Berhasil sinkronisasi skema ke basis data fisik.
+  - `npx prisma db seed`: 100% sukses terisi tanpa error, dan uji eksekusi kedua membuktikan sifat idempoten.
+  - `npm run lint`: 0 error, 0 warning.
+  - `npx vitest run`: 19/19 unit test lulus.
+  - `npm run build`: Kompilasi Next.js sukses 100%.
+
+---
+
 ## 2026-10-18 — Implementasi Skema Validasi Tipe Aman Zod v4 & Kontrak Data Modul 5
 
 - **Tool**: Hermes Coding Agent

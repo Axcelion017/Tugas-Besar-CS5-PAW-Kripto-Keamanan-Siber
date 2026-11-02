@@ -15,6 +15,12 @@ import {
   AccessGrant,
 } from "@/lib/db/mockData";
 import { BookingSchema } from "@/lib/validations/patient";
+import {
+  createAppointmentServerAction,
+  getAppointmentsServerAction,
+  updateAppointmentDetailsServerAction,
+  deleteAppointmentServerAction,
+} from "@/lib/actions/appointment";
 
 function BookingContent() {
   const searchParams = useSearchParams();
@@ -31,18 +37,112 @@ function BookingContent() {
   const [notification, setNotification] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [editingAptId, setEditingAptId] = useState<string | null>(null);
+  const [rescheduleDate, setRescheduleDate] = useState("");
+  const [rescheduleJam, setRescheduleJam] = useState("09:00 WIB");
 
   useEffect(() => {
-    const timer = setTimeout(() => {
+    async function loadData() {
       const s = getUserSession();
-      if (s) {
-        setSession(s);
-        const allApts = getStorageData<Appointment[]>("resilio_appointments", MOCK_APPOINTMENTS);
-        setAppointments(allApts.filter((a) => a.pasienId === s.id || (s.nik && a.pasienNik === s.nik)));
+      if (!s) return;
+      setSession(s);
+
+      // Ambil antrean langsung dari database PostgreSQL
+      try {
+        const aptsRes = await getAppointmentsServerAction({ patientId: s.id });
+        if (aptsRes.success && aptsRes.data) {
+          const mappedApts: Appointment[] = (aptsRes.data as unknown as Array<{
+            id: string;
+            patientId: string;
+            patient?: { name?: string; nik?: string };
+            faskesId: string;
+            doctorId: string;
+            doctor?: { name?: string };
+            poli: string;
+            tanggal: Date | string;
+            jam: string;
+            keluhanAwal: string;
+            status: string;
+            consentActive?: boolean;
+            consentPin?: string | null;
+          }>).map((a) => ({
+            id: a.id,
+            pasienId: a.patientId,
+            pasienNama: a.patient?.name || s.name,
+            pasienNik: a.patient?.nik || s.nik || "-",
+            faskesId: a.faskesId,
+            faskesNama: "Faskes Terdaftar",
+            dokterId: a.doctorId,
+            dokterNama: a.doctor?.name || "Dokter DPJP",
+            poli: a.poli,
+            tanggal: new Date(a.tanggal).toISOString().split("T")[0],
+            jam: a.jam,
+            keluhanAwal: a.keluhanAwal,
+            status: (a.status as Appointment["status"]) || "PENDING_ARRIVAL",
+            consentActive: !!a.consentActive,
+            consentPin: a.consentPin || undefined,
+          }));
+          setAppointments(mappedApts);
+        } else {
+          setAppointments([]);
+        }
+      } catch {
+        setAppointments([]);
       }
-    }, 0);
-    return () => clearTimeout(timer);
+    }
+
+    loadData();
   }, []);
+
+  const handleCancelAppointment = async (aptId: string) => {
+    if (!confirm(`Apakah Anda yakin ingin membatalkan dan menghapus tiket antrean ${aptId}?`)) {
+      return;
+    }
+    setErrorMsg(null);
+    setNotification(null);
+
+    try {
+      const res = await deleteAppointmentServerAction(aptId);
+      if (res.success) {
+        setAppointments((prev) => prev.filter((a) => a.id !== aptId));
+        setNotification(`Tiket antrean ${aptId} berhasil dibatalkan dan dihapus dari basis data.`);
+      } else {
+        setErrorMsg(res.message || "Gagal membatalkan antrean.");
+      }
+    } catch {
+      setErrorMsg("Terjadi kendala saat membatalkan antrean.");
+    }
+  };
+
+  const handleSaveReschedule = async (aptId: string) => {
+    if (!rescheduleDate) {
+      setErrorMsg("Pilih tanggal baru untuk jadwal ulang.");
+      return;
+    }
+    setErrorMsg(null);
+    setNotification(null);
+
+    try {
+      const res = await updateAppointmentDetailsServerAction(aptId, {
+        tanggal: rescheduleDate,
+        jam: rescheduleJam,
+      });
+
+      if (res.success) {
+        setAppointments((prev) =>
+          prev.map((a) =>
+            a.id === aptId ? { ...a, tanggal: rescheduleDate, jam: rescheduleJam } : a
+          )
+        );
+        setEditingAptId(null);
+        setNotification(`Jadwal antrean ${aptId} berhasil diperbarui (Rescheduled).`);
+      } else {
+        setErrorMsg(res.message || "Gagal memperbarui jadwal.");
+      }
+    } catch {
+      setErrorMsg("Terjadi kendala saat memperbarui jadwal antrean.");
+    }
+  };
 
   const requestedFaskesNotFound =
     !!searchParams.get("faskesId") && !MOCK_FASKES.some((f) => f.id === searchParams.get("faskesId"));
@@ -51,7 +151,7 @@ function BookingContent() {
   const currentDoctor =
     availableDoctors.find((d) => d.id === dokterId) || availableDoctors[0] || MOCK_DOCTORS[0];
 
-  const handleBookingSubmit = (e: React.FormEvent) => {
+  const handleBookingSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
     if (!session) return;
@@ -69,6 +169,22 @@ function BookingContent() {
     if (!validation.success) {
       setErrorMsg(validation.error.issues[0]?.message || "Data booking tidak valid.");
       return;
+    }
+
+    // 1. Eksekusi Server Action untuk menyimpan langsung ke basis data PostgreSQL
+    try {
+      await createAppointmentServerAction({
+        faskesId: currentFaskes.id,
+        dokterId: currentDoctor.id,
+        tanggal,
+        jam,
+        poli: currentDoctor.specialty,
+        keluhanAwal,
+        autoConsent,
+        patientId: session.id,
+      });
+    } catch (err: unknown) {
+      console.warn("DB booking action fallback:", err);
     }
 
     const newAptId = generateId("APT-2026");
@@ -295,17 +411,17 @@ function BookingContent() {
               {appointments.map((a) => (
                 <div
                   key={a.id}
-                  className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-1.5"
+                  className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2"
                 >
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-mono font-bold text-slate-500">
+                    <span className="text-xs font-mono font-bold text-slate-500">
                       {a.id}
                     </span>
                     <span
-                      className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${
-                        a.status === "WAITING"
+                      className={`text-xs font-black uppercase px-2.5 py-0.5 rounded-full border ${
+                        a.status === "WAITING" || a.status === "PENDING_ARRIVAL"
                           ? "bg-blue-100 text-blue-800 border-blue-200"
-                          : a.status === "IN_PROGRESS"
+                          : a.status === "IN_PROGRESS" || a.status === "IN_EXAMINATION"
                           ? "bg-amber-100 text-amber-800 border-amber-300 animate-pulse"
                           : "bg-emerald-100 text-emerald-800 border-emerald-200"
                       }`}
@@ -313,14 +429,89 @@ function BookingContent() {
                       {a.status}
                     </span>
                   </div>
-                  <h4 className="text-xs font-bold text-slate-800">{a.dokterNama}</h4>
-                  <p className="text-[11px] text-slate-500">{a.faskesNama}</p>
-                  <p className="text-[11px] text-slate-600 font-semibold">
+                  <h4 className="text-sm font-bold text-slate-800">{a.dokterNama}</h4>
+                  <p className="text-xs text-slate-500">{a.faskesNama} • {a.poli}</p>
+                  <p className="text-xs text-slate-600 font-semibold">
                     Waktu: {a.tanggal} • {a.jam}
                   </p>
-                  <p className="text-[10px] text-slate-400 italic">
+                  <p className="text-xs text-slate-500 italic">
                     &quot;{a.keluhanAwal}&quot;
                   </p>
+
+                  {/* Form Reschedule Jika Mode Edit Aktif */}
+                  {editingAptId === a.id ? (
+                    <div className="p-3 bg-white rounded-xl border border-blue-200 space-y-2.5 mt-2">
+                      <span className="text-xs font-black text-blue-800 block uppercase">
+                        Ubah Jadwal Konsultasi (Reschedule - UPDATE):
+                      </span>
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          type="date"
+                          value={rescheduleDate}
+                          onChange={(e) => setRescheduleDate(e.target.value)}
+                          className="px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold"
+                        />
+                        <select
+                          value={rescheduleJam}
+                          onChange={(e) => setRescheduleJam(e.target.value)}
+                          className="px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold bg-white"
+                        >
+                          <option value="08:30 WIB">08:30 WIB</option>
+                          <option value="09:00 WIB">09:00 WIB</option>
+                          <option value="10:30 WIB">10:30 WIB</option>
+                          <option value="13:30 WIB">13:30 WIB</option>
+                          <option value="15:00 WIB">15:00 WIB</option>
+                        </select>
+                      </div>
+                      <div className="flex items-center gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => handleSaveReschedule(a.id)}
+                          className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition cursor-pointer"
+                        >
+                          Simpan Jadwal Baru
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditingAptId(null)}
+                          className="px-3 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-xs font-bold transition cursor-pointer"
+                        >
+                          Batal
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    /* Tombol Aksi CRUD Lengkap: UPDATE & DELETE */
+                    <div className="flex items-center justify-between pt-2 border-t border-slate-200/60">
+                      <span className="text-xs font-mono font-bold text-blue-700">
+                        PIN: {a.consentPin || "884120"}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        {a.status !== "COMPLETED" && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingAptId(a.id);
+                              setRescheduleDate(a.tanggal);
+                              setRescheduleJam(a.jam);
+                            }}
+                            className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-700 rounded-lg text-xs font-bold border border-slate-300 transition cursor-pointer"
+                            title="Ubah Jadwal Kunjungan (UPDATE)"
+                          >
+                            Reschedule
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleCancelAppointment(a.id)}
+                          className="px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-700 rounded-lg text-xs font-bold border border-red-200 transition cursor-pointer"
+                          title="Batalkan dan Hapus Antrean (DELETE)"
+                        >
+                          Batalkan
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

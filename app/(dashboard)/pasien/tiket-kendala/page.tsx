@@ -10,6 +10,10 @@ import {
   TroubleTicket,
 } from "@/lib/db/mockData";
 import { TroubleTicketSchema } from "@/lib/validations/patient";
+import {
+  createTroubleTicketServerAction,
+  getTroubleTicketsServerAction,
+} from "@/lib/actions/ticket";
 
 type TicketCategory = "BUG" | "SYNC_FAIL" | "DATA_MISMATCH" | "OTHER";
 
@@ -27,18 +31,49 @@ export default function PasienTiketKendalaPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
+    async function loadData() {
       const s = getUserSession();
-      if (s) {
-        setSession(s);
-        const all = getStorageData<TroubleTicket[]>("resilio_trouble_tickets", MOCK_TROUBLE_TICKETS);
-        setTickets(all.filter((t) => t.pengirimId === s.id || t.pengirimId === "P-101"));
+      if (!s) return;
+      setSession(s);
+
+      try {
+        const ticketRes = await getTroubleTicketsServerAction();
+        if (ticketRes.success && ticketRes.data && ticketRes.data.length > 0) {
+          const myTickets: TroubleTicket[] = (ticketRes.data as unknown as Array<{
+            id: string;
+            reporterId: string | null;
+            reporterName: string;
+            kategori: string;
+            judul: string;
+            deskripsi: string;
+            status: string;
+            createdAt: Date | string;
+          }>)
+            .filter((t) => t.reporterId === s.id)
+            .map((t) => ({
+              id: t.id,
+              pengirimId: t.reporterId || s.id,
+              pengirimNama: t.reporterName,
+              pengirimRole: "PASIEN",
+              kategori: (t.kategori as "BUG" | "SYNC_FAIL" | "DATA_MISMATCH" | "OTHER") || "OTHER",
+              judul: t.judul,
+              deskripsi: t.deskripsi,
+              status: (t.status === "RESOLVED" ? "RESOLVED" : "OPEN") as "OPEN" | "INVESTIGATING" | "RESOLVED",
+              createdAt: new Date(t.createdAt).toLocaleDateString("id-ID"),
+            }));
+          setTickets(myTickets);
+        } else {
+          setTickets([]);
+        }
+      } catch {
+        setTickets([]);
       }
-    }, 0);
-    return () => clearTimeout(timer);
+    }
+
+    loadData();
   }, []);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
     if (!session) return;
@@ -53,6 +88,19 @@ export default function PasienTiketKendalaPage() {
     if (!validation.success) {
       setErrorMsg(validation.error.issues[0]?.message || "Data tiket tidak valid.");
       return;
+    }
+
+    // 1. Eksekusi Server Action untuk menyimpan tiket kendala di PostgreSQL
+    try {
+      await createTroubleTicketServerAction({
+        kategori,
+        judul,
+        deskripsi,
+        reporterId: session.id,
+        reporterName: session.name,
+      });
+    } catch (err: unknown) {
+      console.warn("DB trouble ticket action fallback:", err);
     }
 
     const newTicket: TroubleTicket = {

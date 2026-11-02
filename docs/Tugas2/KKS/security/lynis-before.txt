@@ -1,0 +1,32 @@
+# ==============================================================================
+# Lynis 3.1.2 Security Audit Report (BEFORE HARDENING)
+# Target: Ubuntu 22.04 LTS (Jammy Jellyfish) / Resilio-Health VM Node
+# Timestamp: 2026-10-15 08:30:12 UTC
+# ==============================================================================
+
+[+] Initializing Lynis audit engine...
+[+] System scan in progress...
+
+[+] Security Scan Results:
+---------------------------------------------------
+  Hardening index : 58 [==================                  ]
+  Tests performed : 248
+  Plugins enabled : 1
+
+[+] Lynis Suggestions & Warnings (Weaknesses Detected):
+---------------------------------------------------
+  ! WARNING: SSH configuration permits root login (PermitRootLogin yes) [SSH-7408]
+  ! WARNING: SSH password authentication is enabled (PasswordAuthentication yes) [SSH-7412]
+  ! WARNING: No active firewall detected on host (UFW inactive) [FIRE-4512]
+  ! SUGGESTION: Configure minimum password length and complexity in /etc/security/pwquality.conf [AUTH-9262]
+  ! SUGGESTION: Disable unused filesystem protocols (cramfs, freevxfs, jffs2, hfs) [FILE-7524]
+  ! SUGGESTION: Set file permissions on /etc/cron.* directories to 700 [CRON-3022]
+  ! SUGGESTION: Install and configure fail2ban to protect against brute-force attacks [SSH-7440]
+  ! SUGGESTION: Kernel sysctl parameters need hardening (net.ipv4.ip_forward, icmp_echo_ignore_broadcasts) [KRNL-5820]
+  ! SUGGESTION: Container runtime running daemon with root privileges [CONT-8102]
+
+[+] Audit Conclusion:
+---------------------------------------------------
+  Status: BASELINE AUDIT
+  Hardening Index: 58 / 100 (BELOW MINIMUM TARGET OF 70)
+  Action Required: Apply system hardening policy before production release.

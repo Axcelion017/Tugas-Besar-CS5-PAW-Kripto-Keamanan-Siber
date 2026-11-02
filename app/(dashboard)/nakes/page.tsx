@@ -10,8 +10,11 @@ import {
   getStorageData,
   Appointment,
   Patient,
+  AppointmentStatus,
+  TriaseLevel,
 } from "@/lib/db/mockData";
 import { DashboardSkeleton, SkeletonDisruptionNotice } from "@/components/ui/Skeleton";
+import { getAppointmentsServerAction } from "@/lib/actions/appointment";
 
 export default function NakesDashboardPage() {
   const router = useRouter();
@@ -37,19 +40,84 @@ export default function NakesDashboardPage() {
   }, []);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
+    async function loadData() {
       const s = getUserSession();
-      if (s) {
-        setSession(s);
+      if (!s) return;
+      setSession(s);
+
+      // Ambil daftar antrean dokter langsung dari basis data PostgreSQL
+      try {
+        const aptsRes = await getAppointmentsServerAction({ doctorId: s.id });
+        if (aptsRes.success && aptsRes.data && aptsRes.data.length > 0) {
+          const mappedApts: Appointment[] = (aptsRes.data as unknown as Array<{
+            id: string;
+            patientId: string;
+            patient?: { name?: string; nik?: string };
+            faskesId: string;
+            doctorId: string;
+            poli: string;
+            tanggal: Date | string;
+            jam: string;
+            keluhanAwal: string;
+            status: string;
+            consentActive?: boolean;
+            consentPin?: string | null;
+            triageAssessment?: {
+              triaseLevel: string;
+              systolic: number;
+              diastolic: number;
+              heartRate: number;
+              temperature: number | string;
+              respiratoryRate: number;
+              spo2: number;
+            } | null;
+          }>).map((a) => ({
+            id: a.id,
+            pasienId: a.patientId,
+            pasienNama: a.patient?.name || "Pasien",
+            pasienNik: a.patient?.nik || "-",
+            faskesId: a.faskesId,
+            faskesNama: "RSUP Dr. Sardjito",
+            dokterId: a.doctorId,
+            dokterNama: s.name,
+            poli: a.poli,
+            tanggal: new Date(a.tanggal).toISOString().split("T")[0],
+            jam: a.jam,
+            keluhanAwal: a.keluhanAwal,
+            status: (a.status as AppointmentStatus) || "WAITING",
+            consentActive: !!a.consentActive,
+            consentPin: a.consentPin || undefined,
+            triaseLevel: (a.triageAssessment?.triaseLevel as TriaseLevel) || undefined,
+            triaseVitals: a.triageAssessment
+              ? {
+                  systolic: a.triageAssessment.systolic,
+                  diastolic: a.triageAssessment.diastolic,
+                  heartRate: a.triageAssessment.heartRate,
+                  temperature: Number(a.triageAssessment.temperature),
+                  respiratoryRate: a.triageAssessment.respiratoryRate,
+                  spo2: a.triageAssessment.spo2,
+                }
+              : undefined,
+          }));
+          setAppointments(mappedApts);
+        } else {
+          // Fallback lokal jika offline
+          const allApts = getStorageData<Appointment[]>("resilio_appointments", MOCK_APPOINTMENTS);
+          const myApts = allApts.filter(
+            (a) => a.dokterId === s.id || (s.id === "DOC-01" && a.dokterId === "DOC-01")
+          );
+          setAppointments(myApts);
+        }
+      } catch {
         const allApts = getStorageData<Appointment[]>("resilio_appointments", MOCK_APPOINTMENTS);
-        // Filter janji temu yang ditujukan ke dokter ini atau dokter demo
         const myApts = allApts.filter(
-          (a) => a.dokterId === s.id || a.dokterId === "DOC-01"
+          (a) => a.dokterId === s.id || (s.id === "DOC-01" && a.dokterId === "DOC-01")
         );
         setAppointments(myApts);
       }
-    }, 0);
-    return () => clearTimeout(timer);
+    }
+
+    loadData();
   }, []);
 
   if (!session) {
@@ -77,7 +145,7 @@ export default function NakesDashboardPage() {
             <span className="text-xs font-black uppercase tracking-wider text-emerald-700">
               Stasiun Kerja Tenaga Kesehatan Terakreditasi
             </span>
-            <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+            <span className="text-xs font-bold uppercase px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
               STR/SIP Sah
             </span>
           </div>
@@ -87,7 +155,7 @@ export default function NakesDashboardPage() {
           <p className="text-xs text-slate-500 font-medium mt-0.5">
             {session.specialization || "Spesialis Penyakit Dalam"} • {session.faskesName || "RSUP Dr. Sardjito"}
           </p>
-          <p className="text-[10px] text-slate-400 font-mono mt-1 break-words">
+          <p className="text-xs text-slate-400 font-mono mt-1 break-words">
             Nomor STR: <span className="text-slate-700 font-bold">{session.strNumber || "31.1.1.100.2.22.123456"}</span> • Nomor SIP:{" "}
             <span className="text-slate-700 font-bold">{session.sipNumber || "446/SIP-D/2023/001"}</span>
           </p>
@@ -105,7 +173,7 @@ export default function NakesDashboardPage() {
             </span>
             <button
               onClick={() => setIsPracticing(!isPracticing)}
-              className="text-[10px] font-bold uppercase px-2.5 py-1 bg-white hover:bg-slate-100 rounded-lg border border-slate-300 cursor-pointer ml-2"
+              className="text-xs font-bold uppercase px-3 py-1 bg-white hover:bg-slate-100 rounded-lg border border-slate-300 cursor-pointer ml-2"
             >
               Ubah
             </button>
@@ -190,11 +258,11 @@ export default function NakesDashboardPage() {
                 >
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-mono font-bold text-slate-500">
+                      <span className="text-xs font-mono font-bold text-slate-500">
                         {apt.id}
                       </span>
                       <span
-                        className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${
+                        className={`text-xs font-black uppercase px-2.5 py-0.5 rounded-full border ${
                           apt.status === "IN_PROGRESS"
                             ? "bg-amber-100 text-amber-800 border-amber-300 animate-pulse"
                             : apt.status === "COMPLETED"
@@ -207,7 +275,7 @@ export default function NakesDashboardPage() {
 
                       {/* Alert Alergi Bahaya */}
                       {allergies.length > 0 && (
-                        <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-red-100 text-red-700 border border-red-300">
+                        <span className="text-xs font-black uppercase px-2.5 py-0.5 rounded-full bg-red-100 text-red-700 border border-red-300">
                           Alergi: {allergies.join(", ")}
                         </span>
                       )}

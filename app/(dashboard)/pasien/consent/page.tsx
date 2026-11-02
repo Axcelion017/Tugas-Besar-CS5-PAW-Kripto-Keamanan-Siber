@@ -13,6 +13,13 @@ import {
   AccessGrant,
   SecurityAuditLog,
 } from "@/lib/db/mockData";
+import {
+  revokeAccessServerAction,
+  grantAccessServerAction,
+  getAccessGrantsServerAction,
+  updateAccessGrantServerAction,
+  deleteAccessGrantServerAction,
+} from "@/lib/actions/consent";
 
 function generateConsentId(prefix: string) {
   return `${prefix}-${Date.now().toString().slice(-4)}`;
@@ -26,18 +33,91 @@ export default function ConsentManagerPage() {
   const [notif, setNotif] = useState<string | null>(null);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
+    async function loadData() {
       const s = getUserSession();
-      if (s) {
-        setSession(s);
-        const all = getStorageData<AccessGrant[]>("resilio_access_grants", MOCK_ACCESS_GRANTS);
-        setGrants(all.filter((g) => g.pasienId === s.id || g.pasienId === "P-101"));
+      if (!s) return;
+      setSession(s);
+
+      try {
+        const grantsRes = await getAccessGrantsServerAction(s.id);
+        if (grantsRes.success && grantsRes.data && grantsRes.data.length > 0) {
+          const mappedGrants: AccessGrant[] = (grantsRes.data as unknown as Array<{
+            id: string;
+            patientId: string;
+            entityId: string;
+            entityName: string;
+            entityType: string;
+            scope: string;
+            validUntil: Date | string;
+            isRevoked: boolean;
+            createdAt: Date | string;
+          }>).map((g) => ({
+            id: g.id,
+            pasienId: g.patientId,
+            pasienNama: s.name,
+            entityId: g.entityId,
+            entityNama: g.entityName,
+            entityType: (g.entityType as "DOKTER" | "FASKES") || "DOKTER",
+            scope: g.scope,
+            validUntil: new Date(g.validUntil).toLocaleString("id-ID"),
+            isRevoked: g.isRevoked,
+            createdAt: new Date(g.createdAt).toLocaleString("id-ID"),
+          }));
+          setGrants(mappedGrants);
+        } else {
+          setGrants([]);
+        }
+      } catch {
+        setGrants([]);
       }
-    }, 0);
-    return () => clearTimeout(timer);
+    }
+
+    loadData();
   }, []);
 
-  const handleRevoke = (grantId: string, entityNama: string) => {
+  const handleExtendGrant = async (grantId: string, entityNama: string) => {
+    try {
+      const res = await updateAccessGrantServerAction(grantId, 48); // Perpanjang 48 jam (UPDATE)
+      if (res.success) {
+        setGrants((prev) =>
+          prev.map((g) =>
+            g.id === grantId
+              ? {
+                  ...g,
+                  isRevoked: false,
+                  validUntil: new Date(Date.now() + 48 * 3600 * 1000).toLocaleString("id-ID"),
+                }
+              : g
+          )
+        );
+        setNotif(`Izin akses untuk ${entityNama} berhasil diperpanjang 48 jam (UPDATE).`);
+      }
+    } catch {
+      setNotif("Gagal memperpanjang izin akses.");
+    }
+  };
+
+  const handleDeleteGrant = async (grantId: string) => {
+    if (!confirm(`Hapus permanen riwayat izin akses ${grantId} dari basis data?`)) return;
+    try {
+      const res = await deleteAccessGrantServerAction(grantId);
+      if (res.success) {
+        setGrants((prev) => prev.filter((g) => g.id !== grantId));
+        setNotif(`Riwayat izin akses ${grantId} berhasil dihapus permanen (DELETE).`);
+      }
+    } catch {
+      setNotif("Gagal menghapus izin akses.");
+    }
+  };
+
+  const handleRevoke = async (grantId: string, entityNama: string) => {
+    // 1. Eksekusi Server Action untuk 1-Click Revoke di PostgreSQL
+    try {
+      await revokeAccessServerAction(grantId);
+    } catch (err: unknown) {
+      console.warn("DB revoke consent action fallback:", err);
+    }
+
     const all = getStorageData<AccessGrant[]>("resilio_access_grants", MOCK_ACCESS_GRANTS);
     const updated = all.map((g) => (g.id === grantId ? { ...g, isRevoked: true } : g));
     setStorageData("resilio_access_grants", updated);
@@ -64,7 +144,7 @@ export default function ConsentManagerPage() {
     setTimeout(() => setNotif(null), 4000);
   };
 
-  const handleGrantNew = (e: React.FormEvent) => {
+  const handleGrantNew = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!session) return;
 
@@ -74,6 +154,19 @@ export default function ConsentManagerPage() {
 
     const entityNama = doctor ? doctor.name : faskes ? faskes.nama : "Entitas Kesehatan";
     const entityType = doctor ? "DOKTER" : "FASKES";
+
+    // 1. Eksekusi Server Action untuk mencatat pemberian izin di PostgreSQL
+    try {
+      await grantAccessServerAction({
+        patientId: session.id,
+        entityId: selectedEntityId,
+        entityName: entityNama,
+        entityType,
+        durationHours: Number(validDays) * 24,
+      });
+    } catch (err: unknown) {
+      console.warn("DB grant access action fallback:", err);
+    }
 
     const expiryDate = new Date();
     expiryDate.setDate(expiryDate.getDate() + Number(validDays));
@@ -234,18 +327,45 @@ export default function ConsentManagerPage() {
                     </span>
                   </td>
                   <td className="p-4 text-right">
-                    {!g.isRevoked ? (
+                    <div className="flex items-center justify-end gap-1.5">
+                      {!g.isRevoked ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => handleExtendGrant(g.id, g.entityNama)}
+                            className="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-bold uppercase transition cursor-pointer border border-blue-200"
+                            title="Perpanjang Masa Berlaku Izin (UPDATE)"
+                          >
+                            +48 Jam
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleRevoke(g.id, g.entityNama)}
+                            className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold uppercase transition cursor-pointer shadow-xs"
+                            title="Cabut Hak Akses (1-Click Revoke)"
+                          >
+                            Cabut (Revoke)
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleExtendGrant(g.id, g.entityNama)}
+                          className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-lg text-xs font-bold uppercase transition cursor-pointer border border-emerald-200"
+                          title="Aktifkan Kembali Izin Akses (UPDATE)"
+                        >
+                          Aktifkan Lagi
+                        </button>
+                      )}
                       <button
-                        onClick={() => handleRevoke(g.id, g.entityNama)}
-                        className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold uppercase transition cursor-pointer shadow-xs"
+                        type="button"
+                        onClick={() => handleDeleteGrant(g.id)}
+                        className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-xs font-bold transition cursor-pointer"
+                        title="Hapus Rekaman Izin (DELETE)"
                       >
-                        Cabut Izin (Revoke)
+                        Hapus
                       </button>
-                    ) : (
-                      <span className="text-[11px] text-slate-400 font-semibold italic">
-                        Akses Terkunci
-                      </span>
-                    )}
+                    </div>
                   </td>
                 </tr>
               ))}

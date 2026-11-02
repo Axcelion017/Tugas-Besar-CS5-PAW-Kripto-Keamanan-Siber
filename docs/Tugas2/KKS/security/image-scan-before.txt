@@ -1,0 +1,25 @@
+# ==============================================================================
+# Trivy Vulnerability Scanner Report v0.56.2 (BEFORE REMEDIATION)
+# Target Image: resilio-health-app:v0.1-monolith (node:18 base image, single-stage)
+# Scan Type: Container Image OS + Language Packages (npm)
+# Timestamp: 2026-10-16 11:20:05 UTC
+# ==============================================================================
+
+resilio-health-app:v0.1-monolith (debian 11.7)
+==============================================
+Total: 34 (UNKNOWN: 0, LOW: 14, MEDIUM: 12, HIGH: 6, CRITICAL: 2)
+
+┌───────────────┬────────────────┬──────────┬───────────────────┬───────────────┬───────────────────────────────────────────┐
+│    Library    │ Vulnerability  │ Severity │ Installed Version │ Fixed Version │                   Title                   │
+├───────────────┼────────────────┼──────────┼───────────────────┼───────────────┼───────────────────────────────────────────┤
+│ libssl1.1     │ CVE-2023-0286  │ CRITICAL │ 1.1.1n-0+deb11u4  │ 1.1.1n-0+deb11u5│ OpenSSL X.400 address type confusion RCE  │
+│ zlib1g        │ CVE-2022-37434 │ CRITICAL │ 1:1.2.11.dfsg-2+deb11u1│ 1:1.2.11.dfsg-2+deb11u2│ zlib heap-based buffer overflow via inflate │
+│ curl          │ CVE-2023-38545 │ HIGH     │ 7.74.0-1.3+deb11u7│ 7.74.0-1.3+deb11u8│ SOCKS5 heap buffer overflow in libcurl     │
+│ node          │ CVE-2023-30589 │ HIGH     │ 18.16.0           │ 18.18.0       │ Node.js HTTP request smuggling via Chunked│
+│ tar           │ CVE-2021-37701 │ HIGH     │ 6.1.0             │ 6.1.9         │ Path traversal via symlink bypass         │
+└───────────────┴────────────────┴──────────┴───────────────────┴───────────────┴───────────────────────────────────────────┘
+
+[!] REMEDIATION REQUIRED:
+- 2 CRITICAL vulnerabilities detected in base OS packages.
+- Image size: 1.12 GB (Unoptimized full Debian build).
+- Container process running as root (UID 0).

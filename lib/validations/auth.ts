@@ -18,6 +18,33 @@ export const LoginSchema = z.object({
 export type LoginInput = z.infer<typeof LoginSchema>;
 
 /**
+ * Skema Zod untuk Pendaftaran Akun Cepat Pasien Baru (Lightweight Onboarding)
+ */
+export const RegisterPasienCepatSchema = z.object({
+  username: z
+    .string({ message: "Username wajib diisi." })
+    .trim()
+    .min(3, { message: "Username minimal 3 karakter." })
+    .max(50, { message: "Username maksimal 50 karakter." })
+    .regex(/^[a-zA-Z0-9_]+$/, { message: "Username hanya boleh memuat huruf, angka, dan underscore." }),
+  namaLengkap: z
+    .string({ message: "Nama lengkap wajib diisi." })
+    .trim()
+    .min(3, { message: "Nama lengkap minimal 3 karakter." })
+    .max(120, { message: "Nama lengkap maksimal 120 karakter." }),
+  email: z
+    .string({ message: "Email wajib diisi." })
+    .trim()
+    .email({ message: "Format alamat email tidak valid." }),
+  password: z
+    .string({ message: "Kata sandi wajib diisi." })
+    .min(6, { message: "Kata sandi akun minimal 6 karakter." })
+    .max(100, { message: "Kata sandi akun maksimal 100 karakter." }),
+});
+
+export type RegisterPasienCepatInput = z.infer<typeof RegisterPasienCepatSchema>;
+
+/**
  * Skema Zod untuk Formulir Registrasi Pasien (e-KYC)
  */
 export const RegisterPasienSchema = z.object({
@@ -34,6 +61,10 @@ export const RegisterPasienSchema = z.object({
     .string({ message: "Email wajib diisi." })
     .trim()
     .email({ message: "Format alamat email tidak valid." }),
+  password: z
+    .string({ message: "Kata sandi wajib diisi." })
+    .min(6, { message: "Kata sandi akun minimal 6 karakter." })
+    .max(100, { message: "Kata sandi akun maksimal 100 karakter." }),
   phone: z
     .string({ message: "Nomor telepon/WhatsApp wajib diisi." })
     .trim()
