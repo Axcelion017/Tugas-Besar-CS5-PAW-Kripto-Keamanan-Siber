@@ -67,8 +67,17 @@ export async function loginServerAction(
       // Verifikasi Password Hash Bcrypt (Salt rounds 10) atau legacy demo
       let isPasswordMatch = false;
       try {
-        if (dbUser.passwordHash.startsWith("$2a$") || dbUser.passwordHash.startsWith("$2b$")) {
-          isPasswordMatch = await bcrypt.compare(password, dbUser.passwordHash);
+        if (
+          dbUser.passwordHash.startsWith("$2a$") ||
+          dbUser.passwordHash.startsWith("$2b$")
+        ) {
+          // Tangani string placeholder seed misalnya "$2b$10$hashed_doctor123"
+          if (dbUser.passwordHash.startsWith("$2b$10$hashed_")) {
+            const expectedPlain = dbUser.passwordHash.replace("$2b$10$hashed_", "");
+            isPasswordMatch = password === expectedPlain;
+          } else {
+            isPasswordMatch = await bcrypt.compare(password, dbUser.passwordHash);
+          }
         } else {
           isPasswordMatch = dbUser.passwordHash === password;
         }
