@@ -86,7 +86,10 @@ Sistem menerapkan arsitektur modular Next.js App Router dengan pemisahan wilayah
 | :--- | :--- | :--- | :--- |
 | **Kerahasiaan (Confidentiality)** | AES-256-GCM | NIST SP 800-38D | Enkripsi simetris data klinis SOAP & Citra Medis menggunakan kunci 256-bit unik pasien |
 | **Inisialisasi Keacakan (IV)** | 96-bit CSPRNG Nonce | W3C Web Crypto | `crypto.getRandomValues()` 12 bytes unik per rekam medis (Mencegah IV Reuse) |
+| **Context Binding (AAD)** | Additional Authenticated Data | NIST SP 800-38D | Mengikat identitas pasien & faskes ke ciphertext; mencegah manipulasi / transfer antar pasien |
 | **Keutuhan Data (Integrity)** | HMAC-SHA256 | RFC 2104 | Verifikasi keutuhan ciphertext; tolak dekripsi jika terjadi perubahan 1 bit (*Fail-Closed*) |
+| **Pemisahan Kunci (Key Separation)** | HKDF (SHA-256) | RFC 5869 | Menurunkan sub-kunci independen (kunci enkripsi vs kunci MAC) dari satu Master Key pasien |
+| **Penyimpanan Kredensial** | Bcrypt (Salt Rounds = 10) | OWASP Password Storage | Slow hashing memori-keras pada tabel `users` PostgreSQL mencegah serangan brute force |
 | **Penyimpanan (Storage)** | Zero-Knowledge Store | UU PDP No. 27/2022 | Server dan Admin basis data hanya menyimpan opaque ciphertext |
 
 ---
@@ -148,7 +151,7 @@ Aplikasi menyediakan tombol *Quick Demo* pada halaman masuk (`/login` dan `/`) u
 ├── lib/
 │   ├── actions/                  # Next.js Server Actions: clinical.ts (SOAP & UR-T10) & auth.ts (Cookie Auth)
 │   ├── auth/                     # auth.ts (Normalisasi Peran) & sessionStore.ts (Stateful Sesi Server)
-│   ├── crypto/                   # aes.ts (AES-256-GCM) & hmac.ts (HMAC-SHA256)
+│   ├── crypto/                   # aes.ts (AES-256-GCM), hmac.ts (HMAC-SHA256) & hkdf.ts (RFC 5869 KDF)
 │   ├── db/                       # prisma.ts (PostgreSQL Pool Adapter) & mockData.ts (Mock Persistence)
 │   └── validations/              # Skema Validasi Tipe Aman Zod v4 (clinical, auth, triage, patient)
 ├── prisma/
@@ -156,7 +159,7 @@ Aplikasi menyediakan tombol *Quick Demo* pada halaman masuk (`/login` dan `/`) u
 │   ├── migrations/               # Riwayat Migrasi Fisik SQL PostgreSQL
 │   └── seed.ts                   # Seeder Idempoten Berbasis Upsert (17 Tabel Terisi)
 ├── tests/
-│   ├── crypto.test.ts            # Pengujian Unit Kriptografi Vitest (5/5 Passed - AEAD & HMAC)
+│   ├── crypto.test.ts            # Pengujian Unit Kriptografi Vitest (7/7 Passed - AEAD, AAD, Fail-Closed & HKDF)
 │   ├── access-control.test.ts    # Pengujian Matriks Akses RBAC Vitest (8/8 Passed - 4 Positif vs 4 Negatif)
 │   └── validations.test.ts       # Pengujian Skema Validasi Zod Vitest (15/15 Passed)
 └── docs/                         # Dokumentasi Terstruktur Laporan Tugas Besar
@@ -204,10 +207,10 @@ Aplikasi menyediakan tombol *Quick Demo* pada halaman masuk (`/login` dan `/`) u
 ### 8.2 Hasil Verifikasi Kualitas
 - **Dokumentasi Bukti Lengkap 3 Mata Kuliah**:
   - **PAW**: `docs/Tugas2/PAW/LaporanTugas2.md` & `docs/pengujian-milestone2.md` (10 skenario pengujian 100% lulus).
-  - **Kriptografi**: `docs/Tugas2/Kriptografi/LaporanTugas2_Kripto.md` (AEAD, IV 96-bit, AAD context binding, 5 uji lulus).
+  - **Kriptografi**: `docs/Tugas2/Kriptografi/LaporanTugas2_Kripto.md` (AEAD, IV 96-bit, AAD context binding, HKDF RFC 5869, 7 uji lulus).
   - **KKS**: `docs/Tugas2/KKS/LaporanTugas2_KKS.md` (Lynis 74, Trivy 0 critical, SBOM CycloneDX, 8 uji RBAC lulus).
 - **Kompilasi Antarmuka**: Seluruh 32 rute Next.js terkompilasi bersih tanpa galat TypeScript (`npm run build`).
-- **Pengujian Unit Otomatis**: Sebanyak **28 skenario uji unit** (5 kriptografi AEAD/HMAC + 8 kontrol akses RBAC + 15 validasi skema Zod v4) lulus 100% (`npx vitest run`).
+- **Pengujian Unit Otomatis**: Sebanyak **30 skenario uji unit** (7 kriptografi AEAD/HMAC/HKDF + 8 kontrol akses RBAC + 15 validasi skema Zod v4) lulus 100% (`npx vitest run`).
 - **Analisis Kualitas Kode**: Lolos analisis statis ESLint dengan 0 error dan 0 warning (`npm run lint`).
 - **Keamanan Sesi & Cookie HTTP-Only**: Penerbitan cookie sesi `resilio_session_token` (`HttpOnly`, `SameSite=Lax`, `Max-Age=14400`) via Server Action `lib/actions/auth.ts` terverifikasi aktif pada peramban.
 - **Integrasi Basis Data PostgreSQL & Prisma 7**: Migrasi fisik 16 entitas relasional dan seeder idempoten (`npx prisma db seed`) terverifikasi sukses mengisi 17 tabel fisik di database PostgreSQL lokal `resilio_health`.
