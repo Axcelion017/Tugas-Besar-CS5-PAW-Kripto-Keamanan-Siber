@@ -3,6 +3,7 @@
 // Sesuai prinsip praktikum Modul 6: aman dijalankan berulang kali tanpa memicu Unique Constraint Violation
 
 import "dotenv/config";
+import bcrypt from "bcryptjs";
 import { prisma } from "../lib/db/prisma";
 import { UserRole, FamilyRelation, GrantEntityType, TriaseLevel, ImageType } from "@prisma/client";
 import {
@@ -28,11 +29,13 @@ async function main() {
         ? UserRole.pasien
         : (user.role as UserRole);
 
+    const realHash = await bcrypt.hash(user.password, 10);
     await prisma.user.upsert({
       where: { id: user.id },
       update: {
         username: user.username,
         email: user.email,
+        passwordHash: realHash,
         role,
         status: "VERIFIED",
       },
@@ -40,7 +43,7 @@ async function main() {
         id: user.id,
         username: user.username,
         email: user.email,
-        passwordHash: `$2b$10$hashed_${user.password}`,
+        passwordHash: realHash,
         role,
         status: "VERIFIED",
       },
@@ -48,6 +51,7 @@ async function main() {
   }
 
   // Akun tambahan untuk dokter lain (DOC-02, DOC-03, DOC-04)
+  const defaultDocHash = await bcrypt.hash("doctor123", 10);
   for (const doc of MOCK_DOCTORS) {
     if (doc.id === "DOC-01") continue;
     const username = doc.id.toLowerCase();
@@ -56,6 +60,7 @@ async function main() {
       update: {
         username,
         email: `${username}@resilio.id`,
+        passwordHash: defaultDocHash,
         role: UserRole.nakes,
         status: "VERIFIED",
       },
@@ -63,7 +68,7 @@ async function main() {
         id: doc.id,
         username,
         email: `${username}@resilio.id`,
-        passwordHash: "$2b$10$hashed_doctor123",
+        passwordHash: defaultDocHash,
         role: UserRole.nakes,
         status: "VERIFIED",
       },
@@ -71,6 +76,7 @@ async function main() {
   }
 
   // Akun tambahan untuk pasien lain (P-102, P-103)
+  const defaultPatientHash = await bcrypt.hash("patient123", 10);
   for (const p of MOCK_PATIENTS) {
     if (p.id === "P-101") continue;
     const username = p.id.toLowerCase();
@@ -79,6 +85,7 @@ async function main() {
       update: {
         username,
         email: `${username}@patient.resilio.id`,
+        passwordHash: defaultPatientHash,
         role: UserRole.pasien,
         status: "VERIFIED",
       },
@@ -86,7 +93,7 @@ async function main() {
         id: p.id,
         username,
         email: `${username}@patient.resilio.id`,
-        passwordHash: "$2b$10$hashed_patient123",
+        passwordHash: defaultPatientHash,
         role: UserRole.pasien,
         status: "VERIFIED",
       },
