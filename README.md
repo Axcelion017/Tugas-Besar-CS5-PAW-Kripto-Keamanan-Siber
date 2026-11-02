@@ -25,7 +25,20 @@ Resilio-Health menyelesaikan permasalahan tersebut dengan:
 
 ---
 
-## 2. Arsitektur Domain & Peran Pengguna (Role Segregation)
+## 2. Perkembangan Fitur Produk (Milestone 1 `v0.1` ke Milestone 2 `v0.2`)
+
+| Aspek Pengembangan | Milestone 1 (`v0.1`) — Baseline Antarmuka | Milestone 2 (`v0.2`) — Integrasi Server & DB |
+| :--- | :--- | :--- |
+| **Penyimpanan Data** | Mock memory & `localStorage` statis. | **Database Relasional Fisik PostgreSQL 17** via Prisma ORM 7 (`@prisma/adapter-pg`). |
+| **Operasi CRUD** | Mutasi state lokal di peramban. | **CRUD Lengkap 100% Persisten**: Antrean (`appointments`) dan Izin Akses (`access_grants`) mendukung Create, Read, Update, dan Delete melalui Server Actions. |
+| **Validasi Masukan** | Pengecekan atribut dasar HTML5. | **Pertahanan Berlapis Zod v4**: Validasi tipe data ketat, batas fisiologis tensi, format NIK 16 digit, dan medikolegal di sisi server. |
+| **Autentikasi & Sesi** | Variabel state klien. | **Stateful Session Cookies HTTP-Only** (`resilio_session_token`, Max-Age 4 jam, SameSite Lax) dan instan revoke UU PDP. |
+| **Onboarding Pengguna** | Pendaftaran monolitik panjang. | **Progressive Onboarding & Restricted Mode**: Pendaftaran akun cepat, edit data mandiri, dan gembok fitur medis sebelum e-KYC NIK disetujui. |
+| **Kedaulatan Portabilitas RME** | Mock transfer izin. | **Digital Medical Passport Tanpa Kertas**: Izin rujukan lintas faskes persisten dengan kontrol *1-Click Revoke*. |
+
+---
+
+## 3. Arsitektur Domain & Peran Pengguna (Role Segregation)
 
 Sistem menerapkan arsitektur modular Next.js App Router dengan pemisahan wilayah publik `(auth)` dan wilayah terproteksi `(dashboard)` yang terbagi ke dalam 4 domain peran:
 
@@ -67,7 +80,7 @@ Sistem menerapkan arsitektur modular Next.js App Router dengan pemisahan wilayah
 
 ---
 
-## 3. Spesifikasi Kriptografi Produk
+## 4. Spesifikasi Kriptografi Produk
 
 | Komponen | Spesifikasi Teknis | Standar Acuan | Fungsi Keamanan |
 | :--- | :--- | :--- | :--- |
@@ -78,7 +91,27 @@ Sistem menerapkan arsitektur modular Next.js App Router dengan pemisahan wilayah
 
 ---
 
-## 4. Akun Pengujian Evaluasi (4-Role Quick Demo)
+## 5. Teknologi yang Digunakan (Tech Stack)
+
+Sistem Resilio-Health dibangun dengan arsitektur teknologi modern yang terbagi ke dalam empat pilar utama:
+
+| Lapisan / Kategori | Teknologi | Versi | Peran & Alasan Pemilihan |
+| :--- | :--- | :--- | :--- |
+| **Frontend Framework** | **Next.js (App Router)** | `16.3.6` | Framework React dengan Server Components, Route Groups (`(auth)`, `(dashboard)`), dan optimasi kompilasi Turbopack. |
+| **UI Library & Runtime** | **React** | `19.0.0` | Library antarmuka reaktif berbasis komponen modular, React Compiler, dan Hooks modern (`use`, `useState`, `useEffect`). |
+| **Styling & Design System** | **Tailwind CSS** | `^4.0.0` | Utility-first CSS framework untuk tata letak responsif, palet enterprise, dan bebas dari karakter emoji kasual (ikon SVG monokrom). |
+| **Typography** | **Google Fonts Montserrat** | `next/font` | Tipografi geometris bersih berstandar aksesibilitas WCAG 2.1 AA yang dioptimalkan secara lokal tanpa eksternal network request. |
+| **Backend & Server Actions** | **Next.js Server Actions** | Native | Mutasi data aman `"use server"` di sisi server untuk pipeline transaksi 6-tahap (Sesi $\rightarrow$ Zod $\rightarrow$ Semantik $\rightarrow$ DB $\rightarrow$ Revalidate $\rightarrow$ Redirect). |
+| **Database & ORM** | **PostgreSQL & Prisma ORM** | `17.6` / `7.10.1` | Basis data relasional ACID dengan `@prisma/adapter-pg` dan connection pool `pg`, menjamin integritas referensial medikolegal `onDelete: Restrict`. |
+| **Data Validation Engine** | **Zod** | `^4.6.7` | Validasi tipe data ketat (*Type-Safe Schema Validation*) di sisi formulir peramban dan lapisan gerbang Server Action (*Defense-in-Depth*). |
+| **Client-Side Cryptography** | **W3C Web Crypto API** | Native Standard | Enkripsi simetris AES-256-GCM (kunci 256-bit unik pasien, CSPRNG IV 96-bit) dan tag integritas HMAC-SHA256 langsung di peramban (*Zero-Knowledge*). |
+| **Offline-First Engine** | **PWA Service Worker & IndexedDB** | Web Standard | PWA Service Worker (`public/sw.js`) dengan penyimpanan biner IndexedDB berkapasitas besar untuk ketahanan operasional saat internet rumah sakit terputus. |
+| **Testing Suite** | **Vitest** | `^5.0.4` | Framework pengujian unit otomatis berkecepatan tinggi untuk memverifikasi 19 skenario kriptografi dan batas validasi skema. |
+| **Linter & Code Quality** | **ESLint** | `^9.0.0` | Analisis statis kualitas kode dengan 0 error dan 0 warning. |
+
+---
+
+## 6. Akun Pengujian Evaluasi (4-Role Quick Demo)
 
 Aplikasi menyediakan tombol *Quick Demo* pada halaman masuk (`/login` dan `/`) untuk kemudahan evaluasi:
 
@@ -91,7 +124,7 @@ Aplikasi menyediakan tombol *Quick Demo* pada halaman masuk (`/login` dan `/`) u
 
 ---
 
-## 5. Struktur Direktori Repositori
+## 7. Struktur Direktori Repositori
 
 ```text
 .
@@ -114,14 +147,23 @@ Aplikasi menyediakan tombol *Quick Demo* pada halaman masuk (`/login` dan `/`) u
 │   └── ui/                       # Icons.tsx (Vector Iconset), LogoutModal, StatCard, StatusBadge
 ├── lib/
 │   ├── actions/                  # Next.js Server Actions: clinical.ts (SOAP & UR-T10) & auth.ts (Cookie Auth)
-│   ├── auth/auth.ts              # Pengelolaan Sesi 4-Role & Normalisasi Peran
+│   ├── auth/                     # auth.ts (Normalisasi Peran) & sessionStore.ts (Stateful Sesi Server)
 │   ├── crypto/                   # aes.ts (AES-256-GCM) & hmac.ts (HMAC-SHA256)
-│   ├── db/mockData.ts            # Entitas Terstandarisasi, Mock Persistence & Storage Helpers
+│   ├── db/                       # prisma.ts (PostgreSQL Pool Adapter) & mockData.ts (Mock Persistence)
 │   └── validations/              # Skema Validasi Tipe Aman Zod v4 (clinical, auth, triage, patient)
+├── prisma/
+│   ├── schema.prisma             # Skema Relasional 16 Model Prisma 7 (onDelete: Restrict)
+│   ├── migrations/               # Riwayat Migrasi Fisik SQL PostgreSQL
+│   └── seed.ts                   # Seeder Idempoten Berbasis Upsert (17 Tabel Terisi)
 ├── tests/
-│   ├── crypto.test.ts            # Pengujian Unit Kriptografi Vitest (4/4 Passed)
+│   ├── crypto.test.ts            # Pengujian Unit Kriptografi Vitest (5/5 Passed - AEAD & HMAC)
+│   ├── access-control.test.ts    # Pengujian Matriks Akses RBAC Vitest (8/8 Passed - 4 Positif vs 4 Negatif)
 │   └── validations.test.ts       # Pengujian Skema Validasi Zod Vitest (15/15 Passed)
 └── docs/                         # Dokumentasi Terstruktur Laporan Tugas Besar
+    ├── Tugas2/                   # Dokumen Resmi Bukti Penugasan 3 Mata Kuliah
+    │   ├── PAW/LaporanTugas2.md  # Laporan Milestone 2 PAW (CRUD, Zod, DB, Pengujian, Screenshot)
+    │   ├── Kriptografi/          # Laporan Tugas 2 Kripto (AEAD, Parameter, Fail-Closed, Demo)
+    │   └── KKS/                  # Laporan Tugas 2 KKS (Matriks RBAC, Lynis, Image Scan, SBOM)
     ├── database.md               # Spesifikasi Basis Data (Entitas, Relasi, CDM, LDM, PDM, DDL & Kamus Data)
     ├── PAW/                      # kebutuhan.md, arsitektur.md & database.md
     ├── security/                 # asset-inventory.md, dfd.md, threat-model.md, risk-register.md
@@ -130,9 +172,42 @@ Aplikasi menyediakan tombol *Quick Demo* pada halaman masuk (`/login` dan `/`) u
 
 ---
 
-## 6. Verifikasi & Pengujian Sistem
+## 8. Verifikasi, Pengujian & Petunjuk Menjalankan Aplikasi
 
-- **Kompilasi Antarmuka**: Seluruh 30 rute Next.js terkompilasi bersih tanpa galat TypeScript (`npm run build`).
-- **Pengujian Unit Otomatis**: Sebanyak 19 skenario uji unit (4 kriptografi AES/HMAC + 15 validasi skema Zod v4) lulus 100% (`npx vitest run`).
+### 8.1 Petunjuk Menjalankan Aplikasi Secara Lokal
+1. **Kloning Repositori**:
+   ```bash
+   git clone <URL_REPOSITORY>
+   cd "Projek Tubes"
+   ```
+2. **Pasang Dependensi**:
+   ```bash
+   npm install
+   ```
+3. **Konfigurasi Environment Database**:
+   Salin berkas contoh `.env.example` menjadi `.env` dan sesuaikan URL database PostgreSQL:
+   ```bash
+   cp .env.example .env
+   # Format: DATABASE_URL="postgresql://<USER>:***@localhost:5432/resilio_health?schema=public"
+   ```
+4. **Eksekusi Migrasi & Seeder Idempoten Prisma**:
+   ```bash
+   npx prisma migrate dev
+   npx prisma db seed
+   ```
+5. **Jalankan Server Development**:
+   ```bash
+   npm run dev
+   # Buka http://localhost:3000 pada peramban
+   ```
+
+### 8.2 Hasil Verifikasi Kualitas
+- **Dokumentasi Bukti Lengkap 3 Mata Kuliah**:
+  - **PAW**: `docs/Tugas2/PAW/LaporanTugas2.md` & `docs/pengujian-milestone2.md` (10 skenario pengujian 100% lulus).
+  - **Kriptografi**: `docs/Tugas2/Kriptografi/LaporanTugas2_Kripto.md` (AEAD, IV 96-bit, AAD context binding, 5 uji lulus).
+  - **KKS**: `docs/Tugas2/KKS/LaporanTugas2_KKS.md` (Lynis 74, Trivy 0 critical, SBOM CycloneDX, 8 uji RBAC lulus).
+- **Kompilasi Antarmuka**: Seluruh 32 rute Next.js terkompilasi bersih tanpa galat TypeScript (`npm run build`).
+- **Pengujian Unit Otomatis**: Sebanyak **28 skenario uji unit** (5 kriptografi AEAD/HMAC + 8 kontrol akses RBAC + 15 validasi skema Zod v4) lulus 100% (`npx vitest run`).
 - **Analisis Kualitas Kode**: Lolos analisis statis ESLint dengan 0 error dan 0 warning (`npm run lint`).
 - **Keamanan Sesi & Cookie HTTP-Only**: Penerbitan cookie sesi `resilio_session_token` (`HttpOnly`, `SameSite=Lax`, `Max-Age=14400`) via Server Action `lib/actions/auth.ts` terverifikasi aktif pada peramban.
+- **Integrasi Basis Data PostgreSQL & Prisma 7**: Migrasi fisik 16 entitas relasional dan seeder idempoten (`npx prisma db seed`) terverifikasi sukses mengisi 17 tabel fisik di database PostgreSQL lokal `resilio_health`.

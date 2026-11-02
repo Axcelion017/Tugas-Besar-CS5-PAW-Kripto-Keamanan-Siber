@@ -46,6 +46,7 @@ export interface Patient {
   id: string;
   nik: string;
   name: string;
+  birthDate?: string;
   age: number;
   gender: "L" | "P";
   mrn: string;
@@ -58,6 +59,19 @@ export interface Patient {
   encryptionKeyHex: string;
   statusKyc: "VERIFIED" | "PENDING" | "REJECTED";
   familyMembers?: FamilyMember[];
+}
+
+export function calculateAge(birthDate: Date | string | null | undefined): number {
+  if (!birthDate) return 0;
+  const birth = new Date(birthDate);
+  if (isNaN(birth.getTime())) return 0;
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  const m = today.getMonth() - birth.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
+    age--;
+  }
+  return Math.max(0, age);
 }
 
 export interface VitalSigns {

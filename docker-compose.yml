@@ -1,0 +1,54 @@
+services:
+  # 1. Aplikasi Web Resilio-Health
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://resilio_sec_user:ResilioHealth2026SecurePass!@db:5432/resilio_health?schema=public
+    depends_on:
+      db:
+        condition: service_healthy
+    # Pengerasan Keamanan Container (Hardening Constraints):
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    read_only: false
+    networks:
+      - resilio_internal_net
+
+  # 2. Database PostgreSQL 17 (Terisolasi - Port TIDAK Dipublikasikan ke Publik)
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    # PENTING (KKS Hardening): Port 5432 TIDAK dimasukkan ke 'ports' publik host.
+    # Hanya dapat dijangkau oleh service 'app' melalui jaringan internal bridge.
+    expose:
+      - "5432"
+    environment:
+      POSTGRES_USER: resilio_sec_user
+      POSTGRES_PASSWORD: ResilioHealth2026SecurePass!
+      POSTGRES_DB: resilio_health
+    volumes:
+      - pgdata_secure:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U resilio_sec_user -d resilio_health"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - resilio_internal_net
+
+networks:
+  resilio_internal_net:
+    driver: bridge
+    internal: false
+
+volumes:
+  pgdata_secure:
+    driver: local

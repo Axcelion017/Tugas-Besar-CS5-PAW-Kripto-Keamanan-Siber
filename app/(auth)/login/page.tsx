@@ -1,22 +1,32 @@
 "use client";
 
-import React, { useState } from "react";
-import { useRouter } from "next/navigation";
+import React, { useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { saveSession, normalizeRole } from "@/lib/auth/auth";
 import { LoginSchema } from "@/lib/validations/auth";
 import { loginServerAction } from "@/lib/actions/auth";
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
-  const [identifier, setIdentifier] = useState("");
+  const searchParams = useSearchParams();
+  const registeredParam = searchParams.get("registered") === "true";
+  const usernameParam = searchParams.get("username") || "";
+
+  const [identifier, setIdentifier] = useState(usernameParam);
   const [password, setPassword] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
+  const [successMsg, setSuccessMsg] = useState(
+    registeredParam
+      ? "Pendaftaran Berhasil! Akun Anda telah dibuat. Silakan masuk untuk melengkapi profil data diri Anda."
+      : ""
+  );
   const [isLoading, setIsLoading] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg("");
+    setSuccessMsg("");
 
     // Validasi input menggunakan Skema Zod
     const validation = LoginSchema.safeParse({ identifier, password });
@@ -47,6 +57,7 @@ export default function LoginPage() {
   const handleQuickDemo = async (user: string, pass: string) => {
     setIsLoading(true);
     setErrorMsg("");
+    setSuccessMsg("");
     try {
       const result = await loginServerAction(user, pass);
       if (result.success && result.session) {
@@ -88,6 +99,12 @@ export default function LoginPage() {
             Sistem Informasi Rekam Medis & Zero-Trust Gateway
           </p>
         </div>
+
+        {successMsg && (
+          <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold leading-relaxed">
+            {successMsg}
+          </div>
+        )}
 
         {errorMsg && (
           <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-bold leading-relaxed">
@@ -176,7 +193,7 @@ export default function LoginPage() {
           <p className="text-xs text-slate-500 font-medium">Belum memiliki akun terverifikasi?</p>
           <div className="flex justify-center gap-4 text-xs font-bold text-red-600">
             <Link href="/register/pasien" className="hover:underline">
-              Daftar Pasien (NIK) →
+              Daftar Pasien Baru →
             </Link>
             <span className="text-slate-300">|</span>
             <Link href="/register/nakes" className="hover:underline">
@@ -186,5 +203,13 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
   );
 }

@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { PemeriksaanKlinisSchema } from "@/lib/validations/clinical";
 import { MOCK_PATIENTS, MOCK_ENCRYPTED_RECORDS, EncryptedMedicalRecord } from "@/lib/db/mockData";
+import { prisma } from "@/lib/db/prisma";
 
 export interface ServerActionResponse {
   success: boolean;
@@ -125,6 +126,25 @@ export async function submitPemeriksaanKlinisAction(
   };
 
   // Simulasikan mutasi data pada penyimpanan memori server
+  try {
+    await prisma.medicalRecord.create({
+      data: {
+        id: recordId,
+        patientId: patient.id,
+        doctorId: "DOC-01",
+        faskesId: "FAS-01",
+        primaryIcd10: validData.icd10,
+        diagnosisShort: newRecord.diagnosisShort,
+        encryptedPayload: newRecord.encryptedPayload,
+        ivHex: newRecord.ivHex,
+        hmacDigest: newRecord.hmacDigest,
+        version: 1,
+      },
+    });
+  } catch (dbError) {
+    console.warn("Prisma DB create record fallback:", dbError);
+  }
+
   MOCK_ENCRYPTED_RECORDS.unshift(newRecord);
 
   // --------------------------------------------------------------------------

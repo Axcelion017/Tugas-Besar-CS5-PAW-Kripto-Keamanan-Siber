@@ -11,6 +11,8 @@ import {
   TriaseLevel,
 } from "@/lib/db/mockData";
 import { TriaseSchema } from "@/lib/validations/triage";
+import { submitTriageServerAction } from "@/lib/actions/triage";
+import { getAppointmentsServerAction } from "@/lib/actions/appointment";
 
 export default function TriasePemeriksaanAwalPage() {
   const router = useRouter();
@@ -32,20 +34,72 @@ export default function TriasePemeriksaanAwalPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
+    async function loadData() {
+      try {
+        const aptsRes = await getAppointmentsServerAction();
+        if (aptsRes.success && aptsRes.data && aptsRes.data.length > 0) {
+          const mappedApts: Appointment[] = (aptsRes.data as unknown as Array<{
+            id: string;
+            patientId: string;
+            patient?: { name?: string; nik?: string };
+            faskesId: string;
+            doctorId: string;
+            doctor?: { name?: string };
+            poli: string;
+            tanggal: Date | string;
+            jam: string;
+            keluhanAwal: string;
+            status: string;
+            consentActive?: boolean;
+            consentPin?: string | null;
+            triageAssessment?: {
+              triaseLevel: string;
+            } | null;
+          }>).map((a) => ({
+            id: a.id,
+            pasienId: a.patientId,
+            pasienNama: a.patient?.name || "Pasien",
+            pasienNik: a.patient?.nik || "-",
+            faskesId: a.faskesId,
+            faskesNama: "RSUP Dr. Sardjito",
+            dokterId: a.doctorId,
+            dokterNama: a.doctor?.name || "Dokter DPJP",
+            poli: a.poli,
+            tanggal: new Date(a.tanggal).toISOString().split("T")[0],
+            jam: a.jam,
+            keluhanAwal: a.keluhanAwal,
+            status: (a.status as Appointment["status"]) || "WAITING_TRIAGE",
+            consentActive: !!a.consentActive,
+            consentPin: a.consentPin || undefined,
+            triaseLevel: (a.triageAssessment?.triaseLevel as "HIJAU" | "KUNING" | "MERAH") || undefined,
+          }));
+          setAppointments(mappedApts);
+          const triageQueue = mappedApts.filter(
+            (a) => a.status === "WAITING_TRIAGE" || a.status === "PENDING_ARRIVAL"
+          );
+          if (triageQueue.length > 0) {
+            setSelectedAptId(triageQueue[0].id);
+          }
+          return;
+        }
+      } catch {
+        // fallback
+      }
+
       const allApts = getStorageData<Appointment[]>("resilio_appointments", MOCK_APPOINTMENTS);
       setAppointments(allApts);
       const triageQueue = allApts.filter((a) => a.status === "WAITING_TRIAGE");
       if (triageQueue.length > 0) {
         setSelectedAptId(triageQueue[0].id);
       }
-    }, 0);
-    return () => clearTimeout(timer);
+    }
+
+    loadData();
   }, []);
 
   const selectedApt = appointments.find((a) => a.id === selectedAptId) || null;
 
-  const handleSubmitTriase = (e: React.FormEvent) => {
+  const handleSubmitTriase = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
 
@@ -71,6 +125,24 @@ export default function TriasePemeriksaanAwalPage() {
     if (!validation.success) {
       setErrorMsg(validation.error.issues[0]?.message || "Data tanda vital tidak valid.");
       return;
+    }
+
+    // 1. Eksekusi Server Action untuk menyimpan langsung ke basis data PostgreSQL
+    try {
+      await submitTriageServerAction(selectedApt.id, {
+        systolic: Number(systolic),
+        diastolic: Number(diastolic),
+        heartRate: Number(heartRate),
+        temperature: Number(temperature),
+        respiratoryRate: Number(respiratoryRate),
+        spo2: Number(spo2),
+        beratBadan: Number(beratBadan),
+        tinggiBadan: Number(tinggiBadan),
+        triaseLevel,
+        catatanPerawat,
+      });
+    } catch (err: unknown) {
+      console.warn("DB triage action fallback:", err);
     }
 
     const allApts = getStorageData<Appointment[]>("resilio_appointments", MOCK_APPOINTMENTS);

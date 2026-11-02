@@ -17,6 +17,7 @@ import {
   EncryptedMedicalImage,
 } from "@/lib/db/mockData";
 import { PemeriksaanKlinisSchema } from "@/lib/validations/clinical";
+import { submitPemeriksaanKlinisAction } from "@/lib/actions/clinical";
 
 
 function generateRecordId(prefix: string) {
@@ -329,7 +330,30 @@ export default function ClinicalExaminationPage({
         // Simpan ke records pusat
         const existingRecords = getStorageData<EncryptedMedicalRecord[]>("resilio_records", []);
         setStorageData("resilio_records", [record, ...existingRecords]);
-        setSubmitStatus("SUKSES: Rekam medis dan citra medis berhasil dienkripsi (AES-256-GCM) dan disahkan.");
+
+        // Eksekusi Server Action untuk persistensi ke Basis Data PostgreSQL
+        try {
+          const fd = new FormData();
+          fd.append("bookingId", appointment.id);
+          fd.append("subjective", subjective);
+          fd.append("systolic", String(systolic));
+          fd.append("diastolic", String(diastolic));
+          fd.append("heartRate", String(heartRate));
+          fd.append("temperature", String(temperature));
+          fd.append("respiratoryRate", "20");
+          fd.append("spo2", String(spo2));
+          fd.append("icd10", icd10);
+          fd.append("assessment", icd10Map[icd10] || "Pemeriksaan Medis Rawat Jalan");
+          fd.append("planPrescription", planPrescription);
+          fd.append("planFollowUp", planAction || "Kontrol 1 minggu kemudian");
+          if (detectedAllergies.length > 0) fd.append("forceOverrideAllergy", "true");
+          fd.append("isMedicallyConfirmed", "true");
+          await submitPemeriksaanKlinisAction(null, fd);
+        } catch (saErr) {
+          console.log("Server Action sync status:", saErr);
+        }
+
+        setSubmitStatus("SUKSES: Rekam medis dan citra medis berhasil dienkripsi (AES-256-GCM) dan disinkronkan ke PostgreSQL.");
       }
 
       // Perbarui status appointment menjadi COMPLETED

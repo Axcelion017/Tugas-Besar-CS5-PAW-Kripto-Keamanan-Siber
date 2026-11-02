@@ -1,0 +1,501 @@
+// prisma/schema.prisma
+// Prisma 7 Schema untuk Resilio-Health HIS
+// Database Provider: PostgreSQL (Zero-Knowledge Client-Side Encryption Architecture)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// -----------------------------------------------------------------------------
+// ENUMS
+// -----------------------------------------------------------------------------
+
+enum UserRole {
+  pasien
+  nakes
+  staf
+  admin
+}
+
+enum AccountStatus {
+  VERIFIED
+  PENDING
+  REJECTED
+  SUSPENDED
+}
+
+enum FaskesType {
+  RUMAH_SAKIT     @map("Rumah Sakit")
+  KLINIK_PRATAMA  @map("Klinik Pratama")
+  PUSKESMAS       @map("Puskesmas")
+}
+
+enum FaskesStatus {
+  ACTIVE
+  QUARANTINED
+}
+
+enum Gender {
+  L
+  P
+}
+
+enum FamilyRelation {
+  Anak
+  Orang_Tua  @map("Orang Tua")
+  Pasangan
+  Wali
+}
+
+enum TriaseLevel {
+  HIJAU
+  KUNING
+  MERAH
+}
+
+enum AppointmentStatus {
+  PENDING_ARRIVAL
+  WAITING_TRIAGE
+  WAITING_DOCTOR
+  IN_EXAMINATION
+  WAITING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum ImageType {
+  RONTGEN
+  USG
+  LAB
+  EKG
+  FOTO_KLINIS
+}
+
+enum GrantEntityType {
+  DOKTER
+  FASKES
+}
+
+enum AuditSeverity {
+  INFO
+  WARN
+  CRITICAL
+}
+
+enum AuditAction {
+  LOGIN
+  VIEW_RME
+  WRITE_RME
+  IDOR_BLOCKED
+  HMAC_VERIFIED
+  HMAC_MISMATCH
+  REVOKE_CONSENT
+  QUARANTINE_FASKES
+  BREAK_GLASS_ACCESS
+  CHECK_IN_TRIAGE
+  ASSIGN_DPJP
+}
+
+enum TicketCategory {
+  BUG
+  SYNC_FAIL
+  DATA_MISMATCH
+  OTHER
+}
+
+enum TicketStatus {
+  OPEN
+  INVESTIGATING
+  RESOLVED
+}
+
+// -----------------------------------------------------------------------------
+// 1. PENGGUNA SISTEM (USERS)
+// -----------------------------------------------------------------------------
+model User {
+  id           String        @id @default(uuid()) @db.VarChar(36)
+  username     String        @unique @db.VarChar(50)
+  email        String        @unique @db.VarChar(120)
+  passwordHash String        @map("password_hash") @db.VarChar(255)
+  role         UserRole
+  status       AccountStatus @default(PENDING)
+  createdAt    DateTime      @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime      @updatedAt @map("updated_at") @db.Timestamptz
+
+  patient        Patient?
+  doctor         Doctor?
+  staffMember    StaffMember?
+  auditLogs      SecurityAuditLog[]
+  kycSubmissions KycSubmission[]
+  kydSubmissions KydSubmission[]
+  troubleTickets TroubleTicket[]
+
+  @@map("users")
+}
+
+// -----------------------------------------------------------------------------
+// 2. FASILITAS PELAYANAN KESEHATAN (FASKES)
+// -----------------------------------------------------------------------------
+model Faskes {
+  id               String       @id @db.VarChar(32)
+  kodeFaskes       String       @unique @map("kode_faskes") @db.VarChar(50)
+  nama             String       @db.VarChar(150)
+  tipe             FaskesType
+  alamat           String       @db.Text
+  kota             String       @db.VarChar(100)
+  kontak           String       @db.VarChar(50)
+  spesialisasiList String[]     @default([]) @map("spesialisasi_list")
+  kategoriPenyakit String[]     @default([]) @map("kategori_penyakit")
+  status           FaskesStatus @default(ACTIVE)
+  createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz
+
+  doctors        Doctor[]
+  staffMembers   StaffMember[]
+  appointments   Appointment[]
+  medicalRecords MedicalRecord[]
+  troubleTickets TroubleTicket[]
+
+  @@map("faskes")
+}
+
+// -----------------------------------------------------------------------------
+// 3. PROFIL MEDIS PASIEN (PATIENTS)
+// -----------------------------------------------------------------------------
+model Patient {
+  id                       String        @id @db.VarChar(32)
+  userId                   String        @unique @map("user_id") @db.VarChar(36)
+  nik                      String        @unique @db.Char(16)
+  name                     String        @db.VarChar(120)
+  birthDate                DateTime      @map("birth_date") @db.Date
+  gender                   Gender
+  bloodType                String        @map("blood_type") @db.VarChar(5)
+  mrn                      String        @unique @db.VarChar(30)
+  allergies                String[]      @default([])
+  emergencyContactName     String        @map("emergency_contact_name") @db.VarChar(120)
+  emergencyContactRelation String        @map("emergency_contact_relation") @db.VarChar(50)
+  emergencyContactPhone    String        @map("emergency_contact_phone") @db.VarChar(20)
+  encryptionKeyHex         String        @map("encryption_key_hex") @db.Char(64)
+  createdAt                DateTime      @default(now()) @map("created_at") @db.Timestamptz
+
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  familyMembers    FamilyMember[]
+  appointments     Appointment[]
+  medicalRecords   MedicalRecord[]
+  accessGrants     AccessGrant[]
+  activeEncounters ActiveEncounter[]
+
+  @@map("patients")
+}
+
+// -----------------------------------------------------------------------------
+// 4. ANGGOTA KELUARGA / PERWALIAN (FAMILY_MEMBERS)
+// -----------------------------------------------------------------------------
+model FamilyMember {
+  id        String         @id @db.VarChar(32)
+  patientId String         @map("patient_id") @db.VarChar(32)
+  nik       String         @db.Char(16)
+  name      String         @db.VarChar(120)
+  relation  FamilyRelation
+  birthDate DateTime       @map("birth_date") @db.Date
+  createdAt DateTime       @default(now()) @map("created_at") @db.Timestamptz
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("family_members")
+}
+
+// -----------------------------------------------------------------------------
+// 5. TENAGA MEDIS DOKTER DPJP (DOCTORS)
+// -----------------------------------------------------------------------------
+model Doctor {
+  id            String   @id @db.VarChar(32)
+  userId        String   @unique @map("user_id") @db.VarChar(36)
+  faskesId      String   @map("faskes_id") @db.VarChar(32)
+  name          String   @db.VarChar(120)
+  strNumber     String   @unique @map("str_number") @db.VarChar(50)
+  sipNumber     String   @unique @map("sip_number") @db.VarChar(50)
+  specialty     String   @db.VarChar(100)
+  kuotaHarian   Int      @default(30) @map("kuota_harian")
+  fotoProfilUrl String?  @map("foto_profil_url") @db.VarChar(255)
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  user                 User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  faskes               Faskes            @relation(fields: [faskesId], references: [id], onDelete: Restrict)
+  assignedAppointments Appointment[]     @relation("DoctorAppointments")
+  dpjpAppointments     Appointment[]     @relation("DpjpAppointments")
+  medicalRecords       MedicalRecord[]
+  activeEncounters     ActiveEncounter[]
+
+  @@map("doctors")
+}
+
+// -----------------------------------------------------------------------------
+// 6. STAF FASKES: TRIASE & ADMISI (STAFF_MEMBERS)
+// -----------------------------------------------------------------------------
+model StaffMember {
+  id        String   @id @db.VarChar(32)
+  userId    String   @unique @map("user_id") @db.VarChar(36)
+  faskesId  String   @map("faskes_id") @db.VarChar(32)
+  name      String   @db.VarChar(120)
+  nip       String   @unique @db.VarChar(50)
+  posisi    String   @db.VarChar(50)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  faskes            Faskes             @relation(fields: [faskesId], references: [id], onDelete: Restrict)
+  triageAssessments TriageAssessment[]
+
+  @@map("staff_members")
+}
+
+// -----------------------------------------------------------------------------
+// 7. PENDAFTARAN & ANTREAN KUNJUNGAN (APPOINTMENTS)
+// -----------------------------------------------------------------------------
+model Appointment {
+  id            String            @id @db.VarChar(32)
+  patientId     String            @map("patient_id") @db.VarChar(32)
+  faskesId      String            @map("faskes_id") @db.VarChar(32)
+  doctorId      String            @map("doctor_id") @db.VarChar(32)
+  dpjpId        String?           @map("dpjp_id") @db.VarChar(32)
+  tanggal       DateTime          @db.Date
+  jam           String            @db.VarChar(20)
+  poli          String            @db.VarChar(100)
+  keluhanAwal   String            @map("keluhan_awal") @db.Text
+  consentActive Boolean           @default(true) @map("consent_active")
+  consentPin    String?           @map("consent_pin") @db.Char(6)
+  status        AppointmentStatus @default(PENDING_ARRIVAL)
+  checkInTime   DateTime?         @map("check_in_time") @db.Timestamptz
+  createdAt     DateTime          @default(now()) @map("created_at") @db.Timestamptz
+
+  patient          Patient           @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  faskes           Faskes            @relation(fields: [faskesId], references: [id], onDelete: Restrict)
+  doctor           Doctor            @relation("DoctorAppointments", fields: [doctorId], references: [id], onDelete: Restrict)
+  dpjp             Doctor?           @relation("DpjpAppointments", fields: [dpjpId], references: [id], onDelete: SetNull)
+  triageAssessment TriageAssessment?
+  medicalRecords   MedicalRecord[]
+  activeEncounter  ActiveEncounter?
+
+  @@index([faskesId, tanggal, status])
+  @@index([patientId, status])
+  @@map("appointments")
+}
+
+// -----------------------------------------------------------------------------
+// 8. PENGKAJIAN TRIASE FISIK (TRIAGE_ASSESSMENTS)
+// -----------------------------------------------------------------------------
+model TriageAssessment {
+  id              String      @id @db.VarChar(32)
+  appointmentId   String      @unique @map("appointment_id") @db.VarChar(32)
+  staffId         String      @map("staff_id") @db.VarChar(32)
+  systolic        Int
+  diastolic       Int
+  heartRate       Int         @map("heart_rate")
+  temperature     Decimal     @db.Decimal(4, 1)
+  respiratoryRate Int         @map("respiratory_rate")
+  spo2            Int
+  beratBadan      Decimal?    @map("berat_badan") @db.Decimal(5, 2)
+  tinggiBadan     Decimal?    @map("tinggi_badan") @db.Decimal(5, 2)
+  triaseLevel     TriaseLevel @map("triase_level")
+  catatanPerawat  String?     @map("catatan_perawat") @db.Text
+  assessedAt      DateTime    @default(now()) @map("assessed_at") @db.Timestamptz
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  assessedBy  StaffMember @relation(fields: [staffId], references: [id], onDelete: Restrict)
+
+  @@map("triage_assessments")
+}
+
+// -----------------------------------------------------------------------------
+// 9. REKAM MEDIS ELEKTRONIK TERENKRIPSI (MEDICAL_RECORDS)
+// -----------------------------------------------------------------------------
+model MedicalRecord {
+  id               String   @id @db.VarChar(32)
+  patientId        String   @map("patient_id") @db.VarChar(32)
+  doctorId         String   @map("doctor_id") @db.VarChar(32)
+  faskesId         String   @map("faskes_id") @db.VarChar(32)
+  appointmentId    String?  @map("appointment_id") @db.VarChar(32)
+  parentRecordId   String?  @map("parent_record_id") @db.VarChar(32)
+  primaryIcd10     String   @map("primary_icd10") @db.VarChar(20)
+  diagnosisShort   String   @map("diagnosis_short") @db.VarChar(255)
+  encryptedPayload String   @map("encrypted_payload") @db.Text
+  ivHex            String   @map("iv_hex") @db.Char(24)
+  hmacDigest       String   @map("hmac_digest") @db.Char(64)
+  version          Int      @default(1)
+  addendumReason   String?  @map("addendum_reason") @db.Text
+  isBreakGlass     Boolean  @default(false) @map("is_break_glass")
+  breakGlassReason String?  @map("break_glass_reason") @db.Text
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  patient       Patient         @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  doctor        Doctor          @relation(fields: [doctorId], references: [id], onDelete: Restrict)
+  faskes        Faskes          @relation(fields: [faskesId], references: [id], onDelete: Restrict)
+  appointment   Appointment?    @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  parentRecord  MedicalRecord?  @relation("MedicalRecordAddendum", fields: [parentRecordId], references: [id], onDelete: SetNull)
+  childAddenda  MedicalRecord[] @relation("MedicalRecordAddendum")
+  medicalImages MedicalImage[]
+
+  @@index([patientId, doctorId])
+  @@index([parentRecordId])
+  @@map("medical_records")
+}
+
+// -----------------------------------------------------------------------------
+// 10. LAMPIRAN CITRA MEDIS BINER TERENKRIPSI (MEDICAL_IMAGES)
+// -----------------------------------------------------------------------------
+model MedicalImage {
+  id               String    @id @db.VarChar(32)
+  medicalRecordId  String    @map("medical_record_id") @db.VarChar(32)
+  title            String    @db.VarChar(150)
+  type             ImageType
+  encryptedBlobHex String    @map("encrypted_blob_hex") @db.Text
+  ivHex            String    @map("iv_hex") @db.Char(24)
+  hmacDigest       String    @map("hmac_digest") @db.Char(64)
+  mimeType         String    @map("mime_type") @db.VarChar(50)
+  notes            String?   @db.Text
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  medicalRecord MedicalRecord @relation(fields: [medicalRecordId], references: [id], onDelete: Cascade)
+
+  @@map("medical_images")
+}
+
+// -----------------------------------------------------------------------------
+// 11. PERSETUJUAN HAK AKSES PASIEN (ACCESS_GRANTS)
+// -----------------------------------------------------------------------------
+model AccessGrant {
+  id           String          @id @db.VarChar(32)
+  patientId    String          @map("patient_id") @db.VarChar(32)
+  entityId     String          @map("entity_id") @db.VarChar(36)
+  entityName   String          @map("entity_name") @db.VarChar(150)
+  entityType   GrantEntityType @map("entity_type")
+  scope        String          @default("READ_RME") @db.VarChar(100)
+  validUntil   DateTime        @map("valid_until") @db.Timestamptz
+  isRevoked    Boolean         @default(false) @map("is_revoked")
+  revokedAt    DateTime?       @map("revoked_at") @db.Timestamptz
+  isBreakGlass Boolean         @default(false) @map("is_break_glass")
+  createdAt    DateTime        @default(now()) @map("created_at") @db.Timestamptz
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId, entityId, isRevoked, validUntil])
+  @@map("access_grants")
+}
+
+// -----------------------------------------------------------------------------
+// 12. TIKET SESI ENCOUNTER AKTIF DPJP (ACTIVE_ENCOUNTERS)
+// -----------------------------------------------------------------------------
+model ActiveEncounter {
+  id             String   @id @db.VarChar(32)
+  appointmentId  String   @unique @map("appointment_id") @db.VarChar(32)
+  patientId      String   @map("patient_id") @db.VarChar(32)
+  doctorId       String   @map("doctor_id") @db.VarChar(32)
+  encounterToken String   @unique @map("encounter_token") @db.VarChar(128)
+  issuedAt       DateTime @default(now()) @map("issued_at") @db.Timestamptz
+  expiresAt      DateTime @map("expires_at") @db.Timestamptz
+  isClosed       Boolean  @default(false) @map("is_closed")
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  patient     Patient     @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor      Doctor      @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  @@index([patientId, doctorId, isClosed, expiresAt])
+  @@map("active_encounters")
+}
+
+// -----------------------------------------------------------------------------
+// 13. JEJAK AUDIT FORENSIK SIEM (SECURITY_AUDIT_LOGS)
+// -----------------------------------------------------------------------------
+model SecurityAuditLog {
+  id             String        @id @default(uuid()) @db.VarChar(36)
+  actorId        String?       @map("actor_id") @db.VarChar(36)
+  actorName      String        @map("actor_name") @db.VarChar(120)
+  actorRole      UserRole      @map("actor_role")
+  action         AuditAction
+  targetResource String        @map("target_resource") @db.VarChar(150)
+  ipAddress      String        @map("ip_address") @db.VarChar(45)
+  userAgent      String        @map("user_agent") @db.Text
+  severity       AuditSeverity @default(INFO)
+  detail         String        @db.Text
+  timestamp      DateTime      @default(now()) @db.Timestamptz
+
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([timestamp(sort: Desc), severity])
+  @@index([actorId, action])
+  @@map("security_audit_logs")
+}
+
+// -----------------------------------------------------------------------------
+// 14. VERIFIKASI IDENTITAS KEPENDUDUKAN (KYC_SUBMISSIONS)
+// -----------------------------------------------------------------------------
+model KycSubmission {
+  id              String        @id @db.VarChar(32)
+  userId          String        @map("user_id") @db.VarChar(36)
+  nik             String        @db.Char(16)
+  namaLengkap     String        @map("nama_lengkap") @db.VarChar(120)
+  birthDate       DateTime      @map("birth_date") @db.Date
+  alamat          String        @db.Text
+  ktpUrl          String        @map("ktp_url") @db.VarChar(255)
+  selfieUrl       String        @map("selfie_url") @db.VarChar(255)
+  watermarkText   String        @map("watermark_text") @db.VarChar(255)
+  status          AccountStatus @default(PENDING)
+  alasanPenolakan String?       @map("alasan_penolakan") @db.Text
+  submittedAt     DateTime      @default(now()) @map("submitted_at") @db.Timestamptz
+  verifiedAt      DateTime?     @map("verified_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("kyc_submissions")
+}
+
+// -----------------------------------------------------------------------------
+// 15. VERIFIKASI LISENSI PRAKTIK DOKTER (KYD_SUBMISSIONS)
+// -----------------------------------------------------------------------------
+model KydSubmission {
+  id              String        @id @db.VarChar(32)
+  userId          String        @map("user_id") @db.VarChar(36)
+  nik             String        @db.Char(16)
+  namaLengkap     String        @map("nama_lengkap") @db.VarChar(120)
+  strNumber       String        @map("str_number") @db.VarChar(50)
+  sipNumber       String        @map("sip_number") @db.VarChar(50)
+  spesialisasi    String        @db.VarChar(100)
+  dokumenStrUrl   String        @map("dokumen_str_url") @db.VarChar(255)
+  suratTugasUrl   String?       @map("surat_tugas_url") @db.VarChar(255)
+  watermarkText   String        @map("watermark_text") @db.VarChar(255)
+  status          AccountStatus @default(PENDING)
+  alasanPenolakan String?       @map("alasan_penolakan") @db.Text
+  submittedAt     DateTime      @default(now()) @map("submitted_at") @db.Timestamptz
+  verifiedAt      DateTime?     @map("verified_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("kyd_submissions")
+}
+
+// -----------------------------------------------------------------------------
+// 16. TIKET KENDALA DATA & SISTEM (TROUBLE_TICKETS)
+// -----------------------------------------------------------------------------
+model TroubleTicket {
+  id           String         @id @db.VarChar(32)
+  reporterId   String?        @map("reporter_id") @db.VarChar(36)
+  reporterName String         @map("reporter_name") @db.VarChar(120)
+  reporterRole UserRole       @map("reporter_role")
+  faskesId     String?        @map("faskes_id") @db.VarChar(32)
+  kategori     TicketCategory
+  judul        String         @db.VarChar(150)
+  deskripsi    String         @db.Text
+  status       TicketStatus   @default(OPEN)
+  createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  resolvedAt   DateTime?      @map("resolved_at") @db.Timestamptz
+
+  reporter User?   @relation(fields: [reporterId], references: [id], onDelete: SetNull)
+  faskes   Faskes? @relation(fields: [faskesId], references: [id], onDelete: SetNull)
+
+  @@map("trouble_tickets")
+}
