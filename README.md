@@ -156,9 +156,14 @@ Aplikasi menyediakan tombol *Quick Demo* pada halaman masuk (`/login` dan `/`) u
 │   ├── migrations/               # Riwayat Migrasi Fisik SQL PostgreSQL
 │   └── seed.ts                   # Seeder Idempoten Berbasis Upsert (17 Tabel Terisi)
 ├── tests/
-│   ├── crypto.test.ts            # Pengujian Unit Kriptografi Vitest (4/4 Passed)
+│   ├── crypto.test.ts            # Pengujian Unit Kriptografi Vitest (5/5 Passed - AEAD & HMAC)
+│   ├── access-control.test.ts    # Pengujian Matriks Akses RBAC Vitest (8/8 Passed - 4 Positif vs 4 Negatif)
 │   └── validations.test.ts       # Pengujian Skema Validasi Zod Vitest (15/15 Passed)
 └── docs/                         # Dokumentasi Terstruktur Laporan Tugas Besar
+    ├── Tugas2/                   # Dokumen Resmi Bukti Penugasan 3 Mata Kuliah
+    │   ├── PAW/LaporanTugas2.md  # Laporan Milestone 2 PAW (CRUD, Zod, DB, Pengujian, Screenshot)
+    │   ├── Kriptografi/          # Laporan Tugas 2 Kripto (AEAD, Parameter, Fail-Closed, Demo)
+    │   └── KKS/                  # Laporan Tugas 2 KKS (Matriks RBAC, Lynis, Image Scan, SBOM)
     ├── database.md               # Spesifikasi Basis Data (Entitas, Relasi, CDM, LDM, PDM, DDL & Kamus Data)
     ├── PAW/                      # kebutuhan.md, arsitektur.md & database.md
     ├── security/                 # asset-inventory.md, dfd.md, threat-model.md, risk-register.md
@@ -183,7 +188,7 @@ Aplikasi menyediakan tombol *Quick Demo* pada halaman masuk (`/login` dan `/`) u
    Salin berkas contoh `.env.example` menjadi `.env` dan sesuaikan URL database PostgreSQL:
    ```bash
    cp .env.example .env
-   # Format: DATABASE_URL="postgresql://<USER>:<PASSWORD>@localhost:5432/resilio_health?schema=public"
+   # Format: DATABASE_URL="postgresql://<USER>:***@localhost:5432/resilio_health?schema=public"
    ```
 4. **Eksekusi Migrasi & Seeder Idempoten Prisma**:
    ```bash
@@ -197,9 +202,12 @@ Aplikasi menyediakan tombol *Quick Demo* pada halaman masuk (`/login` dan `/`) u
    ```
 
 ### 8.2 Hasil Verifikasi Kualitas
-- **Dokumentasi Pengujian Lengkap**: Tersedia di berkas `docs/pengujian-milestone2.md` yang memuat **10 Skenario Pengujian (8 CRUD + 2 Relasi Data)** dengan status kelulusan 100%, disertai 3 bukti penolakan validasi server Zod dan panduan tangkapan layar.
+- **Dokumentasi Bukti Lengkap 3 Mata Kuliah**:
+  - **PAW**: `docs/Tugas2/PAW/LaporanTugas2.md` & `docs/pengujian-milestone2.md` (10 skenario pengujian 100% lulus).
+  - **Kriptografi**: `docs/Tugas2/Kriptografi/LaporanTugas2_Kripto.md` (AEAD, IV 96-bit, AAD context binding, 5 uji lulus).
+  - **KKS**: `docs/Tugas2/KKS/LaporanTugas2_KKS.md` (Lynis 74, Trivy 0 critical, SBOM CycloneDX, 8 uji RBAC lulus).
 - **Kompilasi Antarmuka**: Seluruh 32 rute Next.js terkompilasi bersih tanpa galat TypeScript (`npm run build`).
-- **Pengujian Unit Otomatis**: Sebanyak 19 skenario uji unit (4 kriptografi AES/HMAC + 15 validasi skema Zod v4) lulus 100% (`npx vitest run`).
+- **Pengujian Unit Otomatis**: Sebanyak **28 skenario uji unit** (5 kriptografi AEAD/HMAC + 8 kontrol akses RBAC + 15 validasi skema Zod v4) lulus 100% (`npx vitest run`).
 - **Analisis Kualitas Kode**: Lolos analisis statis ESLint dengan 0 error dan 0 warning (`npm run lint`).
 - **Keamanan Sesi & Cookie HTTP-Only**: Penerbitan cookie sesi `resilio_session_token` (`HttpOnly`, `SameSite=Lax`, `Max-Age=14400`) via Server Action `lib/actions/auth.ts` terverifikasi aktif pada peramban.
 - **Integrasi Basis Data PostgreSQL & Prisma 7**: Migrasi fisik 16 entitas relasional dan seeder idempoten (`npx prisma db seed`) terverifikasi sukses mengisi 17 tabel fisik di database PostgreSQL lokal `resilio_health`.
