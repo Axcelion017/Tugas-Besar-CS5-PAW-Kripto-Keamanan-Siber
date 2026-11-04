@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
-import { GrantEntityType } from "@prisma/client";
+import { GrantEntityType, Prisma } from "@prisma/client";
 
 function safeRevalidate(path: string) {
   try {
@@ -177,8 +177,17 @@ export async function deleteAccessGrantServerAction(
     return {
       success: true,
       message: "Riwayat izin akses berhasil dihapus dari basis data.",
+      data: { id: grantId },
     };
   } catch (error: unknown) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      if (error.code === "P2025") {
+        return {
+          success: false,
+          message: "[Prisma P2025] Rekaman tidak ditemukan: Izin akses yang hendak dihapus tidak ada di database.",
+        };
+      }
+    }
     const msg = error instanceof Error ? error.message : "Kesalahan server";
     return { success: false, message: `Gagal menghapus izin akses: ${msg}` };
   }
