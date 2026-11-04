@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
 import { BookingSchema } from "@/lib/validations/patient";
 import { AssignDpjpSchema } from "@/lib/validations/triage";
-import { AppointmentStatus } from "@prisma/client";
+import { AppointmentStatus, Prisma } from "@prisma/client";
 
 function safeRevalidate(path: string) {
   try {
@@ -78,6 +78,21 @@ export async function createAppointmentServerAction(
       data: created,
     };
   } catch (error: unknown) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      if (error.code === "P2002") {
+        const target = Array.isArray(error.meta?.target) ? error.meta?.target.join(", ") : "identitas unik";
+        return {
+          success: false,
+          message: `[Prisma P2002] Pelanggaran batasan unik: Janji temu dengan ${target} sudah terdaftar di sistem.`,
+        };
+      }
+      if (error.code === "P2003") {
+        return {
+          success: false,
+          message: `[Prisma P2003] Pelanggaran Foreign Key: Pasien, Dokter, atau Faskes terkait tidak ditemukan di database.`,
+        };
+      }
+    }
     const msg = error instanceof Error ? error.message : "Kesalahan basis data";
     console.error("Create Appointment Error:", error);
     return {
@@ -283,6 +298,14 @@ export async function updateAppointmentDetailsServerAction(
       data: updated,
     };
   } catch (error: unknown) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      if (error.code === "P2025") {
+        return {
+          success: false,
+          message: "[Prisma P2025] Rekaman tidak ditemukan: Janji temu yang ingin diubah tidak ada di database.",
+        };
+      }
+    }
     const msg = error instanceof Error ? error.message : "Kesalahan server";
     return { success: false, message: `Gagal memperbarui jadwal: ${msg}` };
   }
@@ -300,7 +323,7 @@ export async function deleteAppointmentServerAction(
     });
 
     if (!existing) {
-      return { success: false, message: "Tiket antrean tidak ditemukan." };
+      return { success: false, message: "[Prisma P2025] Tiket antrean tidak ditemukan di database." };
     }
 
     // Jika antrean sudah memiliki rekam medis terkait, tidak boleh dihapus sembarangan (onDelete: Restrict)
@@ -317,9 +340,24 @@ export async function deleteAppointmentServerAction(
     return {
       success: true,
       message: "Tiket antrean berhasil dibatalkan dan dihapus dari basis data.",
+      data: { id: appointmentId },
     };
   } catch (error: unknown) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      if (error.code === "P2025") {
+        return {
+          success: false,
+          message: "[Prisma P2025] Rekaman tidak ditemukan: Data antrean yang hendak dihapus tidak ada di database.",
+        };
+      }
+      if (error.code === "P2003") {
+        return {
+          success: false,
+          message: "[Prisma P2003/RESTRICT] Larangan hapus: Antrean ini masih terikat dengan data medis/triase lain.",
+        };
+      }
+    }
     const msg = error instanceof Error ? error.message : "Kesalahan server";
-    return { success: false, message: `Gagal membatalkan tiket antrean: ${msg}` };
+    return { success: false, message: `Gagal membatalkan antrean: ${msg}` };
   }
 }
