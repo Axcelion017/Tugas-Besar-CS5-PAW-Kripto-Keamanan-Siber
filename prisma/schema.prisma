@@ -328,6 +328,8 @@ model MedicalRecord {
   hmacDigest       String   @map("hmac_digest") @db.Char(64)
   version          Int      @default(1)
   addendumReason   String?  @map("addendum_reason") @db.Text
+  vitalSignsTrend  Json?    @map("vital_signs_trend")
+  claimStatus      String   @default("DRAFT") @map("claim_status") @db.VarChar(30)
   isBreakGlass     Boolean  @default(false) @map("is_break_glass")
   breakGlassReason String?  @map("break_glass_reason") @db.Text
   createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
@@ -357,6 +359,8 @@ model MedicalImage {
   ivHex            String    @map("iv_hex") @db.Char(24)
   hmacDigest       String    @map("hmac_digest") @db.Char(64)
   mimeType         String    @map("mime_type") @db.VarChar(50)
+  fileSizeBytes    BigInt?   @map("file_size_bytes")
+  binaryHmac       String?   @map("binary_hmac") @db.VarChar(128)
   notes            String?   @db.Text
   createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz
 

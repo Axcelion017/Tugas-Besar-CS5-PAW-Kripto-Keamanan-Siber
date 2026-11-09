@@ -15,6 +15,7 @@ import {
 } from "@/lib/db/mockData";
 import { DashboardSkeleton, SkeletonDisruptionNotice } from "@/components/ui/Skeleton";
 import { getAppointmentsServerAction } from "@/lib/actions/appointment";
+import { DoctorCalendarSchedule } from "@/components/clinical/DoctorCalendarSchedule";
 
 export default function NakesDashboardPage() {
   const router = useRouter();
@@ -22,6 +23,7 @@ export default function NakesDashboardPage() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [isPracticing, setIsPracticing] = useState(true);
   const [isOfflineMode, setIsOfflineMode] = useState(false);
+  const [dashboardView, setDashboardView] = useState<"KALENDER" | "ANTREAN">("KALENDER");
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -223,8 +225,66 @@ export default function NakesDashboardPage() {
         </div>
       </div>
 
-      {/* Daftar Antrean Pasien Hari Ini (UR-T02) */}
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden space-y-4">
+      {/* Switcher Tampilan: Kalender Visual vs Daftar Antrean */}
+      <div className="flex items-center gap-2 p-1.5 bg-slate-100 rounded-2xl w-fit">
+        <button
+          type="button"
+          onClick={() => setDashboardView("KALENDER")}
+          className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer ${
+            dashboardView === "KALENDER"
+              ? "bg-white text-slate-900 shadow-xs"
+              : "text-slate-500 hover:text-slate-900"
+          }`}
+        >
+          Jadwal Berbasis Kalender Visual
+        </button>
+        <button
+          type="button"
+          onClick={() => setDashboardView("ANTREAN")}
+          className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer ${
+            dashboardView === "ANTREAN"
+              ? "bg-white text-slate-900 shadow-xs"
+              : "text-slate-500 hover:text-slate-900"
+          }`}
+        >
+          Daftar Antrean Meja Konsultasi
+        </button>
+      </div>
+
+      {/* TAMPILAN 1: JADWAL KALENDER VISUAL */}
+      {dashboardView === "KALENDER" && (
+        <DoctorCalendarSchedule
+          appointments={appointments.map((a) => {
+            const p = allPatients.find((pt) => pt.id === a.pasienId || pt.nik === a.pasienNik);
+            return {
+              id: a.id,
+              patientId: a.pasienId,
+              patientName: a.pasienNama,
+              patientMrn: p?.mrn || "MRN-2026-0081",
+              patientBloodType: p?.bloodType || "O+",
+              tanggal: typeof a.tanggal === "string" ? a.tanggal : new Date(a.tanggal).toISOString().split("T")[0],
+              jam: a.jam,
+              poli: a.poli,
+              keluhanAwal: a.keluhanAwal,
+              status: a.status,
+              triaseLevel: (a.triaseLevel as string) || "HIJAU",
+              vitals: a.triaseVitals
+                ? {
+                    systolic: a.triaseVitals.systolic,
+                    diastolic: a.triaseVitals.diastolic,
+                    heartRate: a.triaseVitals.heartRate,
+                    temperature: Number(a.triaseVitals.temperature),
+                    spo2: a.triaseVitals.spo2,
+                  }
+                : null,
+            };
+          })}
+        />
+      )}
+
+      {/* TAMPILAN 2: DAFTAR ANTREAN PASIEN HARI INI */}
+      {dashboardView === "ANTREAN" && (
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden space-y-4">
         <div className="p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
             <h2 className="text-base font-black text-slate-900">
@@ -316,6 +376,7 @@ export default function NakesDashboardPage() {
           )}
         </div>
       </div>
+      )}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { describe, test, expect } from "vitest";
-import { encryptAES, decryptAES } from "../lib/crypto/aes";
+import { encryptAES, decryptAES, encryptBinaryAttachment, decryptBinaryAttachment } from "../lib/crypto/aes";
 import { generateHMAC, verifyHMAC } from "../lib/crypto/hmac";
 import { deriveSubKeysHKDF } from "../lib/crypto/hkdf";
 
@@ -100,5 +100,36 @@ describe("Resilio-Health Cryptographic & AEAD Tests (Rubrik Kriptografi 052357 R
 
     // Tag autentikasi GCM memverifikasi AAD; jika AAD berbeda, dekripsi wajib ditolak
     await expect(decryptAES(ciphertext, iv, masterKeyHex, wrongAad)).rejects.toThrow();
+  });
+
+  // K2 & Spec: Uji Enkripsi Citra Biner Medis (Rontgen / USG / MRI)
+  test("8. Positif: Enkripsi dan Dekripsi Biner Citra Medis Rontgen (ArrayBuffer) + Integritas HMAC", async () => {
+    // Simulasi buffer biner gambar Rontgen Thorax (256 bytes)
+    const rawImageBytes = new Uint8Array(256);
+    for (let i = 0; i < 256; i++) rawImageBytes[i] = (i * 7) % 256;
+    const rawBuffer = rawImageBytes.buffer;
+
+    const { ciphertextBuffer, ivHex, binaryHmac } = await encryptBinaryAttachment(
+      rawBuffer,
+      masterKeyHex,
+      "ATTACHMENT:XRAY-001|PATIENT:P-101"
+    );
+
+    expect(ciphertextBuffer).toBeDefined();
+    expect(ciphertextBuffer.byteLength).toBeGreaterThan(256); // 256 bytes + 16 bytes GCM tag
+    expect(ivHex.length).toBe(24);
+    expect(binaryHmac.length).toBe(64);
+
+    // Dekripsi kembali biner gambar
+    const decryptedBuffer = await decryptBinaryAttachment(
+      ciphertextBuffer,
+      ivHex,
+      masterKeyHex,
+      "ATTACHMENT:XRAY-001|PATIENT:P-101"
+    );
+
+    const decryptedBytes = new Uint8Array(decryptedBuffer);
+    expect(decryptedBytes.length).toBe(256);
+    expect(Array.from(decryptedBytes)).toEqual(Array.from(rawImageBytes));
   });
 });

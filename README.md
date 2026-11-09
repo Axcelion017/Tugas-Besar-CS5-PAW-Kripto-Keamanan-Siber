@@ -107,7 +107,8 @@ Sistem Resilio-Health dibangun dengan arsitektur teknologi modern yang terbagi k
 | **Backend & Server Actions** | **Next.js Server Actions** | Native | Mutasi data aman `"use server"` di sisi server untuk pipeline transaksi 6-tahap (Sesi $\rightarrow$ Zod $\rightarrow$ Semantik $\rightarrow$ DB $\rightarrow$ Revalidate $\rightarrow$ Redirect). |
 | **Database & ORM** | **PostgreSQL & Prisma ORM** | `17.6` / `7.10.1` | Basis data relasional ACID dengan `@prisma/adapter-pg` dan connection pool `pg`, menjamin integritas referensial medikolegal `onDelete: Restrict`. |
 | **Data Validation Engine** | **Zod** | `^4.6.7` | Validasi tipe data ketat (*Type-Safe Schema Validation*) di sisi formulir peramban dan lapisan gerbang Server Action (*Defense-in-Depth*). |
-| **Client-Side Cryptography** | **W3C Web Crypto API** | Native Standard | Enkripsi simetris AES-256-GCM (kunci 256-bit unik pasien, CSPRNG IV 96-bit) dan tag integritas HMAC-SHA256 langsung di peramban (*Zero-Knowledge*). |
+| **Data Visualization** | **Recharts** | `^2.15.0` | Visualisasi grafik tren tanda vital dinamis (Sistolik, Diastolik, Detak Jantung) pada dashboard pasien sesuai Permenkes 24/2022. |
+| **Client-Side Cryptography** | **W3C Web Crypto API** | Native Standard | Enkripsi simetris AES-256-GCM (kunci 256-bit unik pasien, CSPRNG IV 96-bit), enkripsi citra biner, dan tag integritas HMAC-SHA256 langsung di peramban (*Zero-Knowledge*). |
 | **Offline-First Engine** | **PWA Service Worker & IndexedDB** | Web Standard | PWA Service Worker (`public/sw.js`) dengan penyimpanan biner IndexedDB berkapasitas besar untuk ketahanan operasional saat internet rumah sakit terputus. |
 | **Testing Suite** | **Vitest** | `^5.0.4` | Framework pengujian unit otomatis berkecepatan tinggi untuk memverifikasi 19 skenario kriptografi dan batas validasi skema. |
 | **Linter & Code Quality** | **ESLint** | `^9.0.0` | Analisis statis kualitas kode dengan 0 error dan 0 warning. |
@@ -209,8 +210,37 @@ Aplikasi menyediakan tombol *Quick Demo* pada halaman masuk (`/login` dan `/`) u
   - **PAW**: `docs/Tugas2/PAW/LaporanTugas2.md` & `docs/pengujian-milestone2.md` (10 skenario pengujian 100% lulus).
   - **Kriptografi**: `docs/Tugas2/Kriptografi/LaporanTugas2_Kripto.md` (AEAD, IV 96-bit, AAD context binding, HKDF RFC 5869, 7 uji lulus).
   - **KKS**: `docs/Tugas2/KKS/LaporanTugas2_KKS.md` (Lynis 74, Trivy 0 critical, SBOM CycloneDX, 8 uji RBAC lulus).
-- **Kompilasi Antarmuka**: Seluruh 32 rute Next.js terkompilasi bersih tanpa galat TypeScript (`npm run build`).
-- **Pengujian Unit Otomatis**: Sebanyak **30 skenario uji unit** (7 kriptografi AEAD/HMAC/HKDF + 8 kontrol akses RBAC + 15 validasi skema Zod v4) lulus 100% (`npx vitest run`).
+- **Kompilasi Antarmuka**: Seluruh 33 rute Next.js terkompilasi bersih tanpa galat TypeScript (`npm run build`).
+- **Pengujian Unit Otomatis**: Sebanyak **33 skenario uji unit** (8 kriptografi AEAD/HMAC/HKDF/Biner + 8 kontrol akses RBAC + 15 validasi skema Zod v4 + 2 transaksi & rollback Modul 6) lulus 100% (`npx vitest run`).
 - **Analisis Kualitas Kode**: Lolos analisis statis ESLint dengan 0 error dan 0 warning (`npm run lint`).
 - **Keamanan Sesi & Cookie HTTP-Only**: Penerbitan cookie sesi `resilio_session_token` (`HttpOnly`, `SameSite=Lax`, `Max-Age=14400`) via Server Action `lib/actions/auth.ts` terverifikasi aktif pada peramban.
 - **Integrasi Basis Data PostgreSQL & Prisma 7**: Migrasi fisik 16 entitas relasional dan seeder idempoten (`npx prisma db seed`) terverifikasi sukses mengisi 17 tabel fisik di database PostgreSQL lokal `resilio_health`.
+
+### 8.3 Penggunaan Container, Virtual Node (VM), dan Verifikasi KKS (sec-0.2)
+Sistem menyediakan 3 komponen kontainer dan virtual node dengan fungsi keamanan spesifik:
+1. **Container `app` (Aplikasi Web Next.js 16)**:
+   - Dijalankan dari `Dockerfile` multi-stage build berbasis `node:20-alpine`.
+   - Menggunakan pengguna non-root `USER node` (UID 1000) dan pembatasan capability kernel (`cap_drop: ALL` di `docker-compose.yml`).
+   - Bebas kerentanan critical (Trivy Scan: 0 Critical / 0 High).
+2. **Container `db` (Basis Data PostgreSQL 17)**:
+   - Port 5432 **TIDAK dipublikasikan ke host publik** (`expose: 5432` hanya di dalam bridge `resilio_internal_net`).
+   - Mencegah serangan sniffing dan akses database dari luar jaringan internal.
+3. **Node Virtual `resilio-node` (Hardened OS Environment)**:
+   - Node Ubuntu 22.04 LTS yang diperkeras untuk membuktikan kepatuhan host/VM.
+   - Mengonfigurasi SSH Server agar menolak password dan login root (`sshd -T`).
+   - Menjalankan audit keamanan Lynis dengan Hardening Index $\ge 70$.
+
+**Perintah Menjalankan & Memverifikasi Hardening**:
+```bash
+# 1. Menjalankan node virtual hardened
+./scripts/setup-docker-node.sh
+
+# 2. Menjalankan verifikasi mandiri kepatuhan KKS
+./scripts/verify-hardening.sh
+
+# 3. Demonstrasi SSH Key-Only & Root Login Disabled
+docker exec resilio-node sshd -T | grep -E 'passwordauthentication|permitrootlogin'
+
+# 4. Demonstrasi Skor Audit Keamanan Lynis (Index >= 70)
+docker exec -it resilio-node lynis audit system --quick
+```

@@ -4,6 +4,122 @@ Semua perubahan besar pada proyek Resilio-Health didokumentasikan di sini.
 
 ---
 
+## [v0.2.1] - 2026-11-08 — Integrasi Penuh Standar RME Permenkes RI No. 24/2022, Recharts, & Citra Biner
+### Pembaruan Skema Basis Data & Kriptografi
+- **Migrasi Non-Destruktif `enhance_ehr_permenkes24`**:
+  - Penambahan kolom `vitalSignsTrend` (Json) dan `claimStatus` pada tabel `medical_records`.
+  - Penambahan kolom `fileSizeBytes` dan `binaryHmac` pada tabel `medical_images`.
+- **Ekstensi Kriptografi Citra Medis Biner (`lib/crypto/aes.ts` & `hmac.ts`)**:
+  - Implementasi fungsi `encryptBinaryAttachment` dan `decryptBinaryAttachment` untuk mengenkripsi biner citra medis (Rontgen, USG, EKG) dengan `AES-256-GCM` dan membubuhkan tanda tangan digital integritas `HMAC-SHA256` di sisi peramban klien.
+  - Penambahan unit test Vitest ke-8 untuk enkripsi citra biner di `tests/crypto.test.ts` (lulus 100%).
+- **Lapisan Penyimpanan Offline PWA (`lib/storage/indexedDb.ts` & `public/sw.js`)**:
+  - Implementasi wrapper `resilio_offline_db` dengan 3 Object Stores: `cached_active_patients`, `offline_clinical_outbox`, dan `offline_media_blobs`.
+  - Pendaftaran Service Worker PWA dengan dukungan event `sync-medical-records` pada Background Sync API.
+
+### Pembaruan Antarmuka & Logika Server
+- **Formulir Terpadu 5-Tab Pemeriksaan Dokter (`/nakes/periksa/[bookingId]`)**:
+  - **Tab 1: Administratif & Alergi**: Menampilkan ringkasan nomor rekam medis, penjamin BPJS/SEP, dan profil alergi kritis.
+  - **Tab 2: Anamnesis & Fisik**: Pengkajian keluhan utama, skor GCS (Eye, Verbal, Motorik), dan tanda vital otomatis dari loket triase.
+  - **Tab 3: Diagnosis & Citra Medis**: Autocomplete kode ICD-10 WHO dan uploader file citra medis terenkripsi biner.
+  - **Tab 4: Penatalaksanaan & Resep**: e-Prescription dengan deteksi otomatis kontraindikasi alergi secara real-time dan prosedur ICD-9-CM.
+  - **Tab 5: CPPT & Pengesahan**: Ringkasan SOAP, disposisi resume medis, dan kotak centang keabsahan medikolegal.
+- **Implementasi Otomatisasi Hardened Node OS & Verifikasi Rubrik KKS (sec-0.2)**:
+  - Menyediakan node virtual Ubuntu 22.04 LTS `resilio-node` dengan pengerasan OpenSSH Server (`PermitRootLogin no`, `PasswordAuthentication no`), firewall UFW, parameter sysctl, dan audit Lynis.
+  - Skrip pengujian otomatis `scripts/verify-hardening.sh` memverifikasi seluruh butir rubrik penilaian KKS (SSH daemon `sshd -T`, Docker non-root `USER node`, `cap_drop: ALL`, port database terisolasi, dan berkas bukti di `security/`).
+- **Pengalihan Otomatis Pasca-Login ke Beranda Terpadu (`/beranda`)**:
+  - Memperbarui alur login pengguna (`app/(auth)/login/page.tsx` dan demo login di `app/page.tsx`) sehingga seluruh pengguna terverifikasi langsung diarahkan ke **Beranda Terpadu** (`/beranda`) yang memuat ringkasan eksekutif dan status kedaulatan data.
+- **Penyempurnaan Tampilan Detail Penggunaan Resep Obat Pasien**:
+  - Menambahkan pengurai cerdas `parsePrescriptionDetail` pada portal rekam medis pasien (`/pasien/rekam-medis` & `/pasien/rekam-medis/[recordId]`).
+  - Setiap resep obat kini menyajikan detail penggunaan terstruktur: Nama Obat & Sediaan, Dosis, Aturan Minum (Signa), Waktu Minum (sebelum/sesudah makan), Tujuan Terapi Medis, dan Catatan Peringatan Khusus.
+- **Restrukturisasi Format Cetak Rekam Medis Administratif Kontinu (`PrintableMedicalResume`)**:
+  - Mengubah layout modal cetak dari bentuk kotak-kotak terpisah menjadi **Dokumen Administratif Kontinu Standar Rumah Sakit** (Permenkes RI No. 24/2022).
+  - Menyajikan Kop Surat RS Resmi, Nomor Berkas & Lokasi Penyimpanan RME, Tabel Data Administratif Pasien Lengkap, Dokumentasi Klinis SOAP, Tabel Resep Obat, Rincian Biaya Billing, dan Blok Pengesahan DPJP/Perawat.
+  - Menambahkan tombol **"✕ Tutup Dokumen"** yang jelas dan mencolok di bagian atas dan bawah view cetak.
+- **Penyelesaian Bug Perhitungan Statistik & Penampilan Dokumen Rekam Medis**:
+  - Memperbaiki ketidaksesuaian jumlah statistik pada `getDoctorPatientListServerAction`: metrik *Jumlah Pasien*, *Dalam Antrean*, *Menunggu TTD*, dan *Sudah TTD* kini dikalkulasi secara presisi per-pasien dan selaras 100% dengan filter tab daftar pasien.
+  - Memperbaiki bug dokumen kosong (*empty medical records*) pada `getPatientDetailForDoctorServerAction`: daftar berkas RME kini selalu dikirimkan dan diizinkan secara sah bagi dokter DPJP penanggung jawab yang menangani pasien (`activeAppointment` & `activeGrant`), sehingga seluruh berkas SOAP dan citra radiologi/lab langsung tampil utuh.
+- **Tampilan Daftar Pasien Berbentuk Tabel Bersih Tanpa Pemisah Kolom (`/nakes/pasien-lookup`)**:
+  - Mengubah daftar pasien menjadi elemen `<table>` enterprise yang rapi: baris dipisahkan garis horizontal tipis (`divide-y divide-slate-100`) tanpa pemisah kolom vertikal yang kaku.
+  - Interaksi baris kursor penuh (`hover:bg-slate-50/90 cursor-pointer`) untuk membuka detail rekam medis pasien secara instan.
+- **Halaman Beranda Terpadu untuk Seluruh Pengguna (`/beranda`)**:
+  - Membangun halaman ringkasan informasi terpadu yang dapat diakses oleh seluruh 4 peran (`pasien`, `nakes`, `staf`, `admin`).
+  - Menampilkan ringkasan spesifik peran: metrik kedaulatan kriptografi klien W3C Web Crypto, antrean hari ini, RME terkini, janji temu poliklinik, kepatuhan Permenkes 24/2022, dan kesiapan SATUSEHAT.
+  - Menambahkan tautan *"Beranda Terpadu"* pada menu navigasi utama sidebar `RoleNav.tsx`.
+- **Fitur Jadwal Praktik Dokter Berbasis Kalender Mingguan (`/nakes/jadwal`)**:
+  - Memisahkan jadwal dokter menjadi fitur mandiri dengan rute `/nakes/jadwal` dan tautan sidebar *Jadwal Praktik Mingguan*.
+  - Menampilkan visualisasi kalender mingguan (Senin s.d. Minggu) dengan slot jam mulai-selesai presisi (`08:30 - 09:15`, `09:30 - 10:15`, `10:30 - 11:30`, `13:30 - 14:15 WIB`).
+  - Menyertakan filter faskes praktik (karena dokter dapat berpraktik di berbagai rumah sakit: RSUP Dr. Sardjito, RS Harapan Sehat) dan indikator warna skala prioritas triase.
+- **Penyempurnaan Fitur Surat Rujukan Dokter Lintas Rumah Sakit (`/nakes/periksa/[bookingId]`)**:
+  - Mengintegrasikan pemilih Faskes Rujukan Tujuan resmi (`FAS-01` RSUP Dr. Sardjito, `FAS-02` RS Harapan Sehat, `FAS-03` Klinik Pratama, `FAS-04` Puskesmas).
+  - Mengintegrasikan pemilih Dokter Spesialis Konsulen yang berpraktik di rumah sakit terkait, tingkat urgensi rujukan (Rutin / Mendesak 24 Jam / Transfer Ambulans Darurat), dan otomatis tercetak pada dokumen resmi resume medis.
+- **Integrasi Penuh Basis Data PostgreSQL & Seeder Komprehensif**:
+  - Menghidupkan dan menyinkronkan data riil seluruh pasien (`P-101` Budi Santoso, `P-102` Siti Rahmawati, `P-103` Ahmad Dahlan, `P-104` Dewi Lestari) ke PostgreSQL dengan tabel relasional `patients`, `appointments`, `triage_assessments`, `medical_records`, dan `medical_images`.
+  - Setiap data kunjungan memiliki slot jam mulai-selesai presisi, hasil pengukuran tanda vital lengkap, serta skala prioritas triase terkalibrasi.
+- **Penyempurnaan List Pasien Bersih & Indikator Kursor Menyeluruh (`/nakes/pasien-lookup`)**:
+  - Mengubah tampilan list terpisah menjadi satu kontainer bersih dengan pembatas garis tipis (`divide-y divide-slate-100`).
+  - Indikator kursor aktif ke seluruh permukaan baris (`hover:bg-slate-50/90 cursor-pointer transition-colors`) tanpa bentuk pembatas luar terputus-putus.
+- **Skala Prioritas Triase yang Diperkuat dengan Warna Tegas**:
+  - **P1 • MERAH (Gawat Darurat / Resusitasi)**: Badge merah solid (`bg-red-600 text-white`) dengan indikator pulsing dot.
+  - **P2 • KUNING (Mendesak / Gejala Akut)**: Badge kuning-oranye solid (`bg-amber-500 text-white`).
+  - **P3 • HIJAU (Non-Urgent / Rawat Jalan Rutin)**: Badge hijau solid (`bg-emerald-600 text-white`).
+  - Ditampilkan secara konsisten pada daftar pasien, kartu rekam medis, dan kalender jadwal.
+- **Fitur Input Resep Obat Elektronik Otomatis Masuk RME (`addPrescriptionToMedicalRecordServerAction`)**:
+  - Modal input resep digital bagi dokter (nama obat, sediaan, aturan pakai signa, durasi) dengan pengecekan kontraindikasi alergi instan dan mutasi langsung ke PostgreSQL.
+- **Fitur Input Hasil Uji Laboratorium Otomatis Masuk RME (`addLabResultToMedicalRecordServerAction`)**:
+  - Modal input pemeriksaan LAB (Darah Lengkap, Glukosa Darah, HbA1c, Enzim Jantung Troponin, Kolesterol, Urin Rutin) lengkap dengan nilai rujukan dan catatan analis yang tersimpan ke `medical_images` (tipe `LAB`) dan `medical_records`.
+- **Fitur Input Tindakan Medis ICD-9-CM Dokter & Staf (`addProcedureToMedicalRecordServerAction`)**:
+  - Form pencatatan prosedur medis terstandarisasi (89.52 EKG, 99.21 Terapi IV, 93.57 Hecting, 88.76 USG) dengan pemilihan wewenang pelaksana (Dokter DPJP / Staf Perawat) yang langsung terintegrasi ke rekam medis pasien.
+- **Fitur Jadwal Dokter Berbasis Kalender Visual (`DoctorCalendarSchedule`)**:
+  - Komponen kalender garis waktu visual (Timeline 08:00 - 17:00 WIB) dan mode Grid kartu blok waktu yang menampilkan jam mulai dan jam selesai pelayanan secara eksplisit.
+  - Memvisualisasikan durasi janji temu pasien, identitas No. RM, poli tujuan, dan kode warna skala prioritas kegawatan.
+- **Transformasi Fitur Dokter: Daftar Pasien, Metrik Dokumen & Riwayat RME Terpadu**:
+  - Mengubah antarmuka pencarian pasien dokter (`/nakes/pasien-lookup`) menjadi **Daftar Pasien & Status Rekam Medis** terpadu.
+  - Menyajikan **4 Kartu Metrik Ringkasan**:
+    1. **Jumlah Pasien**: Total pasien terdaftar dalam basis data faskes.
+    2. **Jumlah Antrean**: Jumlah pasien aktif dalam antrean poliklinik hari ini.
+    3. **Belum Ditandatangani**: Jumlah kunjungan/dokumen draft yang menunggu verifikasi & pengesahan DPJP.
+    4. **Sudah Ditandatangani**: Jumlah berkas rekam medis yang telah disahkan secara digital dengan stempel waktu dan tanda tangan sah.
+  - Menampilkan seluruh pasien dalam bentuk **List View** interaktif dan bersih (*Clean UI*, tanpa emoji), lengkap dengan filter pencarian instan dan tab status dokumen (`Semua`, `Menunggu TTD`, `Sudah TTD`, `Dalam Antrean`).
+  - **Navigasi Interaktif per Item**: Setiap baris pasien pada list dapat diklik langsung untuk menuju ke halaman detail rekam medis pasien (`/nakes/pasien-lookup/[patientId]`).
+  - **Halaman Detail Rekam Medis Pasien untuk Dokter (`/nakes/pasien-lookup/[patientId]`)**:
+    - Menampilkan ringkasan identitas pasien (NIK, MRN, Usia, Gender, Gol. Darah, Kontak Darurat, dan Peringatan Alergi Kritis).
+    - Validasi hak akses Zero-Trust / BOLA dengan dukungan aktivasi protokol darurat Break-Glass IGD.
+    - Riwayat berkas rekam medis kunjungan pasien lengkap dengan fitur dekripsi SOAP, tanda vital triase perawat, diagnosis ICD-10, resep obat farmasi, citra medis penunjang, dan tombol cetak resume medis resmi rumah sakit (`PrintableMedicalResume`).
+- **Pembersihan Visual Simbol & Emoji Berwarna (Enterprise Clean UI)**:
+  - Menghapus seluruh emotikon/simbol berwarna (`💊`, `🔍`, `📅`, `🏥`, `⚠️`, `🖨️`, `🔒`) pada antarmuka rekam medis pasien (`/pasien/rekam-medis`, `/pasien/rekam-medis/[recordId]`), stasiun dokter (`/nakes/periksa/[bookingId]`), stasiun perawat (`/staf/triase`), dan berkas resume medis (`PrintableMedicalResume.tsx`).
+  - Menggantikan dengan badge monokrom rapi seperti pill `Rx` untuk resep farmasi, label teks formal, dan status integritas kriptografi yang elegan.
+- **Konektivitas Basis Data Riil Pencarian NIK Dokter (`lookupPatientByNikServerAction`)**:
+  - Menghubungkan fitur pencarian pasien dokter (`/nakes/pasien-lookup`) langsung ke PostgreSQL `prisma.patient` melalui Server Action.
+  - Mengintegrasikan gatekeeper BOLA/IDOR otomatis: jika dokter tidak memiliki consent aktif dari pasien, akses RME ditolak dan insiden `IDOR_BLOCKED` langsung dicatat ke `security_audit_logs`.
+  - Mengimplementasikan eksekusi Break-Glass darurat (`executeBreakGlassServerAction`) yang menerbitkan izin darurat 12 jam langsung di PostgreSQL dan mencatat insiden audit bertingkat `CRITICAL`.
+- **Perbaikan & Penyempurnaan Dekripsi Rekam Medis Pasien (`smartDecryptPayload`)**:
+  - Menyediakan fungsi `smartDecryptPayload` yang menangani dekripsi AES-256-GCM native, hex string JSON, Base64, maupun plain payload secara transparan.
+  - Memastikan pasien dapat membuka dan melihat detail rekam medis pribadinya tanpa terhalang galat format, sembari tetap mempertahankan pembuktian *Fail-Closed* pada pengujian manipulasi (*Tamper Test*).
+- **Fitur Cetak Rekam Medis Standar Rumah Sakit (`PrintableMedicalResume`)**:
+  - Pembuatan komponen resmi cetak `components/clinical/PrintableMedicalResume.tsx` dengan dukungan `@media print` untuk menghasilkan lembar resume pelayanan rapi bebas dari navbar dan sidebar.
+  - Fitur cetak dapat diakses langsung oleh **Dokter** (`/nakes/periksa/[bookingId]`), **Staf Perawat** (`/staf/triase`), dan **Pasien** (`/pasien/rekam-medis/[recordId]`).
+- **Kelengkapan Fitur Pemeriksaan Dokter DPJP (`/nakes/periksa/[bookingId]`)**:
+  - Rekam medis triase (tanda vital lengkap, kategori triase, catatan perawat triase).
+  - Anamnesis lengkap (keluhan utama, skor GCS Eye/Verbal/Motorik).
+  - Tindakan medis berkode ICD-9-CM.
+  - Foto dan citra medis penunjang (Rontgen, USG, EKG, Lab) dengan enkripsi biner AES-GCM dan digest HMAC.
+  - Resep digital & farmasi (aturan minum, status verifikasi apoteker, dan deteksi alergi).
+  - Persetujuan medis (Informed Consent medikolegal).
+  - Surat keterangan dokter (Surat Keterangan Istirahat/Sakit, Surat Rujukan Faskes Lanjutan, dan Jadwal Kontrol Ulang).
+  - Rincian biaya pelayanan (Billing: Konsultasi, Tindakan, Farmasi, dan Status Klaim BPJS).
+  - Riwayat perubahan rekam medis (*Addendum Audit Trail & Versioning*: Versi 1 $\rightarrow$ Versi 2 berstempel waktu dan alasan klinis).
+- **Penyempurnaan Tampilan Rekam Medis Pasien (`/pasien/rekam-medis` & `/pasien/rekam-medis/[recordId]`)**:
+  - Penambahan kartu atribusi resmi tenaga kesehatan yang jelas:
+    - **Dokter yang Mendiagnosis (DPJP)**: Nama lengkap, gelar spesialisasi, nomor STR & SIP resmi, serta faskes tempat praktik.
+    - **Staf Nakes Pelaksana Tindakan (Perawat Triase)**: Nama perawat, NIP, jabatan, dan deskripsi tindakan fisik awal yang dilakukan.
+  - Tampilan detail yang ramah pasien: kartu anamnesis keluhan, kartu diagnosis ICD-10 dengan penjelasan nama penyakit, kotak 4 parameter tanda vital, resep obat digital e-Prescription berbentuk kartu obat individual, petunjuk dokter, serta galeri citra radiologi penunjang.
+  - Integrasi Server Action `getMedicalRecordsServerAction` dan `getSingleMedicalRecordServerAction` langsung ke PostgreSQL.
+- **Grafik Tren Tanda Vital Recharts pada Dasbor Pasien (`/pasien`)**:
+  - Pembuatan komponen `components/clinical/VitalSignsTrendChart.tsx` berbasis `recharts` untuk visualisasi dinamis tekanan darah sistolik, diastolik, dan detak jantung.
+  - Integrasi Server Action `getMedicalRecordsServerAction` untuk membaca histori tanda vital riil dari PostgreSQL.
+
+---
+
 ## [v0.2] - 2026-10-17 — Milestone 2 (Transformasi Modular 4 Peran, Zero-Trust & Ketahanan Offline-First)
 
 ### Pengembangan Aplikasi Web (PAW)

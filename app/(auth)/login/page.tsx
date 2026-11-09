@@ -3,7 +3,7 @@
 import React, { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { saveSession, normalizeRole } from "@/lib/auth/auth";
+import { saveSession } from "@/lib/auth/auth";
 import { LoginSchema } from "@/lib/validations/auth";
 import { loginServerAction } from "@/lib/actions/auth";
 
@@ -42,8 +42,7 @@ function LoginForm() {
       const result = await loginServerAction(identifier, password);
       if (result.success && result.session) {
         saveSession(result.session); // Sinkronisasi ke localStorage untuk kompatibilitas klien
-        const targetRole = result.targetRole || normalizeRole(result.session.role);
-        router.replace(`/${targetRole}`);
+        router.replace("/beranda");
       } else {
         setErrorMsg(result.message || "Kredensial atau NIK tidak valid. Periksa kembali atau gunakan tombol demo.");
         setIsLoading(false);
@@ -62,8 +61,7 @@ function LoginForm() {
       const result = await loginServerAction(user, pass);
       if (result.success && result.session) {
         saveSession(result.session);
-        const targetRole = result.targetRole || normalizeRole(result.session.role);
-        router.replace(`/${targetRole}`);
+        router.replace("/beranda");
       }
     } catch {
       setErrorMsg("Gagal melakukan demo login otomatis.");

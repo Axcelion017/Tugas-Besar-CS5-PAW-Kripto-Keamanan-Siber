@@ -2,11 +2,9 @@
 ## Integrasi Logika Server dan Database Produk Web
 
 - **Mata Kuliah**: Praktikum Pengembangan Aplikasi Web (PAW)
-- **Sub-CPMK**: 3 (C3, P4) — Bobot 10% Nilai Akhir
 - **Produk Web**: Resilio-Health — Hospital Information System (HIS) Berdaulat & Zero-Trust
 - **Tag GitHub**: `v0.2`
 - **Basis Data**: PostgreSQL 17 (`resilio_health`) via Prisma ORM 7 (`@prisma/adapter-pg`)
-- **Tenggat**: Minggu, 08 November 2026, 23.59 WIB
 
 ---
 
@@ -100,7 +98,7 @@ erDiagram
 
 ## 3. Bukti Implementasi Operasi CRUD Lengkap 2 Entitas Berelasi
 
-Sesuai ketentuan penilaian (40 Poin), aplikasi menyediakan kontrol interaktif lengkap **Create, Read, Update, Delete** pada dua entitas berelasi utama:
+Aplikasi menyediakan kontrol interaktif lengkap **Create, Read, Update, Delete** pada dua entitas berelasi utama:
 
 ### 3.1 Entitas 1: `Appointment` (Antrean & Booking Konsultasi / Rujukan)
 1. **CREATE (C)**:
@@ -142,7 +140,7 @@ Sesuai ketentuan penilaian (40 Poin), aplikasi menyediakan kontrol interaktif le
 
 ## 4. Bukti Validasi Sisi Server (Zod v4) & Penolakan Input Tidak Sah
 
-Sesuai ketentuan penilaian (20 Poin), seluruh Server Actions menerapkan validasi skema Zod v4 di backend. Jika ada pengguna yang membypass validasi HTML peramban (`novalidate`) atau mengirim request langsung dari terminal cURL, server tetap menolak secara tegas:
+Server Actions menerapkan validasi skema Zod v4 di backend. Jika ada pengguna yang membypass validasi HTML peramban (`novalidate`) atau mengirim request langsung dari terminal cURL, server tetap menolak secara tegas:
 
 ```text
 ┌──────────────────────────────────────────────────────────────────────────┐
@@ -195,8 +193,6 @@ Pengujian dilakukan secara menyeluruh terhadap database PostgreSQL lokal menggun
 | **9** | **RELASI (1:N)** | `Patient` $\rightarrow$ `Appointment` | Integritas referensial pembuatan antrean kunjungan terikat ID pasien sah. | 1. Insert appointment dengan `patient_id: P-101`<br>2. Insert appointment dengan `patient_id` fiktif | Appointment untuk pasien sah berhasil; appointment untuk pasien fiktif ditolak DB. | PostgreSQL mengembalikan error FK Violation `Key (patient_id)=(...) is not present in table patients`. | **LULUS** |
 | **10** | **RELASI (Restrict)** | `Patient` $\rightarrow$ `MedicalRecord` | Perlindungan retensi 25 tahun: larangan menghapus pasien yang memiliki rekam medis (`onDelete: Restrict`). | 1. Jalankan `DELETE FROM patients WHERE id = 'P-101'` pada pasien yang memiliki RME | Penghapusan ditolak demi kepatuhan Pasal 21 Permenkes No. 24/2022. | PostgreSQL menolak dengan error `update or delete on table "patients" violates foreign key constraint on table "medical_records"`. | **LULUS** |
 
-> **Tingkat Kelulusan Skenario**: **10 / 10 Lulus (100%)** — Memenuhi ketentuan syarat kelulusan minimal 90%.
-
 ---
 
 ## 6. Pembuktian Persistensi Data Database PostgreSQL
@@ -218,30 +214,28 @@ Untuk membuktikan data tersimpan permanen di database fisik (bukan mock memory):
 Silakan ambil **5 tangkapan layar utama** berikut di peramban Anda untuk dilampirkan sebagai bukti pengerjaan Milestone 2:
 
 ### Screenshot 1: Implementasi CREATE & READ Antrean (`/pasien/booking`)
-- **Yang Ditampilkan**:
-  - Formulir pemesanan konsultasi di sisi kiri yang terisi data poli dan keluhan awal.
-  - Panel kanan *"Daftar Antrean & Booking Anda"* yang menampilkan kartu antrean hasil kueri database lengkap dengan status `PENDING_ARRIVAL`, nama dokter, faskes, dan PIN persetujuan.
+  ![alt text](image-7.png)
 
 ### Screenshot 2: Implementasi UPDATE & DELETE Antrean (`/pasien/booking`)
-- **Yang Ditampilkan**:
-  - Klik tombol **"Reschedule"** pada salah satu kartu antrean sehingga formulir edit tanggal dan sesi jam muncul di dalam kartu.
-  - Perlihatkan tombol merah **"Batalkan"** di sebelah tombol reschedule sebagai bukti fungsi Delete antrean.
+  ![alt text](image-6.png)
 
 ### Screenshot 3: Implementasi CRUD Izin Akses UU PDP (`/pasien/consent`)
-- **Yang Ditampilkan**:
   - Formulir *"Berikan Izin Akses Baru"* (Create).
+  ![alt text](image-4.png)
   - Tabel daftar izin akses aktif (Read) yang memuat tombol **"+48 Jam"** (Update perpanjang izin), tombol **"Cabut (Revoke)"**, dan tombol **"Hapus"** (Delete).
+  ![alt text](image-5.png)
 
 ### Screenshot 4: Bukti Penolakan Validasi Sisi Server (Zod Error Banner)
-- **Yang Ditampilkan**:
-  - Masukkan data tidak sah (misal di formulir registrasi atau booking dengan keluhan kurang dari 5 karakter).
-  - Tangkap layar banner pesan galat merah spesifik yang dihasilkan oleh penolakan Zod Server Action.
+  Data tidak sah dan pesan error Zod:
+  ![alt text](image-3.png)
 
 ### Screenshot 5: Inspeksi Visual Database PostgreSQL (Prisma Studio)
-- **Yang Ditampilkan**:
-  - Jalankan `npx prisma studio` di terminal lalu buka `http://localhost:5555`.
-  - Tangkap layar tabel **`Appointment`**, **`Patient`**, atau **`AccessGrant`** yang menampilkan baris data riil yang tersimpan di PostgreSQL lokal Anda.
-
+  Patient:
+  ![alt text](image.png)
+  Appointment:
+  ![alt text](image-1.png)
+  AccessGrant:
+  ![alt text](image-2.png)
 ---
 
 ## 8. Petunjuk Menjalankan Aplikasi Secara Mandiri

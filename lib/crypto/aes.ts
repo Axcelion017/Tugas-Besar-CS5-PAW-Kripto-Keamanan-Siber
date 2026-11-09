@@ -94,8 +94,97 @@ export async function decryptAES(
   return decoder.decode(decryptedBuf);
 }
 
+// Fungsi Enkripsi Berkas Biner (Citra Medis Rontgen / USG / Lab)
+export async function encryptBinaryAttachment(
+  binaryBuffer: ArrayBuffer,
+  keyHex: string,
+  aadText?: string
+): Promise<{ ciphertextBuffer: ArrayBuffer; ivHex: string; binaryHmac: string }> {
+  const encoder = new TextEncoder();
+  const rawKey = hexToBuf(keyHex);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+
+  const cryptoKey = await crypto.subtle.importKey(
+    "raw",
+    rawKey as BufferSource,
+    { name: "AES-GCM" },
+    false,
+    ["encrypt"]
+  );
+
+  const algorithmParams: AesGcmParams = {
+    name: "AES-GCM",
+    iv: iv as BufferSource,
+    tagLength: 128,
+  };
+
+  if (aadText) {
+    algorithmParams.additionalData = encoder.encode(aadText) as BufferSource;
+  }
+
+  const encryptedBuf = await crypto.subtle.encrypt(
+    algorithmParams,
+    cryptoKey,
+    binaryBuffer as BufferSource
+  );
+
+  // Hitung HMAC-SHA256 integritas biner
+  const hmacKey = await crypto.subtle.importKey(
+    "raw",
+    rawKey as BufferSource,
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const sig = await crypto.subtle.sign("HMAC", hmacKey, encryptedBuf as BufferSource);
+
+  return {
+    ciphertextBuffer: encryptedBuf,
+    ivHex: bufToHex(iv.buffer),
+    binaryHmac: bufToHex(sig),
+  };
+}
+
+// Fungsi Dekripsi Berkas Biner (Citra Medis)
+export async function decryptBinaryAttachment(
+  ciphertextBuffer: ArrayBuffer,
+  ivHex: string,
+  keyHex: string,
+  aadText?: string
+): Promise<ArrayBuffer> {
+  const encoder = new TextEncoder();
+  const rawKey = hexToBuf(keyHex);
+  const iv = hexToBuf(ivHex);
+
+  const cryptoKey = await crypto.subtle.importKey(
+    "raw",
+    rawKey as BufferSource,
+    { name: "AES-GCM" },
+    false,
+    ["decrypt"]
+  );
+
+  const algorithmParams: AesGcmParams = {
+    name: "AES-GCM",
+    iv: iv as BufferSource,
+    tagLength: 128,
+  };
+
+  if (aadText) {
+    algorithmParams.additionalData = encoder.encode(aadText) as BufferSource;
+  }
+
+  return await crypto.subtle.decrypt(
+    algorithmParams,
+    cryptoKey,
+    ciphertextBuffer as BufferSource
+  );
+}
+
 // Alias fungsi (dideklarasikan SATU KALI saja di bawah agar tidak duplikat)
 export const encrypt = encryptAES;
 export const decrypt = decryptAES;
 export const encryptAES_GCM = encryptAES;
 export const decryptAES_GCM = decryptAES;
+export const aesGcmEncrypt = encryptAES;
+export const aesGcmDecrypt = decryptAES;

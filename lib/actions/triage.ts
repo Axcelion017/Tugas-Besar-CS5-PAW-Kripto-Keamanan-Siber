@@ -99,7 +99,13 @@ export async function submitTriageServerAction(
     return {
       success: true,
       message: "Pengkajian tanda vital dan kategori triase berhasil disimpan ke basis data.",
-      data: saved,
+      data: {
+        ...saved,
+        temperature: Number(saved.temperature),
+        beratBadan: saved.beratBadan ? Number(saved.beratBadan) : null,
+        tinggiBadan: saved.tinggiBadan ? Number(saved.tinggiBadan) : null,
+        assessedAt: saved.assessedAt.toISOString(),
+      },
     };
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : "Kesalahan basis data";
