@@ -3,7 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { saveSession } from "@/lib/auth/auth";
+import { saveSession, loginUser } from "@/lib/auth/auth";
 import { loginServerAction } from "@/lib/actions/auth";
 
 export default function HomePage() {
@@ -20,6 +20,14 @@ export default function HomePage() {
     } catch {
       // Fallback
     }
+
+    const local = loginUser(user, pass);
+    if (local) {
+      saveSession(local);
+      router.push("/beranda");
+      return;
+    }
+
     router.push("/login");
   };
 

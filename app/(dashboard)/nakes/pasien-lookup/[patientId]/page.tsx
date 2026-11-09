@@ -12,6 +12,15 @@ import {
   addLabResultToMedicalRecordServerAction,
   addProcedureToMedicalRecordServerAction,
 } from "@/lib/actions/clinical";
+import {
+  MOCK_PATIENTS,
+  MOCK_ENCRYPTED_RECORDS,
+  MOCK_APPOINTMENTS,
+  getStorageData,
+  Patient,
+  EncryptedMedicalRecord,
+  Appointment,
+} from "@/lib/db/mockData";
 import { PrintableMedicalResume } from "@/components/clinical/PrintableMedicalResume";
 
 interface DecryptedSoapData {
@@ -165,8 +174,97 @@ export default function DoctorPatientDetailPage({
       const session = getUserSession();
       const doctorId = session?.id || "DOC-01";
 
-      const res = await getPatientDetailForDoctorServerAction(patientId, doctorId);
-      setData(res);
+      try {
+        const res = await getPatientDetailForDoctorServerAction(patientId, doctorId);
+        if (res.success && res.patient) {
+          setData(res);
+          setIsLoading(false);
+          return;
+        }
+      } catch (err) {
+        console.warn("Failed fetching patient from DB, trying fallback:", err);
+      }
+
+      // Fallback ke data mock lokal jika server action tidak menemukan
+      const allPatients = getStorageData<Patient[]>("resilio_patients", MOCK_PATIENTS);
+      const targetP = allPatients.find((p) => p.id === patientId || p.nik === patientId);
+
+      if (targetP) {
+        const allRecords = getStorageData<EncryptedMedicalRecord[]>("resilio_records", MOCK_ENCRYPTED_RECORDS);
+        const patientRecords = allRecords.filter((r) => r.patientId === targetP.id);
+        const allApts = getStorageData<Appointment[]>("resilio_appointments", MOCK_APPOINTMENTS);
+        const patientApts = allApts.filter((a) => a.pasienId === targetP.id);
+
+        setData({
+          success: true,
+          accessAllowed: true,
+          patient: {
+            id: targetP.id,
+            nik: targetP.nik,
+            name: targetP.name,
+            mrn: targetP.mrn,
+            gender: targetP.gender,
+            bloodType: targetP.bloodType,
+            birthDate: targetP.birthDate || null,
+            phone: targetP.emergencyContact?.phone || "-",
+            allergies: targetP.allergies || [],
+            encryptionKeyHex: targetP.encryptionKeyHex,
+          },
+          medicalRecords: patientRecords.map((r) => ({
+            id: r.recordId,
+            patientId: r.patientId,
+            doctorId: "DOC-01",
+            dokterNama: r.dokterNama || "dr. Andi Pratama, Sp.PD",
+            dokterSpecialty: "Spesialis Penyakit Dalam",
+            dokterStr: r.dokterStr || "STR-3171-88921",
+            dokterSip: "503/SIP.01/2026",
+            faskesNama: r.faskesNama || "RSUP Dr. Sardjito",
+            primaryIcd10: r.primaryIcd10,
+            diagnosisShort: r.diagnosisShort,
+            encryptedPayload: r.encryptedPayload,
+            ivHex: r.ivHex,
+            hmacDigest: r.hmacDigest,
+            version: r.version,
+            addendumReason: null,
+            createdAt: r.timestamp || "15 Oktober 2026",
+            medicalImages: (r.medicalImages || []).map((img) => ({
+              id: img.id,
+              title: img.title,
+              type: img.type,
+              encryptedBlobHex: img.encryptedBlobHex,
+              mimeType: img.mimeType,
+              fileSizeBytes: 0,
+              notes: img.notes || null,
+              createdAt: "15 Oktober 2026",
+            })),
+          })),
+          appointments: patientApts.map((a) => ({
+            id: a.id,
+            poli: a.poli,
+            tanggal: a.tanggal,
+            status: a.status as "PENDING_ARRIVAL" | "WAITING_TRIAGE" | "WAITING_DOCTOR" | "IN_EXAMINATION" | "WAITING" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED",
+            keluhanAwal: a.keluhanAwal,
+            triageAssessment: a.triaseVitals
+              ? {
+                  id: `TRG-${a.id}`,
+                  systolic: a.triaseVitals.systolic,
+                  diastolic: a.triaseVitals.diastolic,
+                  heartRate: a.triaseVitals.heartRate,
+                  temperature: Number(a.triaseVitals.temperature),
+                  spo2: a.triaseVitals.spo2,
+                  respiratoryRate: a.triaseVitals.respiratoryRate,
+                  beratBadan: a.triaseVitals.beratBadan ? Number(a.triaseVitals.beratBadan) : null,
+                  tinggiBadan: a.triaseVitals.tinggiBadan ? Number(a.triaseVitals.tinggiBadan) : null,
+                  triaseLevel: (a.triaseLevel as string) || "HIJAU",
+                  catatanPerawat: "Pengkajian triase fisik di loket",
+                }
+              : null,
+          })),
+        } as unknown as Awaited<ReturnType<typeof getPatientDetailForDoctorServerAction>>);
+      } else {
+        setData(null);
+      }
+
       setIsLoading(false);
     }
 

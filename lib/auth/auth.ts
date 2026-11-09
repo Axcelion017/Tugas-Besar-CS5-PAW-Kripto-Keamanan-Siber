@@ -155,16 +155,52 @@ export function loginUser(identifier: string, password: string): UserSession | n
   return session;
 }
 
-// Pengambilan sesi aktif
+// Pengambilan sesi aktif (Resilient: mendeteksi localStorage dan self-healing via cookie)
 export function getUserSession(): UserSession | null {
   if (typeof window === "undefined") return null;
   const stored = localStorage.getItem("resilio_session");
-  if (!stored) return null;
-  try {
-    return JSON.parse(stored) as UserSession;
-  } catch {
-    return null;
+  if (stored) {
+    try {
+      return JSON.parse(stored) as UserSession;
+    } catch {
+      // lanjut fallback
+    }
   }
+
+  // Self-healing fallback: jika localStorage kosong, pulihkan dari cookie peran aktif
+  try {
+    const match = document.cookie.match(/resilio_user_role=([^;]+)/);
+    if (match && match[1]) {
+      const activeRole = match[1].trim();
+      const demo = DEMO_USERS.find((u) => normalizeRole(u.role) === activeRole);
+      if (demo) {
+        const recovered: UserSession = {
+          id: demo.id,
+          name: demo.name,
+          username: demo.username,
+          role: demo.role,
+          nik: demo.nik,
+          strNumber: demo.strNumber,
+          sipNumber: demo.sipNumber,
+          specialization: demo.specialization,
+          faskesId: demo.faskesId,
+          faskesName: demo.faskesName,
+          status: demo.status,
+          allergies: demo.allergies,
+          bloodType: demo.bloodType,
+          phone: demo.phone,
+          encryptionKeyHex: demo.encryptionKeyHex,
+          posisiStaf: demo.posisiStaf,
+        };
+        localStorage.setItem("resilio_session", JSON.stringify(recovered));
+        return recovered;
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  return null;
 }
 
 export const getSession = getUserSession;
