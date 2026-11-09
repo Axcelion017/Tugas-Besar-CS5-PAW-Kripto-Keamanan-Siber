@@ -13,6 +13,7 @@ import {
 import { TriaseSchema } from "@/lib/validations/triage";
 import { submitTriageServerAction } from "@/lib/actions/triage";
 import { getAppointmentsServerAction } from "@/lib/actions/appointment";
+import { PrintableMedicalResume } from "@/components/clinical/PrintableMedicalResume";
 
 export default function TriasePemeriksaanAwalPage() {
   const router = useRouter();
@@ -32,6 +33,7 @@ export default function TriasePemeriksaanAwalPage() {
   const [catatanPerawat, setCatatanPerawat] = useState("");
   const [notif, setNotif] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isPrintOpen, setIsPrintOpen] = useState(false);
 
   useEffect(() => {
     async function loadData() {
@@ -183,20 +185,32 @@ export default function TriasePemeriksaanAwalPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <div className="flex items-center gap-2 text-xs font-bold text-amber-700 uppercase tracking-wider">
-          <Link href="/staf" className="hover:underline">
-            Meja Staf Nakes
-          </Link>
-          <span>/</span>
-          <span>Pemeriksaan Awal & Triase Keperawatan (UR-S02)</span>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2 text-xs font-bold text-amber-700 uppercase tracking-wider">
+            <Link href="/staf" className="hover:underline">
+              Meja Staf Nakes
+            </Link>
+            <span>/</span>
+            <span>Pemeriksaan Awal & Triase Keperawatan (UR-S02)</span>
+          </div>
+          <h1 className="text-2xl font-black text-slate-900 tracking-tight mt-1">
+            Input Tanda-Tanda Vital Awal & Penentuan Tingkat Triase
+          </h1>
+          <p className="text-xs text-slate-500 font-medium">
+            Perawat mengukur tensi, suhu, dan memilah kegawatan pasien (Hijau/Kuning/Merah) sebelum masuk ke ruang konsultasi dokter.
+          </p>
         </div>
-        <h1 className="text-2xl font-black text-slate-900 tracking-tight mt-1">
-          Input Tanda-Tanda Vital Awal & Penentuan Tingkat Triase
-        </h1>
-        <p className="text-xs text-slate-500 font-medium">
-          Perawat mengukur tensi, suhu, dan memilah kegawatan pasien (Hijau/Kuning/Merah) sebelum masuk ke ruang konsultasi dokter.
-        </p>
+
+        {selectedApt && (
+          <button
+            type="button"
+            onClick={() => setIsPrintOpen(true)}
+            className="px-4 py-2.5 bg-slate-900 hover:bg-black text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-sm transition cursor-pointer self-start md:self-auto shrink-0"
+          >
+            <span>Cetak Lembar Triase & Kunjungan</span>
+          </button>
+        )}
       </div>
 
       {notif && (
@@ -427,6 +441,42 @@ export default function TriasePemeriksaanAwalPage() {
           </form>
         </div>
       </div>
+
+      {/* Modal Cetak Lembar Triase & Kunjungan Pasien oleh Staf Nakes */}
+      {isPrintOpen && selectedApt && (
+        <PrintableMedicalResume
+          data={{
+            recordId: `TRIAGE-${selectedApt.id}`,
+            faskesNama: selectedApt.faskesNama || "RSUP Dr. Sardjito",
+            patientNama: selectedApt.pasienNama,
+            patientNik: selectedApt.pasienNik,
+            patientMrn: "MRN-2026-00101",
+            tanggalPeriksa: selectedApt.tanggal,
+            poli: selectedApt.poli,
+            dokterNama: selectedApt.dokterNama,
+            dokterSpecialty: "Spesialis Penyakit Dalam",
+            perawatNama: "Ns. Maya Indah, S.Kep",
+            perawatNip: "198804122015022001",
+            perawatPosisi: "Perawat Pelaksana Triase & Admisi",
+            triaseLevel: `${triaseLevel} (${triaseLevel === "MERAH" ? "Gawat Darurat" : triaseLevel === "KUNING" ? "Mendesak / Urgent" : "Non-Urgent"})`,
+            triageVitals: {
+              systolic: Number(systolic),
+              diastolic: Number(diastolic),
+              heartRate: Number(heartRate),
+              temperature: Number(temperature),
+              spo2: Number(spo2),
+              respiratoryRate: Number(respiratoryRate),
+            },
+            tindakanStaf: catatanPerawat || "Pengkajian fisik awal, pengukuran tanda-tanda vital, dan klasifikasi prioritas triase",
+            subjective: selectedApt.keluhanAwal,
+            diagnosisShort: "Pemeriksaan Awal Rawat Jalan (Triase)",
+            prescriptions: ["Menunggu telaah resep DPJP"],
+            edukasiDokter: "Pasien diarahkan ke ruang tunggu periksa dokter DPJP.",
+            version: 1,
+          }}
+          onClose={() => setIsPrintOpen(false)}
+        />
+      )}
     </div>
   );
 }

@@ -30,6 +30,47 @@ Dokumen pencatatan penggunaan asisten kecerdasan buatan (AI) sesuai kebijakan in
 
 ---
 
+## 2026-11-08 — Integrasi Standar RME Permenkes RI No. 24/2022, Recharts, & Citra Biner
+
+- **Tool**: Hermes Coding Agent
+- **Tujuan**: Mengintegrasikan cetak biru spesifikasi sistem `SPECIFICATION.md` mencakup Permenkes RI No. 24/2022, enkripsi citra biner AES-GCM + HMAC, visualisasi grafik Recharts, formulir 5-tab dokter, dan wrapper IndexedDB.
+- **Ringkasan Prompt**:
+  1. "Dokumen spesifikasi teknis dan arsitektur sistem (System Blueprint & Technical Requirement Specification) untuk Resilio-Health di bawah ini dirancang secara terstruktur..."
+  2. "lakukan penyesuaian dengan yang baru ini"
+  3. "Setuju, jalankan"
+- **Bagian yang Dihasilkan / Dimodifikasi**:
+  - `SPECIFICATION.md`: Cetak biru lengkap arsitektur sistem, RBAC 4 peran, 2 kelompok besar RME (Administratif & Klinis), skema SQL, alur kriptografi biner, dan alur offline PWA.
+  - `types/ehr.ts`: Definisi antarmuka TypeScript terstandarisasi untuk `AdministrativeRecord` dan `ClinicalRecordPayload` (9 sub-komponen Permenkes 24/2022).
+  - `lib/crypto/aes.ts` & `lib/crypto/hmac.ts`: Penambahan fungsi `encryptBinaryAttachment` dan `decryptBinaryAttachment` (ArrayBuffer) serta alias standar `aesGcmEncrypt`, `aesGcmDecrypt`, `hmacSha256Sign`, dan `hmacSha256Verify`.
+  - `lib/storage/indexedDb.ts`: Wrapper IndexedDB `resilio_offline_db` dengan 3 Object Stores (`cached_active_patients`, `offline_clinical_outbox`, `offline_media_blobs`).
+  - `public/sw.js`: Service Worker PWA dengan dukungan caching aset statis dan Background Sync API (`sync-medical-records`).
+  - `prisma/schema.prisma` & Migrasi `20261108063337_enhance_ehr_permenkes24`: Penambahan kolom `vitalSignsTrend`, `claimStatus` pada `MedicalRecord`, dan `fileSizeBytes`, `binaryHmac` pada `MedicalImage`.
+  - `scripts/harden-os.sh` & `scripts/setup-docker-node.sh`: Skrip otomatisasi hardening sistem operasi Ubuntu 22.04 LTS (SSH key-only, root disabled, UFW, sysctl) dan audit Lynis.
+  - `scripts/verify-hardening.sh`: Skrip verifikasi mandiri kepatuhan seluruh rubrik penugasan Tugas 2 KKS berpenanda `sec-0.2`.
+  - `app/(dashboard)/pasien/rekam-medis/page.tsx` & `[recordId]/page.tsx`: Penambahan helper `parsePrescriptionDetail` untuk menyajikan detail penggunaan obat (dosis, aturan minum, cara minum, indikasi, peringatan).
+  - `components/clinical/PrintableMedicalResume.tsx`: Perombakan format lembar cetak resume rekam medis menjadi dokumen administratif kontinu standar rumah sakit tanpa kotak-kotak terpisah, dilengkapi informasi lengkap pasien, lokasi faskes/server, dan tombol tutup dokumen.
+  - `app/(dashboard)/beranda/page.tsx`: Halaman Beranda terpadu untuk seluruh pengguna (Pasien, Dokter DPJP, Staf Nakes, Admin) yang memuat ringkasan informasi penting, status kedaulatan kriptografi, kepatuhan Permenkes 24/2022, dan pintasan aksi navigasi.
+  - `app/(dashboard)/nakes/jadwal/page.tsx`: Halaman fitur mandiri jadwal praktik dokter berbasis kalender mingguan (Senin s.d. Minggu) dengan filter faskes rumah sakit dan alokasi waktu pelayanan.
+  - `app/(dashboard)/nakes/periksa/[bookingId]/page.tsx`: Integrasi fitur rujukan dokter lintas rumah sakit dengan pemilih faskes resmi, dokter spesialis konsulen, dan tingkat urgensi rujukan.
+  - `components/clinical/DoctorCalendarSchedule.tsx`: Komponen visual jadwal praktik dokter poliklinik berbasis kalender interaktif dengan mode Timeline slot jam (08:00 - 17:00 WIB) dan mode Grid kartu blok waktu, dilengkapi durasi mulai-selesai dan indikator warna skala prioritas.
+  - `components/clinical/PrintableMedicalResume.tsx`: Komponen cetak dokumen resmi resume rekam medis rumah sakit dengan dukungan `@media print` yang dapat diakses oleh Dokter, Staf Nakes, dan Pasien.
+  - `components/clinical/VitalSignsTrendChart.tsx`: Komponen grafik tren tanda vital dinamis berbasis Recharts.
+  - `app/(dashboard)/nakes/pasien-lookup/page.tsx`: Transformasi fitur pencarian menjadi Daftar Pasien & Status Rekam Medis terpadu yang menampilkan 4 metrik (Jumlah Pasien, Jumlah Antrean, Belum Ditandatangani, Sudah Ditandatangani), filter cepat, serta list pasien interaktif yang terhubung ke PostgreSQL via `getDoctorPatientListServerAction`.
+  - `app/(dashboard)/nakes/pasien-lookup/[patientId]/page.tsx`: Halaman detail rekam medis pasien yang dipilih oleh dokter, menyajikan kartu identitas, tanda vital triase, riwayat dokumen SOAP, dekripsi berkas klinis, dan integrasi modal cetak resume medis resmi.
+  - `app/(dashboard)/pasien/rekam-medis/page.tsx` & `[recordId]/page.tsx`: Pembersihan simbol visual berwarna menjadi enterprise clean UI dan implementasi `smartDecryptPayload` sehingga pasien dapat membuka dan membaca detail rekam medis pribadinya secara instan dan aman.
+  - `app/(dashboard)/pasien/page.tsx`: Integrasi grafik tren tanda vital dan pengambilan data RME riil via `getMedicalRecordsServerAction`.
+  - `app/(dashboard)/nakes/periksa/[bookingId]/page.tsx`: Restrukturisasi formulir klinis menjadi 5-Tab interaktif (Administratif, Anamnesis/Fisik GCS, ICD-10/Penunjang, Penatalaksanaan Resep, CPPT/Resume).
+  - `app/(dashboard)/pasien/rekam-medis/page.tsx` & `[recordId]/page.tsx`: Desain ulang tampilan rekam medis pasien dengan kartu atribusi dokter DPJP yang mendiagnosis dan staf perawat yang melakukan tindakan fisik awal, penyajian kartu diagnosis awam, resep obat per-kartu, tanda vital, dan integrasi ke Server Actions PostgreSQL.
+  - `tests/crypto.test.ts`: Penambahan skenario pengujian unit ke-8 untuk enkripsi dan verifikasi keutuhan biner citra medis (100% lulus).
+- **Cara Verifikasi**:
+  - `npx prisma migrate dev`: Migrasi database diterapkan sukses ke PostgreSQL lokal `resilio_health`.
+  - `npx prisma db seed`: Seeder idempoten berhasil dieksekusi 100%.
+  - `npx vitest run`: Seluruh 33 uji unit otomatis lulus 100%.
+  - `npm run lint`: 0 error, 0 warning.
+  - `npm run build`: Kompilasi 32 rute Next.js App Router sukses 100%.
+
+---
+
 ## 2026-10-30 — Integrasi Basis Data PostgreSQL Riil & Skema Prisma 7 Seeding Idempoten
 
 - **Tool**: Hermes Coding Agent

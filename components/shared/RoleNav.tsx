@@ -7,6 +7,7 @@ import { UserSession, logoutUser, normalizeRole } from "@/lib/auth/auth";
 import { logoutServerAction } from "@/lib/actions/auth";
 import { LogoutModal } from "@/components/ui/LogoutModal";
 import {
+  IconHome,
   IconActivity,
   IconSearch,
   IconCalendar,
@@ -49,6 +50,7 @@ export function RoleNav({ session }: RoleNavProps) {
 
   // 1. Navigasi Pasien
   const pasienLinks = [
+    { href: "/beranda", label: "Beranda Terpadu", icon: IconHome },
     { href: "/pasien", label: "Ringkasan Kesehatan", icon: IconActivity },
     { href: "/pasien/profil", label: "Profil & e-KYC", icon: IconUsers },
     { href: "/pasien/faskes", label: "Pencarian Faskes", icon: IconSearch },
@@ -61,14 +63,17 @@ export function RoleNav({ session }: RoleNavProps) {
 
   // 2. Navigasi Tenaga Medis (Dokter DPJP)
   const nakesLinks = [
+    { href: "/beranda", label: "Beranda Terpadu", icon: IconHome },
     { href: "/nakes", label: "Antrean & Jadwal Hari Ini", icon: IconStethoscope },
-    { href: "/nakes/pasien-lookup", label: "Pencarian Pasien (NIK & Break-Glass)", icon: IconSearch },
+    { href: "/nakes/jadwal", label: "Jadwal Praktik Mingguan", icon: IconCalendar },
+    { href: "/nakes/pasien-lookup", label: "Daftar Pasien & Rekam Medis", icon: IconSearch },
     { href: "/nakes/rujukan", label: "Surat Rujukan Digital", icon: IconSend },
     { href: "/nakes/offline-sync", label: "Status Sinkronisasi Offline", icon: IconRefreshCw },
   ];
 
   // 3. Navigasi Staf Nakes Faskes (Perawat Triase & Admisi) - ROLE BARU
   const stafLinks = [
+    { href: "/beranda", label: "Beranda Terpadu", icon: IconHome },
     { href: "/staf", label: "Admisi & Check-in Antrean", icon: IconCalendar },
     { href: "/staf/triase", label: "Triase & Tanda Vital Awal", icon: IconActivity },
     { href: "/staf/assign-dpjp", label: "Pengarahan Dokter (DPJP)", icon: IconUsers },
@@ -77,6 +82,7 @@ export function RoleNav({ session }: RoleNavProps) {
 
   // 4. Navigasi Admin Regulator (Kemenkes)
   const adminLinks = [
+    { href: "/beranda", label: "Beranda Terpadu", icon: IconHome },
     { href: "/admin", label: "Ringkasan Eksekutif", icon: IconBarChart },
     { href: "/admin/verifikasi-kyc", label: "Verifikasi Visual e-KYC", icon: IconShield },
     { href: "/admin/verifikasi-kyd", label: "Verifikasi Dokumen e-KYD", icon: IconFileText },

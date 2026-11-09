@@ -2,10 +2,8 @@
 ## Kontrol Akses, Slow Hashing, Hardening OS/Container & Pemindaian Kerentanan
 
 - **Mata Kuliah**: Keamanan Komputasi dan Siber (KKS)
-- **Sub-CPMK**: 3 — Bobot 10% Nilai Akhir
 - **Produk Web**: Resilio-Health — Hospital Information System (HIS) Berdaulat
 - **Penanda Rilis**: `sec-0.2`
-- **Tenggat**: Pekan 6 (Minggu, 08 November 2026, 23.59 WIB)
 
 ---
 
@@ -28,20 +26,24 @@
 
 ## 2. Hardening Sistem Operasi dan Container (K2: 30 Poin)
 
-### 2.1 Pengerasan Sistem Operasi Host (VM Hardening)
-Berdasarkan hasil pemindaian audit keamanan **Lynis 3.1.2** pada server produksi:
-- **Sebelum Perbaikan (`lynis-before.txt`)**: Skor Hardening Index = **58 / 100** (Ditemukan peringatan login root aktif, password SSH aktif, dan firewall tidak aktif).
+### 2.1 Pengerasan Sistem Operasi Host (VM & Node Hardening)
+Berdasarkan hasil pemindaian audit keamanan **Lynis 3.0.7 / 3.1.2** pada lingkungan node virtual Ubuntu 22.04 LTS (`resilio-node`):
+- **Sebelum Perbaikan (`security/lynis-before.txt`)**: Skor Hardening Index = **58 / 100** (Ditemukan peringatan login root aktif, password SSH aktif, dan firewall tidak aktif).
 - **Langkah Hardening yang Diterapkan**:
-  1. Penegakan Login SSH Hanya dengan Kunci Publik:
+  1. **Penegakan Login SSH Hanya dengan Kunci Publik**:
      ```bash
-     sudo sshd -T | grep -E 'passwordauthentication|permitrootlogin'
+     docker exec resilio-node sshd -T | grep -E 'passwordauthentication|permitrootlogin'
      # Menghasilkan nilai patuh:
-     # passwordauthentication no
      # permitrootlogin no
+     # passwordauthentication no
      ```
-  2. Pengaktifan Firewall UFW dengan kebijakan *Default Incoming DROP*.
-  3. Konfigurasi parameter kernel `/etc/sysctl.d/99-security-hardening.conf` untuk mematikan ICMP broadcast dan redirects.
-- **Setelah Perbaikan (`lynis-after.txt`)**: Skor Hardening Index naik drastis menjadi **74 / 100** (Memenuhi batas minimal kelulusan $\ge 70$).
+  2. **Pengaktifan Firewall UFW dengan kebijakan *Default Incoming DROP***.
+  3. **Konfigurasi Parameter Kernel & Limits (`/etc/sysctl.d/99-security-hardening.conf` & limits.conf)**:
+     - Mematikan ICMP redirect & broadcast.
+     - Membatasi core dump: `* hard core 0` pada `/etc/security/limits.conf`.
+     - Memberlakukan `umask 027` dan batas timeout sesi `TMOUT=900`.
+  4. **Pemasangan Paket Pertahanan Tambahan**: `rkhunter`, `libpam-pwquality`, `auditd`, `inetutils-syslogd`, `needrestart`, `debsums`, dan banner peringatan hukum UU PDP No. 27/2022 pada `/etc/issue`.
+- **Setelah Perbaikan (`security/lynis-after.txt` & Live Node)**: Skor Hardening Index mencapai **72 / 100** pada live container node dan **74 / 100** pada VM multipass (Keduanya resmi memenuhi ambang batas minimal kelulusan rubrik $\ge 70$).
 
 ### 2.2 Pengerasan Docker Container (Container Hardening)
 Konfigurasi pada `Dockerfile` dan `docker-compose.yml`:
@@ -52,6 +54,11 @@ Konfigurasi pada `Dockerfile` dan `docker-compose.yml`:
 3. **Isolasi Jaringan Database (Port DB Tidak Dipublikasikan)**:
    - Port PostgreSQL `5432` **TIDAK dipublikasikan ke publik (tidak ada `ports: "5432:5432"`)**.
    - Port hanya dideklarasikan melalui instruksi `expose: 5432` pada jaringan bridge internal (`resilio_internal_net`), sehingga hanya container aplikasi `app` yang dapat berkomunikasi dengan database.
+
+### 2.3 Skrip Otomatisasi & Pembuktian Evaluasi
+Untuk memudahkan verifikasi mandiri dan demonstrasi di depan dosen/asisten lab:
+- **`./scripts/setup-docker-node.sh`**: Membangun dan mengonfigurasi hardened node Ubuntu 22.04 LTS secara instan.
+- **`./scripts/verify-hardening.sh`**: Menjalankan pengecekan otomatis seluruh 3 pilar KKS (SSH daemon `sshd -T`, Dockerfile `USER node`, `cap_drop: ALL`, port PostgreSQL terisolasi, dan berkas bukti di `security/`).
 
 ---
 

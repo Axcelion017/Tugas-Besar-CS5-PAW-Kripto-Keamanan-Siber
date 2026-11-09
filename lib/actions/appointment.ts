@@ -135,7 +135,24 @@ export async function getAppointmentsServerAction(filters?: {
       orderBy: { createdAt: "desc" },
     });
 
-    return { success: true, data: appointments };
+    // Sanitasi tipe Prisma.Decimal dan Date menjadi plain objects untuk Client Components
+    const serializedAppointments = appointments.map((apt) => ({
+      ...apt,
+      tanggal: apt.tanggal.toISOString(),
+      createdAt: apt.createdAt.toISOString(),
+      checkInTime: apt.checkInTime ? apt.checkInTime.toISOString() : null,
+      triageAssessment: apt.triageAssessment
+        ? {
+            ...apt.triageAssessment,
+            temperature: Number(apt.triageAssessment.temperature),
+            beratBadan: apt.triageAssessment.beratBadan ? Number(apt.triageAssessment.beratBadan) : null,
+            tinggiBadan: apt.triageAssessment.tinggiBadan ? Number(apt.triageAssessment.tinggiBadan) : null,
+            assessedAt: apt.triageAssessment.assessedAt.toISOString(),
+          }
+        : null,
+    }));
+
+    return { success: true, data: serializedAppointments };
   } catch (error: unknown) {
     console.warn("Get Appointments Error:", error);
     return { success: false, data: [] };

@@ -43,3 +43,5 @@ export async function verifyHMAC(
 }
 
 export const createHMAC = generateHMAC;
+export const hmacSha256Sign = generateHMAC;
+export const hmacSha256Verify = verifyHMAC;

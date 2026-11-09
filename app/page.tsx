@@ -3,7 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { saveSession, normalizeRole } from "@/lib/auth/auth";
+import { saveSession } from "@/lib/auth/auth";
 import { loginServerAction } from "@/lib/actions/auth";
 
 export default function HomePage() {
@@ -14,8 +14,7 @@ export default function HomePage() {
       const res = await loginServerAction(user, pass);
       if (res.success && res.session) {
         saveSession(res.session);
-        const target = res.targetRole || normalizeRole(res.session.role);
-        router.push(`/${target}`);
+        router.push("/beranda");
         return;
       }
     } catch {

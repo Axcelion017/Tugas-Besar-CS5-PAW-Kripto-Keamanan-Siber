@@ -779,6 +779,8 @@ Menyimpan catatan rekam medis SOAP terenkripsi *Zero-Knowledge* (AES-256-GCM + H
 | `hmac_digest` | `CHAR(64)` | Tidak | `CHECK length = 64` | Tag keutuhan 256-bit HMAC-SHA256 (*Tamper Detection*). |
 | `version` | `INT` | Tidak | `1` | Nomor versi berkas (Versi 1, 2, dst. untuk Addendum). |
 | `addendum_reason` | `TEXT` | Ya | `NULL` | Alasan medikolegal revisi catatan rekam medis. |
+| `vital_signs_trend`| `JSONB` | Ya | `NULL` | Ringkasan metrik tanda vital terenkripsi untuk render cepat grafik tren Recharts (Permenkes 24/2022). |
+| `claim_status` | `VARCHAR(30)` | Tidak | `'DRAFT'` | Status integrasi klaim pembiayaan BPJS INA-CBGs / asuransi. |
 | `is_break_glass` | `BOOLEAN` | Tidak | `FALSE` | Indikator akses darurat IGD pasien koma/kritis. |
 | `break_glass_reason`| `TEXT` | Ya | `NULL` | Alasan kegawatan klinis pemecahan kaca akses darurat. |
 | `created_at` | `TIMESTAMPTZ` | Tidak | `CURRENT_TIMESTAMP` | Waktu pengesahan tanda tangan rekam medis. |
@@ -798,6 +800,8 @@ Menyimpan lampiran citra diagnostik biner berkapasitas besar (Rontgen Thorax, US
 | `iv_hex` | `CHAR(24)` | Tidak | `CHECK length = 24` | 96-bit IV unik per berkas gambar. |
 | `hmac_digest` | `CHAR(64)` | Tidak | `CHECK length = 64` | Tag digest integritas biner citra medis. |
 | `mime_type` | `VARCHAR(50)` | Tidak | - | Tipe konten berkas (misal: `image/jpeg`, `image/png`). |
+| `file_size_bytes` | `BIGINT` | Ya | `NULL` | Ukuran berkas citra biner dalam satuan bytes. |
+| `binary_hmac` | `VARCHAR(128)`| Ya | `NULL` | Hash integritas biner HMAC-SHA256 pencegah manipulasi citra radiologi. |
 | `notes` | `TEXT` | Ya | `NULL` | Catatan dokter spesialis radiologi/patologi. |
 | `created_at` | `TIMESTAMPTZ` | Tidak | `CURRENT_TIMESTAMP` | Waktu unggah citra terenkripsi. |
 
