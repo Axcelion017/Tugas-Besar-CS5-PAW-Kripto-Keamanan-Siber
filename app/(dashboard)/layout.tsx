@@ -59,7 +59,9 @@ export default function DashboardLayout({
         <header className="bg-white/90 backdrop-blur-md border-b border-slate-200 sticky top-0 z-20 px-4 sm:px-6 py-3 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
             <h2 className="text-xs sm:text-sm font-black text-slate-800 uppercase tracking-wider truncate">
-              {pathname.startsWith("/pasien")
+              {pathname === "/beranda"
+                ? "Beranda Terpadu Resilio-Health"
+                : pathname.startsWith("/pasien")
                 ? "Portal Pasien Mandiri"
                 : pathname.startsWith("/nakes")
                 ? "Stasiun Kerja Dokter (DPJP)"
