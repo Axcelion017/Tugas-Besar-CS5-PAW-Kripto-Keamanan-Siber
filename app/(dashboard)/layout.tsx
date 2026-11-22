@@ -60,7 +60,7 @@ export default function DashboardLayout({
           <div className="flex items-center gap-2 min-w-0">
             <h2 className="text-xs sm:text-sm font-black text-slate-800 uppercase tracking-wider truncate">
               {pathname === "/beranda"
-                ? "Beranda Terpadu JagaMedis"
+                ? "Beranda Terpadu Resilio-Health"
                 : pathname.startsWith("/pasien")
                 ? "Portal Pasien Mandiri"
                 : pathname.startsWith("/nakes")
