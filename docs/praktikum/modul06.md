@@ -1,4 +1,4 @@
-# Dokumen Teknis Modul 6 — PostgreSQL dan Prisma ORM
+# Dokumen Teknis Modul 6 — PostgreSQL dan Prisma ORM (JagaMedis)
 
 Nama/NIM   : Michael Alexander Newton (105224017)
 Repositori : https://github.com/Axcelion017/Tugas-Besar-CS5-PAW-Kripto-Keamanan-Siber
@@ -8,7 +8,7 @@ Repositori : https://github.com/Axcelion017/Tugas-Besar-CS5-PAW-Kripto-Keamanan-
 ## 1. Rancangan Data
 
 ### Diagram Dua Entitas, Relasi, Kunci, dan Constraint Unik
-Pada sistem Resilio-Health, dua entitas relasional utama yang menjadi poros pengelolaan alur pasien dan antrean rumah sakit adalah entitas **`Patient` (Pasien)** dan **`Appointment` (Janji Temu / Antrean Kunjungan)**.
+Pada sistem JagaMedis, dua entitas relasional utama yang menjadi poros pengelolaan alur pasien dan antrean rumah sakit adalah entitas **`Patient` (Pasien)** dan **`Appointment` (Janji Temu / Antrean Kunjungan)**.
 
 ```text
 ┌─────────────────────────────────────────┐
@@ -356,7 +356,7 @@ if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 
 ### Tabel Operasi: Entitas, Aksi / Halaman, Metode Prisma, Galat yang Ditangani
 
-Sistem Resilio-Health mengimplementasikan operasi CRUD penuh pada entitas `Appointment` dan `AccessGrant`:
+Sistem JagaMedis mengimplementasikan operasi CRUD penuh pada entitas `Appointment` dan `AccessGrant`:
 
 | Entitas | Operasi | Aksi / Halaman Web | Server Action & Metode Prisma | Galat Prisma yang Ditangani |
 | :--- | :---: | :--- | :--- | :--- |

@@ -517,7 +517,7 @@ export default function PasienProfilPage() {
                 Perlindungan Privasi Siber (Auto-Watermark Digital):
               </span>
               <p className="text-xs leading-relaxed">
-                Dokumen Anda otomatis diberi tanda air transparan: <strong className="font-mono text-blue-800">&quot;{watermarkString}&quot;</strong> guna mencegah penyalahgunaan KTP di luar sistem Resilio-Health.
+                Dokumen Anda otomatis diberi tanda air transparan: <strong className="font-mono text-blue-800">&quot;{watermarkString}&quot;</strong> guna mencegah penyalahgunaan KTP di luar sistem JagaMedis.
               </p>
             </div>
 

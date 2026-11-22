@@ -44,7 +44,7 @@ export default function BerandaPage() {
         <div className="relative z-10 space-y-2">
           <div className="flex flex-wrap items-center gap-2">
             <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
-              Resilio-Health HIS &amp; Dompet RME Berdaulat
+              JagaMedis HIS &amp; Dompet RME Berdaulat
             </span>
             <span className="text-xs text-slate-400 font-mono">
               Role: {role.toUpperCase()}

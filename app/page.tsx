@@ -30,11 +30,11 @@ export default function HomePage() {
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-red-600 rounded-xl flex items-center justify-center text-white font-black text-xl shadow-md shadow-red-200 shrink-0">
-              R
+              J
             </div>
             <div>
               <span className="font-black text-slate-900 tracking-tight text-base sm:text-lg">
-                RESILIO<span className="text-red-600">-HEALTH</span>
+                JAGA<span className="text-red-600">MEDIS</span>
               </span>
               <p className="text-[9px] sm:text-[10px] text-slate-500 font-bold tracking-wider uppercase truncate">
                 Zero-Trust Hospital Information System
@@ -72,7 +72,7 @@ export default function HomePage() {
           </h1>
 
           <p className="text-base text-slate-600 leading-relaxed font-medium">
-            Resilio-Health adalah Sistem Informasi Rumah Sakit berbasis web yang melindungi data klinis pasien dengan <strong>Enkripsi Sisi Klien (AES-256-GCM)</strong>, jaminan keutuhan <strong>HMAC-SHA256</strong>, ketahanan <strong>Offline-First (PWA & IndexedDB)</strong>, serta <strong>Zero-Trust BOLA/IDOR Defense</strong>.
+            JagaMedis adalah Sistem Informasi Rumah Sakit berbasis web yang melindungi data klinis pasien dengan <strong>Enkripsi Sisi Klien (AES-256-GCM)</strong>, jaminan keutuhan <strong>HMAC-SHA256</strong>, ketahanan <strong>Offline-First (PWA & IndexedDB)</strong>, serta <strong>Zero-Trust BOLA/IDOR Defense</strong>.
           </p>
 
           {/* Primary Action Buttons */}
@@ -210,7 +210,7 @@ export default function HomePage() {
 
       {/* Footer */}
       <footer className="bg-white border-t border-slate-200 py-6 px-6 text-center text-xs text-slate-500">
-        <p>Resilio-Health • Integrasi Tugas Besar PAW, Kriptografi & Keamanan Siber 2026</p>
+        <p>JagaMedis • Integrasi Tugas Besar PAW, Kriptografi & Keamanan Siber 2026</p>
       </footer>
     </div>
   );

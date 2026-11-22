@@ -167,15 +167,15 @@ export function RoleNav({ session }: RoleNavProps) {
           {/* Logo Brand */}
           <div className="p-6 border-b border-slate-100">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-red-600 rounded-xl flex items-center justify-center text-white font-black text-xl shadow-md shadow-red-200">
-                R
+              <div className="w-8 h-8 rounded-xl bg-red-600 flex items-center justify-center text-white font-black text-base shadow-sm shrink-0">
+                J
               </div>
-              <div>
-                <h1 className="text-base font-black text-slate-900 tracking-tight leading-none">
-                  RESILIO-HEALTH
-                </h1>
-                <p className="text-[10px] text-slate-500 font-semibold tracking-wider uppercase mt-1">
-                  HIS Zero-Trust & Cryptographic
+              <div className="leading-tight">
+                <span className="font-black text-slate-900 tracking-tight text-sm">
+                  JAGA<span className="text-red-600">MEDIS</span>
+                </span>
+                <p className="text-[9px] text-slate-400 font-bold tracking-wider uppercase">
+                  Zero-Trust HIS
                 </p>
               </div>
             </div>
@@ -252,7 +252,7 @@ export function RoleNav({ session }: RoleNavProps) {
             <span>Keluar Sesi</span>
           </button>
           <p className="text-[9px] text-slate-400 text-center">
-            Resilio-Health v0.2-alpha • 2026
+            JagaMedis v0.2-alpha • 2026
           </p>
         </div>
       </aside>

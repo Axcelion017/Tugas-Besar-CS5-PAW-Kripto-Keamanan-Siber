@@ -1,5 +1,5 @@
 // public/sw.js
-// Service Worker untuk Resilio-Health PWA
+// Service Worker untuk JagaMedis PWA
 // Offline-First Caching & Background Sync API Support
 
 const CACHE_NAME = "resilio-health-v0.2";

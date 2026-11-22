@@ -1,14 +1,14 @@
-# Dokumen Teknis Modul 4: Next.js App Router
+# Dokumen Teknis Modul 4: Next.js App Router (JagaMedis)
 Nama/NIM : Michael Alexander Newton (105224017)
 Repositori : https://github.com/Axcelion017/Tugas-Besar-CS5-PAW-Kripto-Keamanan-Siber
 Versi Next.js dan mode Cache Components (aktif/tidak) : Next.js 14.2.15 (Cache Components: Aktif secara default pada App Router Data Cache & Full Route Cache)
 
 ---
 
-## 1. Tabel Peta Rute Aplikasi Riil (Resilio-Health)
+## 1. Tabel Peta Rute Aplikasi Riil (JagaMedis)
 | No | URL | Berkas di `app/` | Jenis Rute | Isi Halaman |
 | :---: | :--- | :--- | :---: | :--- |
-| **1** | `/` | `app/page.tsx` | Statis | Landing page publik sistem Resilio-Health, pengenalan modul keamanan & redirector sesi. |
+| **1** | `/` | `app/page.tsx` | Statis | Landing page publik sistem JagaMedis, pengenalan modul keamanan & redirector sesi. |
 | **2** | `/beranda` | `app/beranda/page.tsx` | Statis | Halaman portal beranda utama aplikasi. |
 | **3** | `/login` | `app/(auth)/login/page.tsx` | Statis | Form autentikasi terpusat (multi-role: Pasien, Nakes, Staf, Admin) dengan validasi kredensial. |
 | **4** | `/register/pasien` | `app/(auth)/register/pasien/page.tsx` | Statis | Registrasi identitas Pasien (input NIK 16 digit & unggah berkas KTP). |

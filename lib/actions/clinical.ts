@@ -721,11 +721,15 @@ export async function getPatientDetailForDoctorServerAction(
         !g.isRevoked
     );
 
-    const isAccessAllowed = !!activeGrant || !!activeAppointment || true;
+    // Otorisasi Terpadu: Izin akses sah melalui Consent Grant digital ATAU Tiket Janji Temu Aktif DPJP
+    const isAccessAllowed = !!activeGrant || !!activeAppointment;
 
     return {
       success: true,
       accessAllowed: isAccessAllowed,
+      message: isAccessAllowed
+        ? undefined
+        : "Akses rekam medis memerlukan izin persetujuan (Consent) dari pasien.",
       patient: {
         id: patient.id,
         nik: patient.nik,
@@ -738,38 +742,40 @@ export async function getPatientDetailForDoctorServerAction(
         allergies: patient.allergies,
         encryptionKeyHex: patient.encryptionKeyHex,
       },
-      medicalRecords: patient.medicalRecords.map((r) => ({
-        id: r.id,
-        patientId: r.patientId,
-        doctorId: r.doctorId,
-        dokterNama: r.doctor?.name || "dr. Andi Pratama, Sp.PD",
-        dokterSpecialty: r.doctor?.specialty || "Spesialis Penyakit Dalam",
-        dokterStr: r.doctor?.strNumber || "STR-3171-88921",
-        dokterSip: r.doctor?.sipNumber || "503/SIP.DOKTER/2026/014",
-        faskesNama: r.faskes?.nama || "RSUP Dr. Sardjito",
-        primaryIcd10: r.primaryIcd10,
-        diagnosisShort: r.diagnosisShort,
-        encryptedPayload: r.encryptedPayload,
-        ivHex: r.ivHex,
-        hmacDigest: r.hmacDigest,
-        version: r.version,
-        addendumReason: r.addendumReason,
-        createdAt: r.createdAt.toLocaleDateString("id-ID", {
-          day: "numeric",
-          month: "short",
-          year: "numeric",
-        }),
-        medicalImages: (r.medicalImages || []).map((img) => ({
-          id: img.id,
-          title: img.title,
-          type: img.type,
-          encryptedBlobHex: img.encryptedBlobHex,
-          mimeType: img.mimeType,
-          fileSizeBytes: img.fileSizeBytes ? Number(img.fileSizeBytes) : 0,
-          notes: img.notes,
-          createdAt: img.createdAt.toISOString(),
-        })),
-      })),
+      medicalRecords: isAccessAllowed
+        ? patient.medicalRecords.map((r) => ({
+            id: r.id,
+            patientId: r.patientId,
+            doctorId: r.doctorId,
+            dokterNama: r.doctor?.name || "dr. Andi Pratama, Sp.PD",
+            dokterSpecialty: r.doctor?.specialty || "Spesialis Penyakit Dalam",
+            dokterStr: r.doctor?.strNumber || "STR-3171-88921",
+            dokterSip: r.doctor?.sipNumber || "503/SIP.DOKTER/2026/014",
+            faskesNama: r.faskes?.nama || "RSUP Dr. Sardjito",
+            primaryIcd10: r.primaryIcd10,
+            diagnosisShort: r.diagnosisShort,
+            encryptedPayload: r.encryptedPayload,
+            ivHex: r.ivHex,
+            hmacDigest: r.hmacDigest,
+            version: r.version,
+            addendumReason: r.addendumReason,
+            createdAt: r.createdAt.toLocaleDateString("id-ID", {
+              day: "numeric",
+              month: "short",
+              year: "numeric",
+            }),
+            medicalImages: (r.medicalImages || []).map((img) => ({
+              id: img.id,
+              title: img.title,
+              type: img.type,
+              encryptedBlobHex: img.encryptedBlobHex,
+              mimeType: img.mimeType,
+              fileSizeBytes: img.fileSizeBytes ? Number(img.fileSizeBytes) : 0,
+              notes: img.notes,
+              createdAt: img.createdAt.toISOString(),
+            })),
+          }))
+        : [],
       appointments: patient.appointments.map((a) => ({
         id: a.id,
         poli: a.poli,

@@ -8,7 +8,7 @@ const montserrat = Montserrat({
 });
 
 export const metadata: Metadata = {
-  title: "Resilio-Health | Hospital Information System",
+  title: "JagaMedis | Hospital Information System",
   description:
     "Web-based Hospital Information System dengan Cryptographic Offline-First Resilience dan Zero-Trust Patient Data Sovereignty.",
 };

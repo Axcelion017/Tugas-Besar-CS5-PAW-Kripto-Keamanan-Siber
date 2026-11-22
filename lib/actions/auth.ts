@@ -251,7 +251,7 @@ export async function registerPasienServerAction(
     if (existingUser) {
       return {
         success: false,
-        message: "NIK atau alamat email sudah terdaftar di sistem Resilio-Health.",
+        message: "NIK atau alamat email sudah terdaftar di sistem JagaMedis.",
       };
     }
 

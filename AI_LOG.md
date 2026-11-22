@@ -4,6 +4,34 @@ Dokumen pencatatan penggunaan asisten kecerdasan buatan (AI) sesuai kebijakan in
 
 ---
 
+## 2026-11-19 — Modul 7: Debugging dan Telaah Kode (Resilio-Health)
+
+- **Tool**: Google Antigravity & Hermes Coding Agent (Claude 3.7 Sonnet & Gemini 2.5 Pro)
+- **Tujuan**:
+  1. Mengonfigurasi lingkungan debugging terintegrasi VS Code untuk Next.js 16 App Router (Server Components & Server Actions via Node inspector) serta pencatatan kueri SQL Prisma ORM.
+  2. Melakukan reproduksi sistematis, penelusuran akar masalah (*Root Cause Analysis*), inspeksi panel variabel debugger, analisis lapisan jaringan DevTools, dan perbaikan permanen pada 3 galat kritis aplikasi HIS.
+  3. Menyusun dokumen teknis laporan Modul 7 (`docs/praktikum/modul07.md`) lengkap dengan matriks daftar galat, langkah reproduksi deterministik, bukti tangkapan layar sebelum/sesudah, 4 keputusan teknis medikolegal, dan telaah kode (*Pull Request code review*).
+- **Ringkasan Prompt**:
+  1. *"Setup breakpoint debugger VS Code pada Server Component layout.tsx dan konfigurasi log query Prisma di prisma.ts."*
+  2. *"Bantu reproduksi dan analisis galat 1: hanging login akun dokter akibat format hash bcrypt cacat di seeder."*
+  3. *"Bantu reproduksi dan perbaiki galat 2: runtime crash RSC serialization pada Prisma.Decimal tanda vital triase loket."*
+  4. *"Bantu telusuri dan perbaiki galat 3: penolakan akses dokter DPJP pada RME pasien akibat gateway Zero-Trust kaku yang mengabaikan tiket janji temu aktif."*
+  5. *"Susun dokumen teknis Modul 7 sesuai rubrik praktikum mencakup keputusan teknis z.stringbool(), onDelete: RESTRICT, derived state, dan error boundary."*
+- **Bagian yang Dihasilkan / Dimodifikasi**:
+  - `lib/actions/auth.ts`: Sanitasi defensif format modular crypt Bcrypt dan penanganan kegagalan autentikasi tanpa blocking runtime.
+  - `prisma/seed.ts`: Memperbarui seeder kata sandi dokter dan nakes menggunakan hashing Bcrypt dengan 10 putaran salt valid (`bcrypt.hash(password, 10)`).
+  - `lib/actions/triage.ts`: Sanitasi instans `Prisma.Decimal` menjadi tipe primitif JavaScript `Number(...)` sebelum ditransmisikan melintasi batas serialisasi RSC Flight.
+  - `lib/actions/clinical.ts`: Penerapan *Encounter-Based Access Control* (`isAccessAllowed = !!activeGrant || !!activeAppointment`) dan perbaikan kueri agregasi entitas unik pada kartu ringkasan dokter.
+  - `app/(dashboard)/nakes/pasien-lookup/[patientId]/page.tsx`: Penanganan dekripsi RME terenkripsi AES-256-GCM, verifikasi integritas HMAC, dan render status izin akses aktif.
+  - `.vscode/launch.json`: Konfigurasi multi-target Next.js App Router (server-side node-terminal `--inspect`, client-side Chrome debugger, dan full-stack compound).
+  - `lib/db/prisma.ts`: Konfigurasi pencatatan log Prisma Client tingkat lanjut (`query`, `warn`, `error`).
+  - `docs/praktikum/modul07.md`: Dokumen teknis komprehensif 7 bab mencakup konfigurasi debugger, tabel galat, 3 catatan penelusuran galat mendalam dengan bukti tangkapan layar otentik, keputusan teknis arsitektural, matriks telaah kode PR, kendala penyelesaian, dan kepatuhan AI.
+- **Cara Verifikasi**:
+  - `npx tsc --noEmit`: 0 kesalahan tipe statis (100% type-safe).
+  - `npx vitest run`: 33/33 unit test otomatis lulus 100% (kriptografi, validasi Zod, kontrol akses, dan transaksi rollback).
+  - `npm run build`: Kompilasi produksi 33 rute Next.js App Router sukses tanpa galat.
+  - Pengujian live debugging di VS Code: Menghentikan eksekusi pada Server Component `app/layout.tsx:25` dan inspeksi breakpoint variabel runtime pada `lib/actions/clinical.ts:719`.
+
 ## 2026-10-17 — Milestone 2 (Tag v0.2 & sec-0.2)
 
 - **Tool**: Google Antigravity & Hermes Coding Agent (Claude & Gemini Models)

@@ -1,5 +1,5 @@
 // lib/db/mockData.ts
-// Modul data tiruan terpadu untuk mendanai antarmuka 4-Role Resilio-Health:
+// Modul data tiruan terpadu untuk mendanai antarmuka 4-Role JagaMedis:
 // Pasien, Tenaga Kesehatan (DPJP), Staf Nakes (Triase & Admisi), dan Admin Regulator
 
 export type TriaseLevel = "HIJAU" | "KUNING" | "MERAH";

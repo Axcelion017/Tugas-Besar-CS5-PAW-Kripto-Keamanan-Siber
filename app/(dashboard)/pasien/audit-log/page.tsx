@@ -34,7 +34,7 @@ const DEFAULT_NOTIFICATIONS: PatientNotification[] = [
   },
   {
     id: "NOTIF-02",
-    senderName: "Sistem Keamanan Resilio-Health",
+    senderName: "Sistem Keamanan JagaMedis",
     senderRole: "Zero-Trust Gateway",
     senderFaskes: "Pusat Data Medis Kemenkes",
     actionTitle: "Pemberian Izin Akses Digital (Consent Granted)",
@@ -56,7 +56,7 @@ const DEFAULT_NOTIFICATIONS: PatientNotification[] = [
   },
   {
     id: "NOTIF-04",
-    senderName: "Sistem Keamanan Resilio-Health",
+    senderName: "Sistem Keamanan JagaMedis",
     senderRole: "Zero-Trust BOLA Guard",
     senderFaskes: "Gateway Kemenkes",
     actionTitle: "Percobaan Akses Ilegal Berhasil Diblokir",
