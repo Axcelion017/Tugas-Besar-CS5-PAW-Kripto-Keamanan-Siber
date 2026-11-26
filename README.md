@@ -164,6 +164,10 @@ Aplikasi menyediakan tombol *Quick Demo* pada halaman masuk (`/login` dan `/`) u
 │   ├── access-control.test.ts    # Pengujian Matriks Akses RBAC Vitest (8/8 Passed - 4 Positif vs 4 Negatif)
 │   └── validations.test.ts       # Pengujian Skema Validasi Zod Vitest (15/15 Passed)
 └── docs/                         # Dokumentasi Terstruktur Laporan Tugas Besar
+    ├── audit/                    # Laporan Audit Baseline (v0.2) & Audit Ulang Menyeluruh + Traceability (v0.3)
+    ├── standar/                  # Matriks 30 Standar Acuan Internasional & Regulasi Nasional + Justifikasi
+    ├── sop/                      # Panduan Simulasi Penggunaan, Diagram Alur & 7 SOP Operasional/Insiden
+    ├── perubahan/                # Log Perubahan Terstruktur per Fase Refactoring (Fase 1 s.d. Fase 4)
     ├── Tugas2/                   # Dokumen Resmi Bukti Penugasan 3 Mata Kuliah
     │   ├── PAW/LaporanTugas2.md  # Laporan Milestone 2 PAW (CRUD, Zod, DB, Pengujian, Screenshot)
     │   ├── Kriptografi/          # Laporan Tugas 2 Kripto (AEAD, Parameter, Fail-Closed, Demo)
