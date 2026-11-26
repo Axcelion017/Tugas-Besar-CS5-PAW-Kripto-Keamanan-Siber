@@ -221,8 +221,8 @@ Inspeksi langsung terhadap [session-actions.ts](../../features/auth/session-acti
 
 Seluruh rencana perbaikan berikut disusun bertahap (*incremental*), dipetakan langsung ke katalog [matriks_standar_acuan_v0.3.md](../standar/matriks_standar_acuan_v0.3.md), dan menjaga stabilitas artefak praktikum yang sedang berjalan.
 
-### 7.1. Tahap A — Perbaikan Cepat Tanpa Migrasi Skema (`v0.3.4` — Pembersihan Residual, Anti-Enumeration & Poles UX)
-*Fokus pengerasan keamanan login, higiene UI, modularitas berkas, dan penyederhanaan navigasi tanpa migrasi basis data.*
+### 7.1. Tahap A — Perbaikan Cepat Tanpa Migrasi Skema (`v0.3.4` — Pembersihan Residual, Anti-Enumeration & Poles UX) *(SELESAI & TERVERIFIKASI — 26 Nov 2026, 11:29 WIB; catatan lengkap: [v0.3.4-auth-hardening-ux-2026-11-26.md](../perubahan/v0.3.4-auth-hardening-ux-2026-11-26.md))*
+*Seluruh 6 item (`P-01` s.d. `P-05b`) telah dieksekusi & terverifikasi pada branch `refactor/v0.3.4-auth-hardening-ux` (56/56 Vitest lulus, 0 error TypeScript/ESLint, 36/36 rute build sukses).*
 
 | Kode | Item Perbaikan | Berkas Target | Standar & Aturan Acuan | Indikator Lulus (*Quality Gate*) |
 | :--- | :--- | :--- | :--- | :--- |

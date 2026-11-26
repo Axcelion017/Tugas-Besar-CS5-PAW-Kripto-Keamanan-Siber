@@ -1,13 +1,13 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { UserSession, logoutUser, normalizeRole } from "@/lib/auth/auth";
 import { logoutServerAction } from "@/lib/actions/auth";
 import { LogoutModal } from "@/components/ui/LogoutModal";
+import { getOutboxItems, OUTBOX_UPDATED_EVENT } from "@/lib/storage/indexedDb";
 import {
-  IconHome,
   IconActivity,
   IconSearch,
   IconCalendar,
@@ -35,8 +35,38 @@ export function RoleNav({ session }: RoleNavProps) {
   const router = useRouter();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [pendingOutboxCount, setPendingOutboxCount] = useState(0);
 
   const role = normalizeRole(session.role);
+
+  useEffect(() => {
+    if (role !== "nakes") return;
+    let active = true;
+
+    const refreshOutboxCount = async () => {
+      const items = await getOutboxItems();
+      if (active) setPendingOutboxCount(items.length);
+    };
+
+    const timer = setTimeout(() => {
+      void refreshOutboxCount();
+    }, 0);
+
+    const handleUpdate = () => {
+      void refreshOutboxCount();
+    };
+
+    window.addEventListener(OUTBOX_UPDATED_EVENT, handleUpdate);
+    window.addEventListener("online", handleUpdate);
+    window.addEventListener("offline", handleUpdate);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+      window.removeEventListener(OUTBOX_UPDATED_EVENT, handleUpdate);
+      window.removeEventListener("online", handleUpdate);
+      window.removeEventListener("offline", handleUpdate);
+    };
+  }, [role]);
 
   const handleConfirmLogout = async () => {
     try {
@@ -48,9 +78,8 @@ export function RoleNav({ session }: RoleNavProps) {
     router.replace("/login");
   };
 
-  // 1. Navigasi Pasien
+  // 1. Navigasi Pasien (ringkas tanpa duplikasi /beranda; klik logo untuk ringkasan beranda)
   const pasienLinks = [
-    { href: "/beranda", label: "Beranda Terpadu", icon: IconHome },
     { href: "/pasien", label: "Ringkasan Kesehatan", icon: IconActivity },
     { href: "/pasien/profil", label: "Profil & e-KYC", icon: IconUsers },
     { href: "/pasien/faskes", label: "Pencarian Faskes", icon: IconSearch },
@@ -63,7 +92,6 @@ export function RoleNav({ session }: RoleNavProps) {
 
   // 2. Navigasi Tenaga Medis (Dokter DPJP)
   const nakesLinks = [
-    { href: "/beranda", label: "Beranda Terpadu", icon: IconHome },
     { href: "/nakes", label: "Antrean & Jadwal Hari Ini", icon: IconStethoscope },
     { href: "/nakes/jadwal", label: "Jadwal Praktik Mingguan", icon: IconCalendar },
     { href: "/nakes/pasien-lookup", label: "Daftar Pasien & Rekam Medis", icon: IconSearch },
@@ -71,9 +99,8 @@ export function RoleNav({ session }: RoleNavProps) {
     { href: "/nakes/offline-sync", label: "Status Sinkronisasi Offline", icon: IconRefreshCw },
   ];
 
-  // 3. Navigasi Staf Nakes Faskes (Perawat Triase & Admisi) - ROLE BARU
+  // 3. Navigasi Staf Nakes Faskes (Perawat Triase & Admisi)
   const stafLinks = [
-    { href: "/beranda", label: "Beranda Terpadu", icon: IconHome },
     { href: "/staf", label: "Admisi & Check-in Antrean", icon: IconCalendar },
     { href: "/staf/triase", label: "Triase & Tanda Vital Awal", icon: IconActivity },
     { href: "/staf/assign-dpjp", label: "Pengarahan Dokter (DPJP)", icon: IconUsers },
@@ -82,7 +109,6 @@ export function RoleNav({ session }: RoleNavProps) {
 
   // 4. Navigasi Admin Regulator (Kemenkes)
   const adminLinks = [
-    { href: "/beranda", label: "Beranda Terpadu", icon: IconHome },
     { href: "/admin", label: "Ringkasan Eksekutif", icon: IconBarChart },
     { href: "/admin/verifikasi-kyc", label: "Verifikasi Visual e-KYC", icon: IconShield },
     { href: "/admin/verifikasi-kyd", label: "Verifikasi Dokumen e-KYD", icon: IconFileText },
@@ -146,12 +172,14 @@ export function RoleNav({ session }: RoleNavProps) {
               </svg>
             )}
           </button>
-          <div className="w-8 h-8 bg-red-600 rounded-lg flex items-center justify-center text-white font-black text-sm">
-            J
-          </div>
-          <span className="font-black text-slate-900 tracking-tight text-sm">
-            JAGA<span className="text-red-600">MEDIS</span>
-          </span>
+          <Link href="/beranda" className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-teal-700 rounded-lg flex items-center justify-center text-white font-black text-sm">
+              J
+            </div>
+            <span className="font-black text-slate-900 tracking-tight text-sm">
+              JAGA<span className="text-teal-700">MEDIS</span>
+            </span>
+          </Link>
         </div>
 
         <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border ${roleBadgeColor}`}>
@@ -168,19 +196,19 @@ export function RoleNav({ session }: RoleNavProps) {
         <div>
           {/* Logo Brand */}
           <div className="p-6 border-b border-slate-100">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-xl bg-red-600 flex items-center justify-center text-white font-black text-base shadow-sm shrink-0">
+            <Link href="/beranda" className="flex items-center gap-3 group">
+              <div className="w-8 h-8 rounded-xl bg-teal-700 flex items-center justify-center text-white font-black text-base shadow-sm shrink-0">
                 J
               </div>
               <div className="leading-tight">
-                <span className="font-black text-slate-900 tracking-tight text-sm">
-                  JAGA<span className="text-red-600">MEDIS</span>
+                <span className="font-black text-slate-900 tracking-tight text-sm group-hover:text-teal-800 transition">
+                  JAGA<span className="text-teal-700">MEDIS</span>
                 </span>
                 <p className="text-[11px] text-slate-600 font-bold tracking-wider uppercase">
                   Zero-Trust HIS
                 </p>
               </div>
-            </div>
+            </Link>
 
             {/* Profil Sesi Pengguna */}
             <div className="mt-4 p-3 rounded-xl bg-slate-50 border border-slate-200">
@@ -230,14 +258,28 @@ export function RoleNav({ session }: RoleNavProps) {
                   key={item.href}
                   href={item.href}
                   onClick={() => setMobileMenuOpen(false)}
-                  className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                  className={`flex items-center justify-between gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
                     isActive
-                      ? "bg-red-600 text-white shadow-sm shadow-red-600/30"
-                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                      ? "bg-teal-700 text-white shadow-sm shadow-teal-700/25"
+                      : "text-slate-700 hover:bg-slate-100 hover:text-slate-900"
                   }`}
                 >
-                  <IconComp className={isActive ? "text-white" : "text-slate-400"} size={16} />
-                  <span>{item.label}</span>
+                  <span className="flex items-center gap-3 min-w-0">
+                    <IconComp className={isActive ? "text-white" : "text-slate-500"} size={16} />
+                    <span className="truncate">{item.label}</span>
+                  </span>
+                  {item.href === "/nakes/offline-sync" && pendingOutboxCount > 0 && (
+                    <span
+                      aria-label={`${pendingOutboxCount} berkas luring menunggu sinkronisasi`}
+                      className={`px-2 py-0.5 rounded-full text-[11px] font-black shrink-0 ${
+                        isActive
+                          ? "bg-white/20 text-white"
+                          : "bg-amber-100 text-amber-900 border border-amber-300"
+                      }`}
+                    >
+                      {pendingOutboxCount}
+                    </span>
+                  )}
                 </Link>
               );
             })}

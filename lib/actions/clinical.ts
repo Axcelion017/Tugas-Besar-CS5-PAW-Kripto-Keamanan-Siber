@@ -1,9 +1,9 @@
 export type { ServerActionResponse } from "@/features/medical-records/exam-actions";
+export { submitPemeriksaanKlinisAction } from "@/features/medical-records/exam-actions";
 export {
-  submitPemeriksaanKlinisAction,
   saveEncryptedImageServerAction,
   getAppointmentForExamServerAction,
-} from "@/features/medical-records/exam-actions";
+} from "@/features/medical-records/exam-support-actions";
 
 export {
   getMedicalRecordsServerAction,

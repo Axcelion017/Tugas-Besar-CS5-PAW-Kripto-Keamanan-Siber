@@ -9,6 +9,12 @@ import {
   revokeSessionAsync,
   getSessionFromStoreAsync,
 } from "@/lib/auth/sessionStore";
+import {
+  checkRateLimit,
+  resetRateLimit,
+  DUMMY_BCRYPT_HASH,
+  UNIFORM_LOGIN_ERROR,
+} from "@/lib/auth/rateLimit";
 
 export async function POST(request: NextRequest) {
   try {
@@ -30,6 +36,25 @@ export async function POST(request: NextRequest) {
 
     const cleanId = validation.data.identifier.trim().toLowerCase();
     const password = validation.data.password;
+    const clientIp =
+      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+      request.headers.get("x-real-ip") ||
+      "local";
+    const rateLimitKey = `login:api:${clientIp}:${cleanId}`;
+    const rateCheck = checkRateLimit(rateLimitKey, { maxAttempts: 10, windowMs: 60_000 });
+
+    if (!rateCheck.allowed) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: `Terlalu banyak percobaan masuk. Coba lagi dalam ${rateCheck.retryAfterSeconds} detik.`,
+        },
+        {
+          status: 429,
+          headers: { "Retry-After": String(rateCheck.retryAfterSeconds) },
+        }
+      );
+    }
 
     const dbUser = await prisma.user.findFirst({
       where: {
@@ -48,8 +73,9 @@ export async function POST(request: NextRequest) {
     });
 
     if (!dbUser) {
+      await bcrypt.compare(password, DUMMY_BCRYPT_HASH);
       return NextResponse.json(
-        { success: false, message: "Kredensial atau NIK tidak valid." },
+        { success: false, message: UNIFORM_LOGIN_ERROR },
         { status: 401 }
       );
     }
@@ -63,7 +89,7 @@ export async function POST(request: NextRequest) {
 
     if (!isPasswordMatch) {
       return NextResponse.json(
-        { success: false, message: "Kredensial atau NIK tidak valid." },
+        { success: false, message: UNIFORM_LOGIN_ERROR },
         { status: 401 }
       );
     }
@@ -77,6 +103,8 @@ export async function POST(request: NextRequest) {
         { status: 403 }
       );
     }
+
+    resetRateLimit(rateLimitKey);
 
     const roleStr = dbUser.role.toString();
     const role: UserSession["role"] =

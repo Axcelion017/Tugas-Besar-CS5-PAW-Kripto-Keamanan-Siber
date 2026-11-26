@@ -131,6 +131,13 @@ export default function OfflineSyncPage() {
     setNotice(null);
     try {
       const session = getUserSession();
+      if (!session?.id) {
+        setNotice({
+          type: "err",
+          text: "Sesi dokter aktif tidak ditemukan. Silakan masuk ulang sebelum membuat antrean luring.",
+        });
+        return;
+      }
       const detail = await getPatientDetailForDoctorServerAction("P-101");
       if (!detail.success || !detail.accessAllowed || !detail.patient?.encryptionKeyHex) {
         setNotice({
@@ -151,9 +158,9 @@ export default function OfflineSyncPage() {
             tindakan: "Kontrol tekanan darah ulang 14 hari",
           },
           meta: {
-            dokterId: session?.id || "DOC-01",
-            dokterNama: session?.name || "dr. Andi Pratama, Sp.PD",
-            faskesNama: session?.faskesName || "RSUP Dr. Sardjito",
+            dokterId: session.id,
+            dokterNama: session.name || "Dokter DPJP",
+            faskesNama: session.faskesName || "RSUP Dr. Sardjito",
             timestamp: new Date().toISOString(),
           },
         },

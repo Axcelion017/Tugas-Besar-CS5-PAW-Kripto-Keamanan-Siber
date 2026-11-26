@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { getUserSession, UserSession } from "@/lib/auth/auth";
-import { getStorageData, EncryptedMedicalRecord } from "@/lib/db/mockData";
+import type { EncryptedMedicalRecord } from "@/lib/db/mockData";
 import { getMedicalRecordsServerAction } from "@/lib/actions/clinical";
 import { createAuditLogServerAction } from "@/lib/actions/audit";
 import {
@@ -118,13 +118,7 @@ export default function RekamMedisPasienPage() {
           }));
         }
       } catch {
-        // fallback
-      }
-
-      // 2. Fallback offline hanya mengambil berkas milik sesi pasien saat ini (Anti-BOLA, tidak pernah membocorkan P-101)
-      if (recordList.length === 0) {
-        const stored = getStorageData<EnrichedMedicalRecord[]>("resilio_records", []);
-        recordList = stored.filter((r) => r.patientId === s.id);
+        // Biarkan recordList kosong secara jujur bila server tidak terjangkau (Fail-Closed & Anti-BOLA)
       }
 
       setRecords(recordList);

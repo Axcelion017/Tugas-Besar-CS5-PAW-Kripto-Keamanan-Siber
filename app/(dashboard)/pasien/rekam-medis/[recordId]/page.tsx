@@ -3,11 +3,7 @@
 import React, { use, useState, useEffect } from "react";
 import Link from "next/link";
 import { getUserSession } from "@/lib/auth/auth";
-import {
-  getStorageData,
-  EncryptedMedicalRecord,
-  MOCK_ENCRYPTED_RECORDS,
-} from "@/lib/db/mockData";
+import type { EncryptedMedicalRecord } from "@/lib/db/mockData";
 import { getSingleMedicalRecordServerAction } from "@/lib/actions/clinical";
 import { createAuditLogServerAction } from "@/lib/actions/audit";
 import { PrintableMedicalResume } from "@/components/clinical/PrintableMedicalResume";
@@ -133,26 +129,10 @@ export default function RecordDetailPage({
           return;
         }
       } catch {
-        // fallback
+        // Fail-Closed: jangan pernah menyuntikkan mock record jika PostgreSQL gagal/menolak akses
       }
 
-      // 2. Fallback ke mock data lokal
-      const records = getStorageData<EncryptedMedicalRecord[]>("resilio_records", MOCK_ENCRYPTED_RECORDS);
-      const found = records.find((r) => r.recordId === recordId);
-      if (found) {
-        setRecord({
-          ...found,
-          dokterSpecialty: "Spesialis Penyakit Dalam (Internal Medicine)",
-          dokterSip: "503/SIP.DOKTER/2026/014",
-          perawatNama: "Ns. Maya Indah, S.Kep",
-          perawatNip: "198804122015022001",
-          perawatPosisi: "Perawat Pelaksana Triase & Admisi",
-          tindakanStaf: "Pengkajian fisik awal, pengukuran tensi & nadi, pemantauan saturasi O2, dan penentuan prioritas triase",
-          faskesAlamat: "Jl. Kesehatan No. 1, Yogyakarta",
-        });
-      } else {
-        setNotFound(true);
-      }
+      setNotFound(true);
       setIsLoading(false);
     }
 

@@ -76,7 +76,7 @@ Pengujian dijalankan pada berkas `tests/validations.test.ts` memvalidasi skema d
 
 ## 4. Kesimpulan Kelaikan Sistem
 
-JagaMedis (sebelumnya Resilio-Health) v0.2 telah memenuhi seluruh kriteria evaluasi integrasi tiga mata kuliah (PAW, Kriptografi, KKS) dan kini telah ditingkatkan tuntas melalui seluruh **Fase 1–4 menuju Milestone 3 (`v0.3` / `v0.3.3-fase4`)** (26 November 2026).
+JagaMedis (sebelumnya Resilio-Health) v0.2 telah memenuhi seluruh kriteria evaluasi integrasi tiga mata kuliah (PAW, Kriptografi, KKS) dan kini telah ditingkatkan tuntas melalui seluruh **Fase 1–4 + Tahap A Auth Hardening (`v0.3.4`, 56/56 Vitest lulus, 36/36 rute + `ƒ Proxy`)** menuju Milestone 3 (`v0.3`) (26 November 2026).
 
 ---
 

@@ -150,6 +150,51 @@ export async function clearOutbox(): Promise<void> {
   notifyOutboxUpdated();
 }
 
+export interface CachedPatientRecord {
+  patientId: string;
+  nik: string;
+  name: string;
+  mrn: string;
+  gender: string;
+  bloodType: string;
+  birthDate?: string | null;
+  allergies: string[];
+  phone: string;
+  cachedAt: string;
+}
+
+export async function saveCachedPatients(items: CachedPatientRecord[]): Promise<void> {
+  try {
+    const db = await openOfflineDatabase();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORES.CACHED_PATIENTS, "readwrite");
+      const store = tx.objectStore(STORES.CACHED_PATIENTS);
+      for (const item of items) {
+        store.put(item);
+      }
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch {
+    // Abaikan jika IndexedDB tidak tersedia (SSR / private mode)
+  }
+}
+
+export async function getCachedPatients(): Promise<CachedPatientRecord[]> {
+  try {
+    const db = await openOfflineDatabase();
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(STORES.CACHED_PATIENTS, "readonly");
+      const store = tx.objectStore(STORES.CACHED_PATIENTS);
+      const req = store.getAll();
+      req.onsuccess = () => resolve((req.result as CachedPatientRecord[]) || []);
+      req.onerror = () => reject(req.error);
+    });
+  } catch {
+    return [];
+  }
+}
+
 export async function saveMediaBlob(item: OfflineMediaBlobItem): Promise<void> {
   const db = await openOfflineDatabase();
   return new Promise((resolve, reject) => {

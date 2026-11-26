@@ -4,11 +4,13 @@ import React, { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { saveSession } from "@/lib/auth/auth";
+import { isDemoLoginEnabled } from "@/lib/auth/demoConfig";
 import { LoginSchema } from "@/lib/validations/auth";
 import { loginServerAction } from "@/lib/actions/auth";
 
 function LoginForm() {
   const router = useRouter();
+  const showQuickDemo = isDemoLoginEnabled();
   const searchParams = useSearchParams();
   const registeredParam = searchParams.get("registered") === "true";
   const usernameParam = searchParams.get("username") || "";
@@ -89,25 +91,31 @@ function LoginForm() {
 
         {/* Brand Header */}
         <div className="text-center">
-          <div className="w-14 h-14 bg-red-600 rounded-2xl mx-auto flex items-center justify-center text-white font-black text-2xl shadow-lg shadow-red-200 mb-3">
+          <div className="w-14 h-14 bg-teal-700 rounded-2xl mx-auto flex items-center justify-center text-white font-black text-2xl shadow-lg shadow-teal-200 mb-3">
             J
           </div>
           <h1 className="text-2xl font-black text-slate-900 tracking-tight">
-            JAGA<span className="text-red-600">MEDIS</span>
+            JAGA<span className="text-teal-700">MEDIS</span>
           </h1>
-          <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mt-1">
+          <p className="text-xs text-slate-600 font-bold uppercase tracking-wider mt-1">
             Sistem Informasi Rekam Medis & Zero-Trust Gateway
           </p>
         </div>
 
         {successMsg && (
-          <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold leading-relaxed">
+          <div
+            role="status"
+            className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold leading-relaxed"
+          >
             {successMsg}
           </div>
         )}
 
         {errorMsg && (
-          <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-bold leading-relaxed">
+          <div
+            role="alert"
+            className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-bold leading-relaxed"
+          >
             {errorMsg}
           </div>
         )}
@@ -115,45 +123,56 @@ function LoginForm() {
         {/* Formulir Masuk */}
         <form onSubmit={handleLogin} className="space-y-4">
           <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
+            <label
+              htmlFor="login-identifier"
+              className="block text-xs font-bold text-slate-600 uppercase mb-1"
+            >
               NIK / Username / Email
             </label>
             <input
+              id="login-identifier"
               type="text"
               required
+              autoComplete="username"
               value={identifier}
               onChange={(e) => setIdentifier(e.target.value)}
               placeholder="Contoh: dr_andi, budi, atau 3171012304800001"
-              className="w-full px-4 py-3 rounded-xl border border-slate-300 font-semibold text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-500 transition"
+              className="w-full px-4 py-3 rounded-xl border border-slate-300 font-semibold text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-600 transition"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
+            <label
+              htmlFor="login-password"
+              className="block text-xs font-bold text-slate-600 uppercase mb-1"
+            >
               Kata Sandi (Password)
             </label>
             <input
+              id="login-password"
               type="password"
               required
+              autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
-              className="w-full px-4 py-3 rounded-xl border border-slate-300 font-semibold text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-500 transition"
+              className="w-full px-4 py-3 rounded-xl border border-slate-300 font-semibold text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-600 transition"
             />
           </div>
 
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full py-3.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md shadow-red-600/30 transition-all cursor-pointer disabled:bg-slate-400"
+            className="w-full py-3.5 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md shadow-teal-700/25 transition-all cursor-pointer disabled:bg-slate-400"
           >
             {isLoading ? "Memverifikasi Otorisasi..." : "Masuk ke Sistem"}
           </button>
         </form>
 
-        {/* Tombol Jalan Pintas Pengujian Role */}
+        {/* Tombol Jalan Pintas Pengujian Role (dikendalikan NEXT_PUBLIC_ENABLE_DEMO_LOGIN) */}
+        {showQuickDemo && (
         <div className="pt-4 border-t border-slate-100">
-          <p className="text-[11px] font-bold text-slate-400 uppercase text-center mb-3">
+          <p className="text-xs font-bold text-slate-600 uppercase text-center mb-3">
             Akses Cepat Pengujian Role (Demo)
           </p>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -187,11 +206,12 @@ function LoginForm() {
             </button>
           </div>
         </div>
+        )}
 
         {/* Link Pendaftaran Pengguna Baru */}
         <div className="pt-2 text-center space-y-2">
-          <p className="text-xs text-slate-500 font-medium">Belum memiliki akun terverifikasi?</p>
-          <div className="flex justify-center gap-4 text-xs font-bold text-red-600">
+          <p className="text-xs text-slate-600 font-medium">Belum memiliki akun terverifikasi?</p>
+          <div className="flex justify-center gap-4 text-xs font-bold text-teal-700">
             <Link href="/register/pasien" className="hover:underline">
               Daftar Pasien Baru →
             </Link>
