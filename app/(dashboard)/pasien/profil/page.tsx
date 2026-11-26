@@ -18,8 +18,10 @@ export default function PasienProfilPage() {
 
   // Status e-KYC
   const [statusKyc, setStatusKyc] = useState<"PENDING" | "VERIFIED" | "REJECTED">("PENDING");
+  const [rejectionReason, setRejectionReason] = useState<string | null>(null);
   const [mrn, setMrn] = useState("");
   const [patientId, setPatientId] = useState("");
+  const todayIso = new Date().toISOString().split("T")[0];
 
   // Bagian 1: Data Mandiri (Bisa diubah sendiri)
   const [phone, setPhone] = useState("");
@@ -58,7 +60,20 @@ export default function PasienProfilPage() {
           const p = res.data.patient;
           setPatientId(p.id);
           setMrn(p.mrn);
-          setStatusKyc(res.data.statusAccount === "VERIFIED" ? "VERIFIED" : "PENDING");
+          const latestKyc = res.data.latestKyc;
+          if (res.data.statusAccount === "VERIFIED") {
+            setStatusKyc("VERIFIED");
+            setRejectionReason(null);
+          } else if (
+            res.data.statusAccount === "REJECTED" ||
+            latestKyc?.status === "REJECTED"
+          ) {
+            setStatusKyc("REJECTED");
+            setRejectionReason(latestKyc?.alasanPenolakan || null);
+          } else {
+            setStatusKyc("PENDING");
+            setRejectionReason(null);
+          }
 
           // Data mandiri
           setPhone(p.emergencyContactPhone || s.phone || "");
@@ -134,6 +149,11 @@ export default function PasienProfilPage() {
       return;
     }
 
+    if (!ktpFileName || !selfieFileName) {
+      setNotifError("Berkas foto KTP asli dan swafoto wajah (selfie) wajib dipilih sebelum mengajukan e-KYC.");
+      return;
+    }
+
     setIsSubmittingKyc(true);
     try {
       const res = await submitKycVerificationServerAction({
@@ -197,6 +217,11 @@ export default function PasienProfilPage() {
               <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
               e-KYC Terverifikasi Resmi
             </span>
+          ) : statusKyc === "REJECTED" ? (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-50 text-red-800 border border-red-200 rounded-full text-xs font-black uppercase tracking-wider">
+              <span className="w-2 h-2 rounded-full bg-red-500"></span>
+              e-KYC Ditolak — Ajukan Ulang
+            </span>
           ) : (
             <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 text-amber-800 border border-amber-200 rounded-full text-xs font-black uppercase tracking-wider">
               <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
@@ -205,6 +230,12 @@ export default function PasienProfilPage() {
           )}
         </div>
       </div>
+
+      {statusKyc === "REJECTED" && rejectionReason && (
+        <div role="alert" className="p-4 rounded-2xl bg-red-50 border border-red-200 text-red-900 text-xs font-bold">
+          Alasan Penolakan e-KYC Sebelumnya: {rejectionReason}
+        </div>
+      )}
 
       {/* Notifikasi Banner */}
       {notifSuccess && (
@@ -439,6 +470,7 @@ export default function PasienProfilPage() {
                 <input
                   type="date"
                   required
+                  max={todayIso}
                   value={tanggalLahir}
                   onChange={(e) => setTanggalLahir(e.target.value)}
                   className="w-full px-4 py-2.5 rounded-xl border border-slate-300 font-semibold text-sm focus:ring-2 focus:ring-purple-500 focus:outline-none"

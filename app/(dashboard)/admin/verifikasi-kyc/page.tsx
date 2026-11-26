@@ -1,24 +1,13 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import {
-  MOCK_KYC_REQUESTS,
-  MOCK_PATIENTS,
-  getStorageData,
-  setStorageData,
-  KycSubmission,
-  Patient,
-} from "@/lib/db/mockData";
+import { KycSubmission } from "@/lib/db/mockData";
 import {
   approveKycServerAction,
   rejectKycServerAction,
   getKycSubmissionsServerAction,
 } from "@/lib/actions/auth";
-
-function generateMrn() {
-  return `MRN-2026-${Math.floor(1000 + Math.random() * 9000)}`;
-}
 
 export default function VerifikasiKycPage() {
   const [kycList, setKycList] = useState<KycSubmission[]>([]);
@@ -27,14 +16,14 @@ export default function VerifikasiKycPage() {
   const [rejectReason, setRejectReason] = useState("");
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [notif, setNotif] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function loadData() {
-      const localList = getStorageData<KycSubmission[]>("resilio_kyc_list", MOCK_KYC_REQUESTS);
-      try {
-        const dbRes = await getKycSubmissionsServerAction();
-        if (dbRes.success && dbRes.data && dbRes.data.length > 0) {
-          const mapped: KycSubmission[] = dbRes.data.map((d: {
+  const loadKycFromDb = useCallback(async () => {
+    try {
+      const dbRes = await getKycSubmissionsServerAction();
+      if (dbRes.success && Array.isArray(dbRes.data)) {
+        const mapped: KycSubmission[] = dbRes.data.map(
+          (d: {
             id: string;
             userId: string;
             namaLengkap: string;
@@ -58,90 +47,55 @@ export default function VerifikasiKycPage() {
             selfieUrl: d.selfieUrl,
             watermarkText: d.watermarkText,
             submittedAt: new Date(d.submittedAt).toLocaleString("id-ID"),
-            status: (d.status === "VERIFIED" ? "VERIFIED" : d.status === "REJECTED" ? "REJECTED" : "PENDING") as "VERIFIED" | "PENDING" | "REJECTED",
+            status: (d.status === "VERIFIED"
+              ? "VERIFIED"
+              : d.status === "REJECTED" || d.status === "SUSPENDED"
+              ? "REJECTED"
+              : "PENDING") as "VERIFIED" | "PENDING" | "REJECTED",
             alasanPenolakan: d.alasanPenolakan || undefined,
-          }));
-
-          const existingIds = new Set(mapped.map((m) => m.id));
-          const merged = [...mapped, ...localList.filter((l) => !existingIds.has(l.id))];
-          setKycList(merged);
-          return;
-        }
-      } catch (e) {
-        console.warn("Load DB KYC fallback to local:", e);
+          })
+        );
+        setKycList(mapped);
       }
-      setKycList(localList);
+    } catch (e) {
+      console.warn("Load DB KYC error:", e);
     }
-    loadData();
   }, []);
 
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      void loadKycFromDb();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [loadKycFromDb]);
+
   const handleApprove = async (item: KycSubmission) => {
-    try {
-      await approveKycServerAction(item.id);
-    } catch (e) {
-      console.warn("DB approve KYC fallback:", e);
+    setErrorMsg(null);
+    const res = await approveKycServerAction(item.id);
+    if (!res.success) {
+      setErrorMsg(res.message || "Gagal menyetujui e-KYC di basis data.");
+      return;
     }
 
-    const all = getStorageData<KycSubmission[]>("resilio_kyc_list", MOCK_KYC_REQUESTS);
-    const updated = all.map((k) =>
-      k.id === item.id ? { ...k, status: "VERIFIED" as const } : k
-    );
-    setStorageData("resilio_kyc_list", updated);
-
-    // Aktifkan atau tambahkan ke daftar pasien resmi
-    const patients = getStorageData<Patient[]>("resilio_patients", MOCK_PATIENTS);
-    const existing = patients.find((p) => p.nik === item.nik);
-    if (existing) {
-      const updatedPts = patients.map((p) =>
-        p.nik === item.nik ? { ...p, statusKyc: "VERIFIED" as const } : p
-      );
-      setStorageData("resilio_patients", updatedPts);
-    } else {
-      const newPatient: Patient = {
-        id: item.userId,
-        nik: item.nik,
-        name: item.namaLengkap,
-        age: 30,
-        gender: "L",
-        mrn: generateMrn(),
-        bloodType: "O+",
-        allergies: [],
-        emergencyContact: { name: "Keluarga", relation: "Keluarga", phone: "0812000000" },
-        lastVisit: "-",
-        hasAccess: true,
-        encryptionKeyHex: "",
-        statusKyc: "VERIFIED",
-      };
-      setStorageData("resilio_patients", [newPatient, ...patients]);
-    }
-
-    setKycList(updated);
     if (previewKyc?.id === item.id) setPreviewKyc(null);
-    setNotif(`e-KYC untuk ${item.namaLengkap} (NIK: ${item.nik}) berhasil disetujui. Akun pasien telah aktif di basis data.`);
-    setTimeout(() => setNotif(null), 4000);
+    setNotif(res.message);
+    await loadKycFromDb();
   };
 
   const handleReject = async () => {
     if (!selectedKyc) return;
-    try {
-      await rejectKycServerAction(selectedKyc.id, rejectReason);
-    } catch (e) {
-      console.warn("DB reject KYC fallback:", e);
+    setErrorMsg(null);
+    const res = await rejectKycServerAction(selectedKyc.id, rejectReason);
+    if (!res.success) {
+      setErrorMsg(res.message || "Gagal menolak e-KYC di basis data.");
+      return;
     }
 
-    const all = getStorageData<KycSubmission[]>("resilio_kyc_list", MOCK_KYC_REQUESTS);
-    const updated = all.map((k) =>
-      k.id === selectedKyc.id
-        ? { ...k, status: "REJECTED" as const, alasanPenolakan: rejectReason || "Data NIK tidak sesuai KTP" }
-        : k
-    );
-    setStorageData("resilio_kyc_list", updated);
-    setKycList(updated);
     setShowRejectModal(false);
     if (previewKyc?.id === selectedKyc.id) setPreviewKyc(null);
     setRejectReason("");
-    setNotif(`Pengajuan e-KYC ${selectedKyc.namaLengkap} ditolak.`);
-    setTimeout(() => setNotif(null), 4000);
+    setNotif(`Pengajuan e-KYC ${selectedKyc.namaLengkap} ditolak (Status REJECTED tersimpan permanen di PostgreSQL).`);
+    await loadKycFromDb();
   };
 
   return (
@@ -164,8 +118,14 @@ export default function VerifikasiKycPage() {
       </div>
 
       {notif && (
-        <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-bold">
+        <div role="status" className="p-4 rounded-2xl bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-bold">
           {notif}
+        </div>
+      )}
+
+      {errorMsg && (
+        <div role="alert" className="p-4 rounded-2xl bg-red-50 border border-red-300 text-red-900 text-xs font-bold">
+          {errorMsg}
         </div>
       )}
 

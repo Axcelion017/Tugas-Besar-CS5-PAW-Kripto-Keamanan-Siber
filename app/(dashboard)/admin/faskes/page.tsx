@@ -1,19 +1,18 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { Faskes } from "@/lib/db/mockData";
 import {
-  MOCK_FASKES,
-  MOCK_SECURITY_LOGS,
-  getStorageData,
-  setStorageData,
-  Faskes,
-  SecurityAuditLog,
-} from "@/lib/db/mockData";
-import { toggleFaskesKillSwitchServerAction } from "@/lib/actions/faskes";
+  getFaskesListServerAction,
+  toggleFaskesKillSwitchServerAction,
+} from "@/lib/actions/faskes";
+import { createFaskesServerAction } from "@/lib/actions/admin";
 
-function generateFaskesLogId(prefix: string) {
-  return `${prefix}-${Date.now().toString().slice(-4)}`;
+function formatFaskesType(tipe: string): Faskes["tipe"] {
+  if (tipe === "KLINIK_PRATAMA" || tipe === "Klinik Pratama") return "Klinik Pratama";
+  if (tipe === "PUSKESMAS" || tipe === "Puskesmas") return "Puskesmas";
+  return "Rumah Sakit";
 }
 
 export default function MasterFaskesAdminPage() {
@@ -24,16 +23,45 @@ export default function MasterFaskesAdminPage() {
   const [alamatBaru, setAlamatBaru] = useState("");
   const [kontakBaru, setKontakBaru] = useState("");
   const [notif, setNotif] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const loadFaskesFromDb = useCallback(async () => {
+    try {
+      const res = await getFaskesListServerAction();
+      if (res.success && Array.isArray(res.data)) {
+        const mapped: Faskes[] = (
+          res.data as unknown as Array<{
+            id: string;
+            kodeFaskes: string;
+            nama: string;
+            tipe: string;
+            alamat: string;
+            kota: string;
+            kontak: string;
+            spesialisasiList: string[];
+            kategoriPenyakit: string[];
+            status: "ACTIVE" | "QUARANTINED";
+          }>
+        ).map((f) => ({
+          ...f,
+          tipe: formatFaskesType(f.tipe),
+        }));
+        setFaskesList(mapped);
+      }
+    } catch (err) {
+      console.warn("Load DB Faskes error:", err);
+    }
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      const list = getStorageData<Faskes[]>("resilio_faskes_list", MOCK_FASKES);
-      setFaskesList(list);
+      void loadFaskesFromDb();
     }, 0);
     return () => clearTimeout(timer);
-  }, []);
+  }, [loadFaskesFromDb]);
 
   const handleToggleQuarantine = async (faskes: Faskes) => {
+    setErrorMsg(null);
     const isQuarantining = faskes.status === "ACTIVE";
     const actionText = isQuarantining ? "MENGISOLASI" : "MEMULIHKAN";
 
@@ -41,7 +69,7 @@ export default function MasterFaskesAdminPage() {
       !confirm(
         `PERINGATAN SIBER: Apakah Anda yakin ingin ${actionText} Faskes ${faskes.nama}? ${
           isQuarantining
-            ? "Seluruh jalur API sinkronisasi faskes ini akan dibekukan untuk mengisolasi potensi infeksi ransomware!"
+            ? "Seluruh jalur booking dan penulisan RME faskes ini akan dibekukan di server untuk mengisolasi potensi ransomware!"
             : "Koneksi ke server pusat akan diizinkan kembali."
         }`
       )
@@ -49,77 +77,46 @@ export default function MasterFaskesAdminPage() {
       return;
     }
 
-    // 1. Eksekusi Server Action untuk isolasi faskes di basis data PostgreSQL
-    try {
-      await toggleFaskesKillSwitchServerAction(
-        faskes.id,
-        isQuarantining ? "QUARANTINED" : "ACTIVE"
-      );
-    } catch (err: unknown) {
-      console.warn("DB toggle faskes kill-switch fallback:", err);
-    }
-
-    const updated = faskesList.map((f) =>
-      f.id === faskes.id
-        ? { ...f, status: (isQuarantining ? "QUARANTINED" : "ACTIVE") as "ACTIVE" | "QUARANTINED" }
-        : f
+    const res = await toggleFaskesKillSwitchServerAction(
+      faskes.id,
+      isQuarantining ? "QUARANTINED" : "ACTIVE"
     );
-    setStorageData("resilio_faskes_list", updated);
-    setFaskesList(updated);
-
-    // Catat ke SIEM Log
-    const logs = getStorageData<SecurityAuditLog[]>("resilio_security_logs", MOCK_SECURITY_LOGS);
-    const newLog: SecurityAuditLog = {
-      id: generateFaskesLogId("LOG"),
-      timestamp: new Date().toLocaleString("id-ID"),
-      actorId: "ADM-01",
-      actorName: "Administrator Utama",
-      actorRole: "ADMIN",
-      action: "QUARANTINE_FASKES",
-      targetResource: `/api/admin/faskes/${faskes.id}`,
-      ipAddress: "10.0.1.1 (Admin Terminal)",
-      userAgent: typeof navigator !== "undefined" ? navigator.userAgent : "Admin Browser",
-      severity: isQuarantining ? "CRITICAL" : "INFO",
-      detail: `Kill-Switch: Status faskes ${faskes.nama} diubah menjadi ${
-        isQuarantining ? "QUARANTINED (Terisolasi dari Cloud API)" : "ACTIVE"
-      }`,
-    };
-    setStorageData("resilio_security_logs", [newLog, ...logs]);
+    if (!res.success) {
+      setErrorMsg(res.message || "Gagal mengubah status Kill-Switch faskes.");
+      return;
+    }
 
     setNotif(
       `Status Faskes ${faskes.nama} berhasil diubah menjadi ${
         isQuarantining ? "QUARANTINED (Terisolasi)" : "ACTIVE (Normal)"
-      }.`
+      } di PostgreSQL.`
     );
-    setTimeout(() => setNotif(null), 5000);
+    await loadFaskesFromDb();
   };
 
-  const handleAddFaskes = (e: React.FormEvent) => {
+  const handleAddFaskes = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMsg(null);
     if (!namaBaru.trim()) return;
 
-    const newFas: Faskes = {
-      id: `FAS-0${faskesList.length + 1}`,
-      kodeFaskes: `FAS-${Math.floor(100 + Math.random() * 900)}`,
+    const res = await createFaskesServerAction({
       nama: namaBaru,
       tipe: tipeBaru,
-      alamat: alamatBaru || "Jl. Kesehatan Nasional",
       kota: kotaBaru,
-      spesialisasiList: ["Dokter Umum", "Kesehatan Ibu & Anak"],
-      kategoriPenyakit: ["Penyakit Umum", "ISPA", "Pemeriksaan Rutin"],
-      status: "ACTIVE",
-      kontak: kontakBaru || "(0274) 123456",
-    };
+      alamat: alamatBaru,
+      kontak: kontakBaru,
+    });
 
-    const updated = [...faskesList, newFas];
-    setStorageData("resilio_faskes_list", updated);
-    setFaskesList(updated);
+    if (!res.success) {
+      setErrorMsg(res.message || "Gagal mendaftarkan faskes baru.");
+      return;
+    }
 
     setNamaBaru("");
     setAlamatBaru("");
     setKontakBaru("");
-    setNotif(`Faskes ${newFas.nama} berhasil didaftarkan ke jaringan RME Nasional.`);
-    setTimeout(() => setNotif(null), 4000);
+    setNotif(res.message || "Faskes berhasil didaftarkan ke PostgreSQL.");
+    await loadFaskesFromDb();
   };
 
   return (
@@ -142,8 +139,14 @@ export default function MasterFaskesAdminPage() {
       </div>
 
       {notif && (
-        <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-bold">
+        <div role="status" className="p-4 rounded-2xl bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-bold">
           {notif}
+        </div>
+      )}
+
+      {errorMsg && (
+        <div role="alert" className="p-4 rounded-2xl bg-red-50 border border-red-300 text-red-900 text-xs font-bold">
+          {errorMsg}
         </div>
       )}
 

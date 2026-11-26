@@ -359,19 +359,19 @@ Aplikasi klinis memiliki standar usability lebih ketat dari aplikasi umum karena
 
 ---
 
-### Fase 2 (`P1 — Tinggi`) — Eliminasi *Split-Brain* & Integritas Alur End-to-End 4 Peran
-- [ ] **F2.1 — Alur Pasien 100% PostgreSQL**:
-  - *Target*: `app/(dashboard)/pasien/{booking,consent,profil,faskes,audit-log,tiket-kendala,page}.tsx`, `lib/actions/auth.ts`.
-  - *Aksi*: Gunakan ID & PIN kembalian DB di `/pasien/booking` dan simpan auto-consent ke tabel `access_grants`; sambungkan `/pasien/faskes` & `[faskesId]` ke `getFaskesListServerAction` dan blokir booking jika `QUARANTINED`; sinkronkan enum `audit-log` (`VIEW_RME`, `LOGIN`, `WRITE_RME`, `IDOR_BLOCKED`); perbaiki `pasien/page.tsx` (`safePatient.id`, tampilkan *empty state* jujur tanpa grafik vital palsu); wajibkan file pada KYC dan jangan timpa `patient.nik` sebelum disetujui Admin; batasi `min`/`max` tanggal booking & lahir serta kunci tombol saat `isSubmitting`.
-- [ ] **F2.2 — Alur Staf Triase & Admisi 100% PostgreSQL + Handoff Cepat**:
-  - *Target*: `app/(dashboard)/staf/{page,triase/page,assign-dpjp/page,rujukan/page}.tsx`, `lib/actions/triage.ts`.
+### Fase 2 (`P1 — Tinggi`) — Eliminasi *Split-Brain* & Integritas Alur End-to-End 4 Peran *(SELESAI & TERVERIFIKASI — 26 Nov 2026, 08:52 WIB; catatan lengkap: [fase-2-end-to-end-db-2026-11-26.md](../perubahan/fase-2-end-to-end-db-2026-11-26.md))*
+- [x] **F2.1 — Alur Pasien 100% PostgreSQL**:
+  - *Target*: `app/(dashboard)/pasien/{booking,consent,profil,faskes,faskes/[faskesId],audit-log,tiket-kendala,page}.tsx`, `lib/actions/{auth,appointment}.ts`.
+  - *Aksi*: Gunakan ID & PIN kembalian DB di `/pasien/booking` dan simpan auto-consent ke tabel `access_grants`; sambungkan `/pasien/faskes` & `[faskesId]` ke `getFaskesListServerAction` dan blokir booking jika `QUARANTINED`; migrasikan `/pasien/consent` & `/pasien/tiket-kendala` ke 100% PostgreSQL; sinkronkan enum `audit-log` (`VIEW_RME`, `LOGIN`, `WRITE_RME`, `IDOR_BLOCKED`, dll.); perbaiki `pasien/page.tsx` (`safePatient.id`, tampilkan *empty state* jujur tanpa grafik vital palsu); wajibkan file pada KYC dan jangan timpa `patient.nik` sebelum disetujui Admin; batasi `min`/`max` tanggal booking & lahir serta kunci tombol saat `isSubmitting`.
+- [x] **F2.2 — Alur Staf Triase & Admisi 100% PostgreSQL + Handoff Cepat**:
+  - *Target*: `app/(dashboard)/staf/{page,triase/page,assign-dpjp/page,rujukan/page}.tsx`, `lib/actions/{triage,appointment}.ts`.
   - *Aksi*: Hubungkan `/staf` (check-in & walk-in) ke Server Actions PostgreSQL dan bawa `?aptId=` pada tombol *"Mulai Triase"*; perbaiki `submitTriageServerAction` agar mengubah `Appointment.status` ke `WAITING_DOCTOR` dalam `prisma.$transaction` serta tambahkan *auto-highlight* peringatan nilai vital abnormal; tampilkan `triageAssessment` asli di `/staf/assign-dpjp` & perbaiki dependency `useEffect` agar tidak refetch tiap klik; pisahkan data tab Keluar/Masuk di `/staf/rujukan`.
-- [ ] **F2.3 — Alur Dokter DPJP 100% PostgreSQL + Konteks Klinis**:
-  - *Target*: `app/(dashboard)/nakes/{page,jadwal/page,rujukan/page,periksa/[bookingId]/page,pasien-lookup/[patientId]/page}.tsx`, `components/clinical/DoctorCalendarSchedule.tsx`.
-  - *Aksi*: Muat data booking `/nakes/periksa/[bookingId]` dari PostgreSQL, pasang **Sticky Patient Banner** (Nama, MRN, Alergi, Triase) di ruang periksa, update `Appointment.status` ke `COMPLETED` saat disimpan, ikutkan input Tab 5 ke payload terenkripsi, nonaktifkan cetak resume sebelum dekripsi berhasil, jadikan tanggal kalender dokter dinamis (hapus hardcode `12–18 Okt 2026`), dan perbaiki filter status kartu metrik di `/nakes`.
-- [ ] **F2.4 — Konsol Admin 100% PostgreSQL & Penegakan Kill-Switch**:
-  - *Target*: `app/(dashboard)/admin/{page,siem-monitor/page,verifikasi-kyc/page,verifikasi-kyd/page,incident-center/page,faskes/page}.tsx`, `lib/actions/auth.ts`.
-  - *Aksi*: Hubungkan seluruh 5 halaman Admin ke Server Actions PostgreSQL (termasuk Server Action untuk e-KYD); perbaiki `rejectKycServerAction` agar menyimpan `AccountStatus.REJECTED` (bukan `SUSPENDED`); tambahkan pengecekan `faskes.status !== "QUARANTINED"` pada Server Action booking & klinis.
+- [x] **F2.3 — Alur Dokter DPJP 100% PostgreSQL + Konteks Klinis**:
+  - *Target*: `app/(dashboard)/nakes/{page,jadwal/page,rujukan/page,periksa/[bookingId]/page,pasien-lookup/[patientId]/page}.tsx`, `components/clinical/DoctorCalendarSchedule.tsx`, `lib/actions/clinical.ts`.
+  - *Aksi*: Muat data booking `/nakes/periksa/[bookingId]` dari PostgreSQL (`getAppointmentForExamServerAction`), pasang **Sticky Patient Banner** (Nama, MRN, Alergi, Triase) di ruang periksa, update `Appointment.status` ke `COMPLETED` saat disimpan, ikutkan input Tab 2–5 ke payload terenkripsi, nonaktifkan cetak resume sebelum dekripsi berhasil, jadikan tanggal kalender dokter dinamis (hapus hardcode `12–18 Okt 2026`), dan perbaiki filter status kartu metrik di `/nakes`.
+- [x] **F2.4 — Konsol Admin 100% PostgreSQL & Penegakan Kill-Switch**:
+  - *Target*: `lib/actions/admin.ts` (baru), `app/(dashboard)/admin/{page,siem-monitor/page,verifikasi-kyc/page,verifikasi-kyd/page,incident-center/page,faskes/page}.tsx`, `lib/actions/{auth,clinical,appointment}.ts`.
+  - *Aksi*: Hubungkan seluruh 6 halaman Admin ke Server Actions PostgreSQL (termasuk Server Action untuk e-KYD); perbaiki `rejectKycServerAction` agar menyimpan `AccountStatus.REJECTED` (bukan `SUSPENDED`); tambahkan pengecekan `faskes.status !== "QUARANTINED"` pada Server Action booking & seluruh 5 aksi tulis klinis.
 
 **Quality Gates Fase 2**:
 | Indikator Uji | Standar Acuan | Cara Menguji | Target Lulus |

@@ -4,6 +4,35 @@ Dokumen pencatatan penggunaan asisten kecerdasan buatan (AI) sesuai kebijakan in
 
 ---
 
+## 2026-11-26 — Fase 2 Refactoring (`P1 — Tinggi`): Eliminasi *Split-Brain* & Integritas Alur End-to-End 4 Peran (100% PostgreSQL)
+
+- **Tool**: Google Antigravity (Gemini Models)
+- **Branch**: `refactor/fase-2-end-to-end-db`
+- **Catatan Perubahan Rinci**: `docs/perubahan/fase-2-end-to-end-db-2026-11-26.md`
+- **Tujuan**:
+  1. Melaksanakan seluruh item **Fase 2 (`F2.1` – `F2.4`)** dari Master Plan Audit Menyeluruh JagaMedis (`docs/audit/audit_menyeluruh_jagamedis_22Nov2026.md`) untuk menghilangkan *split-brain* antara `localStorage` / `MOCK_*` dan PostgreSQL pada keempat peran pengguna.
+  2. Menyambungkan seluruh alur **Pasien** (booking + auto-consent atomik, direktori faskes + blokir karantina, consent manager, tiket kendala, audit log, dashboard tanpa data vital palsu, profil & KYC) ke PostgreSQL 100%.
+  3. Menyambungkan seluruh alur **Staf Triase & Admisi** (check-in, walk-in, handoff cepat `?aptId=`, transaksi atomik triase $\rightarrow$ `WAITING_DOCTOR`, peringatan vital kritis CDS, assign DPJP ber-PIN, pemisahan rujukan masuk/keluar) ke PostgreSQL.
+  4. Menyambungkan seluruh alur **Dokter DPJP** (ruang periksa 100% PostgreSQL + Sticky Patient Banner NISTIR 7804 + enkripsi Tab 2–5, penonaktifan cetak sebelum dekripsi, kalender dinamis, perbaikan metrik, serta penegakan Kill-Switch `QUARANTINED` pada seluruh aksi tulis klinis).
+  5. Membuat `lib/actions/admin.ts` dan menyambungkan seluruh 6 halaman **Konsol Admin Regulator** ke PostgreSQL serta menegakkan siklus status `AccountStatus.REJECTED` e-KYC/e-KYD secara persisten.
+- **Ringkasan Prompt**:
+  1. *"Berikan pesan commit yang komprehensif dan berikan nama branch untuk fase kedua."*
+  2. *"Okeh sekarang sudah dibuatkan branch baru sekarang lanjut ke fase kedua."*
+- **Bagian yang Dihasilkan / Dimodifikasi**:
+  - **Server Actions (`F2.1`–`F2.4`)**: `lib/actions/admin.ts` (baru, 8 aksi Admin), `lib/actions/{auth,appointment,triage,clinical}.ts`.
+  - **Portal Pasien (`F2.1`)**: `app/(dashboard)/pasien/{page,booking,consent,faskes,faskes/[faskesId],audit-log,profil,tiket-kendala}/page.tsx`.
+  - **Meja Staf Triase (`F2.2`)**: `app/(dashboard)/staf/{page,triase/page,assign-dpjp/page,rujukan/page}.tsx`.
+  - **Stasiun Kerja Dokter (`F2.3`)**: `app/(dashboard)/nakes/{page,jadwal/page,rujukan/page,periksa/[bookingId]/page,pasien-lookup/[patientId]/page}.tsx`, `components/clinical/DoctorCalendarSchedule.tsx`.
+  - **Konsol Admin (`F2.4`)**: `app/(dashboard)/admin/{page,siem-monitor/page,verifikasi-kyc/page,verifikasi-kyd/page,incident-center/page,faskes/page}.tsx`.
+  - **Pengujian & Dokumentasi**: `tests/phase2-end-to-end.test.ts` (baru, 4 skenario integrasi end-to-end PostgreSQL), `docs/perubahan/fase-2-end-to-end-db-2026-11-26.md` (baru), `docs/perubahan/README.md`, `AI_LOG.md`, `CHANGELOG.md`, `EVALUASI.md`, `README.md`, `docs/audit/audit_menyeluruh_jagamedis_22Nov2026.md`.
+- **Cara Verifikasi**:
+  - `npx tsc --noEmit`: 0 kesalahan tipe statis.
+  - `npx vitest run`: 6 berkas tes, **44/44 tes lulus (100%)**.
+  - `npm run lint`: 0 error, 0 warning.
+  - `npm run build`: Kompilasi produksi **33/33 rute + `ƒ Proxy (Middleware)`** sukses.
+
+---
+
 ## 2026-11-26 — Fase 1 Refactoring (`P0 — Kritis`): Keamanan Server-Side, Sesi Persisten & Kriptografi Nyata
 
 - **Tool**: Google Antigravity (Gemini Models)

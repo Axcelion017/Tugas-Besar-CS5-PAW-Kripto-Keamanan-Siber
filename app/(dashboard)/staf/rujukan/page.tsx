@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   MOCK_ACCESS_GRANTS,
@@ -9,13 +9,17 @@ import {
   setStorageData,
   AccessGrant,
 } from "@/lib/db/mockData";
+import { getFaskesListServerAction } from "@/lib/actions/faskes";
+import { createWalkInAppointmentServerAction } from "@/lib/actions/appointment";
 
 export default function StafRujukanAdminPage() {
-  const [grants, setGrants] = useState<AccessGrant[]>(() =>
-    getStorageData<AccessGrant[]>("resilio_access_grants", MOCK_ACCESS_GRANTS)
+  const [grants, setGrants] = useState<AccessGrant[]>([]);
+  const [faskesOptions, setFaskesOptions] = useState<Array<{ id: string; nama: string; tipe: string }>>(
+    MOCK_FASKES.map((f) => ({ id: f.id, nama: f.nama, tipe: f.tipe }))
   );
   const [activeTab, setActiveTab] = useState<"keluar" | "masuk">("keluar");
   const [notif, setNotif] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // Form Rujukan Masuk Baru
   const [inNama, setInNama] = useState("");
@@ -25,9 +29,45 @@ export default function StafRujukanAdminPage() {
   const [inDiagnosa, setInDiagnosa] = useState("");
   const [showInModal, setShowInModal] = useState(false);
 
-  const handleCreateIncoming = (e: React.FormEvent) => {
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setGrants(getStorageData<AccessGrant[]>("resilio_access_grants", MOCK_ACCESS_GRANTS));
+    }, 0);
+
+    getFaskesListServerAction()
+      .then((res) => {
+        if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+          setFaskesOptions(
+            (res.data as unknown as Array<{ id: string; nama: string; tipe: string }>).map((f) => ({
+              id: f.id,
+              nama: f.nama,
+              tipe: f.tipe,
+            }))
+          );
+        }
+      })
+      .catch(() => {});
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  const handleCreateIncoming = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMsg(null);
     if (!inNama || !inNik) return;
+
+    // Daftarkan juga antrean rujukan masuk ke PostgreSQL bila pasien terdaftar via NIK
+    let dbNote = "";
+    if (/^\d{16}$/.test(inNik)) {
+      const aptRes = await createWalkInAppointmentServerAction({
+        nik: inNik,
+        poli: inPoli,
+        keluhan: `Rujukan Masuk dari ${inAsalFaskes}: ${inDiagnosa || "Observasi lanjutan"}`,
+      });
+      if (aptRes.success) {
+        dbNote = " Antrean Loket Triase PostgreSQL juga otomatis diterbitkan.";
+      }
+    }
 
     const newGrant: AccessGrant = {
       id: `GRANT-IN-${Date.now().toString().slice(-4)}`,
@@ -50,13 +90,24 @@ export default function StafRujukanAdminPage() {
     setInNama("");
     setInNik("");
     setInDiagnosa("");
-    setNotif(`Berkas rujukan masuk untuk ${inNama} berhasil didaftarkan dan diarahkan ke ${inPoli}.`);
-    setTimeout(() => setNotif(null), 4000);
+    setActiveTab("masuk");
+    setNotif(`Berkas rujukan masuk untuk ${inNama} berhasil didaftarkan ke ${inPoli}.${dbNote}`);
+    setTimeout(() => setNotif(null), 5000);
   };
 
-  const outgoingReferrals = grants.filter(
-    (g) => g.entityType === "FASKES" || g.scope.toLowerCase().includes("rujukan")
+  // Pisahkan secara tegas data Rujukan Masuk vs Rujukan Keluar
+  const incomingReferrals = grants.filter(
+    (g) =>
+      g.scope.toLowerCase().includes("rujukan masuk") ||
+      g.id.startsWith("GRANT-IN-")
   );
+  const outgoingReferrals = grants.filter(
+    (g) =>
+      !g.scope.toLowerCase().includes("rujukan masuk") &&
+      !g.id.startsWith("GRANT-IN-") &&
+      (g.entityType === "FASKES" || g.scope.toLowerCase().includes("rujukan"))
+  );
+  const displayedReferrals = activeTab === "keluar" ? outgoingReferrals : incomingReferrals;
 
   return (
     <div className="space-y-6">
@@ -78,8 +129,14 @@ export default function StafRujukanAdminPage() {
       </div>
 
       {notif && (
-        <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-bold">
+        <div role="status" className="p-4 rounded-2xl bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-bold">
           {notif}
+        </div>
+      )}
+
+      {errorMsg && (
+        <div role="alert" className="p-4 rounded-2xl bg-red-50 border border-red-300 text-red-900 text-xs font-bold">
+          {errorMsg}
         </div>
       )}
 
@@ -125,7 +182,7 @@ export default function StafRujukanAdminPage() {
               : "Daftar Pasien Rujukan Masuk dari Faskes Lain"}
           </h2>
           <span className="text-xs font-mono text-slate-500">
-            {outgoingReferrals.length} Berkas Aktif
+            {displayedReferrals.length} Berkas Aktif
           </span>
         </div>
 
@@ -143,7 +200,16 @@ export default function StafRujukanAdminPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {outgoingReferrals.map((g) => (
+              {displayedReferrals.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="p-8 text-center text-slate-500 text-xs">
+                    {activeTab === "keluar"
+                      ? "Belum ada berkas rujukan keluar faskes saat ini."
+                      : "Belum ada pasien rujukan masuk dari faskes lain. Klik '+ Terima Pasien Rujukan Masuk' untuk mendaftarkan."}
+                  </td>
+                </tr>
+              ) : (
+                displayedReferrals.map((g) => (
                 <tr key={g.id} className="hover:bg-slate-50/50 transition">
                   <td className="p-4 font-mono font-bold text-slate-900">{g.id}</td>
                   <td className="p-4 font-bold text-slate-900 text-sm">{g.pasienNama}</td>
@@ -166,14 +232,15 @@ export default function StafRujukanAdminPage() {
                   </td>
                   <td className="p-4 text-right">
                     <Link
-                      href={`/staf/assign-dpjp`}
+                      href="/staf/assign-dpjp"
                       className="px-3 py-1.5 bg-slate-900 hover:bg-black text-white text-[11px] font-bold rounded-lg uppercase"
                     >
                       Arahkan Poli
                     </Link>
                   </td>
                 </tr>
-              ))}
+              ))
+              )}
             </tbody>
           </table>
         </div>
@@ -229,7 +296,7 @@ export default function StafRujukanAdminPage() {
                   onChange={(e) => setInAsalFaskes(e.target.value)}
                   className="w-full px-4 py-2 border rounded-xl text-sm bg-white"
                 >
-                  {MOCK_FASKES.map((f) => (
+                  {faskesOptions.map((f) => (
                     <option key={f.id} value={f.nama}>
                       {f.nama} ({f.tipe})
                     </option>

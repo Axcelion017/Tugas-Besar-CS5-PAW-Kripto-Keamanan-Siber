@@ -1,13 +1,40 @@
 "use client";
 
-import React, { use } from "react";
+import React, { use, useState, useEffect } from "react";
 import Link from "next/link";
-import {
-  MOCK_FASKES,
-  MOCK_DOCTORS,
-  getStorageData,
-  Faskes,
-} from "@/lib/db/mockData";
+import { getFaskesDetailServerAction } from "@/lib/actions/faskes";
+import { DashboardSkeleton } from "@/components/ui/Skeleton";
+
+interface DbDoctor {
+  id: string;
+  name: string;
+  specialty: string;
+  strNumber: string;
+  sipNumber: string;
+  kuotaHarian: number;
+  isActive: boolean;
+}
+
+interface DbFaskesDetail {
+  id: string;
+  kodeFaskes: string;
+  nama: string;
+  tipe: string;
+  alamat: string;
+  kota: string;
+  kontak: string;
+  spesialisasiList: string[];
+  kategoriPenyakit: string[];
+  status: "ACTIVE" | "QUARANTINED";
+  doctors: DbDoctor[];
+}
+
+function formatFaskesType(tipe: string): string {
+  if (tipe === "RUMAH_SAKIT") return "Rumah Sakit";
+  if (tipe === "KLINIK_PRATAMA") return "Klinik Pratama";
+  if (tipe === "PUSKESMAS") return "Puskesmas";
+  return tipe;
+}
 
 export default function FaskesDetailPage({
   params,
@@ -15,9 +42,35 @@ export default function FaskesDetailPage({
   params: Promise<{ faskesId: string }>;
 }) {
   const { faskesId } = use(params);
+  const [faskes, setFaskes] = useState<DbFaskesDetail | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const faskesList = getStorageData<Faskes[]>("resilio_faskes_list", MOCK_FASKES);
-  const faskes = faskesList.find((f) => f.id === faskesId);
+  useEffect(() => {
+    async function loadDetail() {
+      try {
+        const res = await getFaskesDetailServerAction(faskesId);
+        if (res.success && res.data) {
+          const raw = res.data as unknown as DbFaskesDetail;
+          setFaskes({
+            ...raw,
+            tipe: formatFaskesType(raw.tipe),
+          });
+        } else {
+          setFaskes(null);
+        }
+      } catch {
+        setFaskes(null);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    loadDetail();
+  }, [faskesId]);
+
+  if (isLoading) {
+    return <DashboardSkeleton noticeText="Memuat profil fasilitas kesehatan dan daftar dokter dari PostgreSQL..." />;
+  }
 
   if (!faskes) {
     return (
@@ -46,7 +99,8 @@ export default function FaskesDetailPage({
               Fasilitas Kesehatan Tidak Ditemukan
             </h2>
             <p className="text-xs text-slate-500 font-medium">
-              Fasilitas kesehatan dengan ID <span className="font-mono font-bold text-slate-800">{faskesId}</span> tidak terdaftar dalam pangkalan data rumah sakit dan klinik nasional.
+              Fasilitas kesehatan dengan ID{" "}
+              <span className="font-mono font-bold text-slate-800">{faskesId}</span> tidak terdaftar dalam pangkalan data rumah sakit dan klinik nasional.
             </p>
           </div>
           <div className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-4 rounded-2xl border border-slate-200 text-left font-mono">
@@ -71,7 +125,8 @@ export default function FaskesDetailPage({
     );
   }
 
-  const doctors = MOCK_DOCTORS.filter((d) => d.faskesId === faskes.id);
+  const isQuarantined = faskes.status === "QUARANTINED";
+  const doctors = faskes.doctors || [];
 
   return (
     <div className="space-y-6">
@@ -88,16 +143,31 @@ export default function FaskesDetailPage({
         <span>{faskes.nama}</span>
       </div>
 
+      {isQuarantined && (
+        <div
+          role="alert"
+          className="p-4 rounded-2xl bg-red-50 border border-red-300 text-red-900 text-xs font-bold"
+        >
+          PERINGATAN KILL-SWITCH SIBER: {faskes.nama} saat ini sedang berada dalam status KARANTINA oleh Admin Regulator. Pendaftaran antrean baru diblokir hingga isolasi dicabut.
+        </div>
+      )}
+
       {/* Hero Profil Faskes */}
       <div className="p-8 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs font-black uppercase tracking-wider text-blue-600">
                 {faskes.tipe} • ID: {faskes.kodeFaskes}
               </span>
-              <span className="text-[10px] font-bold uppercase px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
-                Operasional Normal
+              <span
+                className={`text-[10px] font-bold uppercase px-2.5 py-0.5 rounded-full border ${
+                  isQuarantined
+                    ? "bg-red-100 text-red-800 border-red-300"
+                    : "bg-emerald-100 text-emerald-800 border-emerald-200"
+                }`}
+              >
+                {isQuarantined ? "Karantina / Terisolasi" : "Operasional Normal"}
               </span>
             </div>
             <h1 className="text-3xl font-black text-slate-900 tracking-tight mt-1">
@@ -108,12 +178,18 @@ export default function FaskesDetailPage({
             </p>
           </div>
 
-          <Link
-            href={`/pasien/booking?faskesId=${faskes.id}`}
-            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md transition text-center"
-          >
-            Booking Antrean Faskes Ini →
-          </Link>
+          {isQuarantined ? (
+            <span className="px-6 py-3 bg-red-100 text-red-700 border border-red-300 rounded-xl text-xs font-black uppercase tracking-wider text-center">
+              Booking Ditangguhkan (Karantina)
+            </span>
+          ) : (
+            <Link
+              href={`/pasien/booking?faskesId=${faskes.id}`}
+              className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md transition text-center"
+            >
+              Booking Antrean Faskes Ini →
+            </Link>
+          )}
         </div>
 
         <div className="pt-4 border-t border-slate-100 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
@@ -164,74 +240,49 @@ export default function FaskesDetailPage({
               Belum ada dokter yang didaftarkan pada faskes ini.
             </div>
           ) : (
-            doctors.map((doc) => {
-              const sisaKuota = doc.kuotaHarian - doc.kuotaTerisi;
-              const isPenuh = sisaKuota <= 0;
-
-              return (
-                <div
-                  key={doc.id}
-                  className="p-6 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-4 flex flex-col justify-between"
-                >
-                  <div>
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <span className="text-[10px] font-bold uppercase text-emerald-700">
-                          {doc.specialty}
-                        </span>
-                        <h3 className="text-base font-black text-slate-900 mt-0.5">
-                          {doc.name}
-                        </h3>
-                        <p className="text-[10px] text-slate-500 font-mono mt-0.5">
-                          STR: {doc.strNumber} • SIP: {doc.sipNumber}
-                        </p>
-                      </div>
-
-                      <span
-                        className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${
-                          isPenuh
-                            ? "bg-red-100 text-red-700 border-red-200"
-                            : "bg-emerald-100 text-emerald-800 border-emerald-200"
-                        }`}
-                      >
-                        {isPenuh ? "Kuota Penuh" : `Tersedia ${sisaKuota} Kuota`}
+            doctors.map((doc) => (
+              <div
+                key={doc.id}
+                className="p-6 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-4 flex flex-col justify-between"
+              >
+                <div>
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <span className="text-[10px] font-bold uppercase text-emerald-700">
+                        {doc.specialty}
                       </span>
-                    </div>
-
-                    {/* Jadwal Praktik */}
-                    <div className="mt-4 p-3 bg-slate-50 rounded-xl space-y-1">
-                      <p className="text-[10px] font-bold text-slate-500 uppercase">
-                        Jadwal Praktik Mingguan:
+                      <h3 className="text-base font-black text-slate-900 mt-0.5">{doc.name}</h3>
+                      <p className="text-[11px] text-slate-500 font-mono mt-0.5">
+                        STR: {doc.strNumber} • SIP: {doc.sipNumber}
                       </p>
-                      {doc.jadwal.map((j, idx) => (
-                        <p key={idx} className="text-xs text-slate-700 font-semibold">
-                          {j.hari}: <span className="text-blue-700">{j.jam}</span>
-                        </p>
-                      ))}
                     </div>
-                  </div>
 
-                  <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
-                    <span className="text-[11px] text-slate-500">
-                      Terisi: {doc.kuotaTerisi} / {doc.kuotaHarian} antrean
+                    <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full border bg-emerald-100 text-emerald-800 border-emerald-200">
+                      Kuota {doc.kuotaHarian}/Hari
                     </span>
-
-                    {isPenuh ? (
-                      <span className="px-4 py-2 bg-slate-200 text-slate-400 rounded-xl text-xs font-black uppercase tracking-wider">
-                        Penuh
-                      </span>
-                    ) : (
-                      <Link
-                        href={`/pasien/booking?faskesId=${faskes.id}&dokterId=${doc.id}`}
-                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition inline-block text-center shadow-xs"
-                      >
-                        Pilih & Booking Dokter →
-                      </Link>
-                    )}
                   </div>
                 </div>
-              );
-            })
+
+                <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
+                  <span className="text-xs text-slate-500">
+                    Status Praktik: {doc.isActive ? "Aktif" : "Non-Aktif"}
+                  </span>
+
+                  {isQuarantined || !doc.isActive ? (
+                    <span className="px-4 py-2 bg-slate-200 text-slate-500 rounded-xl text-xs font-black uppercase tracking-wider">
+                      Tidak Tersedia
+                    </span>
+                  ) : (
+                    <Link
+                      href={`/pasien/booking?faskesId=${faskes.id}&dokterId=${doc.id}`}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition inline-block text-center shadow-xs"
+                    >
+                      Pilih & Booking Dokter →
+                    </Link>
+                  )}
+                </div>
+              </div>
+            ))
           )}
         </div>
       </div>

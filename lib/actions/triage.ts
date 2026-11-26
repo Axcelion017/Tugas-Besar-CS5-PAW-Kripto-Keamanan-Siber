@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
 import { TriaseSchema } from "@/lib/validations/triage";
-import { AuditAction, AuditSeverity, TriaseLevel } from "@prisma/client";
+import { AppointmentStatus, AuditAction, AuditSeverity, TriaseLevel } from "@prisma/client";
 import { requireSession, recordSecurityAuditBestEffort } from "@/features/auth/guard";
 
 function safeRevalidate(path: string) {
@@ -80,36 +80,46 @@ export async function submitTriageServerAction(
 
     const triageId = `TRG-${appointmentId.slice(-4)}`;
 
-    const saved = await prisma.triageAssessment.upsert({
-      where: { appointmentId },
-      update: {
-        staffId: resolvedStaffId,
-        systolic,
-        diastolic,
-        heartRate,
-        temperature,
-        respiratoryRate,
-        spo2,
-        beratBadan,
-        tinggiBadan,
-        triaseLevel: triaseLevel as TriaseLevel,
-        catatanPerawat,
-      },
-      create: {
-        id: triageId,
-        appointmentId,
-        staffId: resolvedStaffId,
-        systolic,
-        diastolic,
-        heartRate,
-        temperature,
-        respiratoryRate,
-        spo2,
-        beratBadan,
-        tinggiBadan,
-        triaseLevel: triaseLevel as TriaseLevel,
-        catatanPerawat: catatanPerawat || "Pengkajian triase tanda vital loket",
-      },
+    // Atomik: simpan pengkajian triase DAN alihkan status antrean ke WAITING_DOCTOR
+    const saved = await prisma.$transaction(async (tx) => {
+      const triageRecord = await tx.triageAssessment.upsert({
+        where: { appointmentId },
+        update: {
+          staffId: resolvedStaffId,
+          systolic,
+          diastolic,
+          heartRate,
+          temperature,
+          respiratoryRate,
+          spo2,
+          beratBadan,
+          tinggiBadan,
+          triaseLevel: triaseLevel as TriaseLevel,
+          catatanPerawat,
+        },
+        create: {
+          id: triageId,
+          appointmentId,
+          staffId: resolvedStaffId,
+          systolic,
+          diastolic,
+          heartRate,
+          temperature,
+          respiratoryRate,
+          spo2,
+          beratBadan,
+          tinggiBadan,
+          triaseLevel: triaseLevel as TriaseLevel,
+          catatanPerawat: catatanPerawat || "Pengkajian triase tanda vital loket",
+        },
+      });
+
+      await tx.appointment.update({
+        where: { id: appointmentId },
+        data: { status: AppointmentStatus.WAITING_DOCTOR },
+      });
+
+      return triageRecord;
     });
 
     await recordSecurityAuditBestEffort({
@@ -119,11 +129,12 @@ export async function submitTriageServerAction(
       action: AuditAction.CHECK_IN_TRIAGE,
       targetResource: `/api/triage/${appointmentId}`,
       severity: AuditSeverity.INFO,
-      detail: `Pengkajian triase pasien antrean ${appointmentId} disimpan dengan kategori ${triaseLevel}.`,
+      detail: `Pengkajian triase pasien antrean ${appointmentId} disimpan dengan kategori ${triaseLevel}; status dialihkan ke WAITING_DOCTOR.`,
     });
 
     safeRevalidate("/staf");
     safeRevalidate("/staf/triase");
+    safeRevalidate("/staf/assign-dpjp");
     safeRevalidate("/nakes");
 
     return {

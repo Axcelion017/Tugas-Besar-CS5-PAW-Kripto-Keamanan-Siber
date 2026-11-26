@@ -1,86 +1,47 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { SecurityAuditLog } from "@/lib/db/mockData";
 import {
-  MOCK_SECURITY_LOGS,
-  getStorageData,
-  setStorageData,
-  SecurityAuditLog,
-} from "@/lib/db/mockData";
-
-function generateSiemLogId(prefix: string) {
-  return `${prefix}-${Date.now().toString().slice(-4)}`;
-}
+  getSiemAuditLogsServerAction,
+  simulateSiemSecurityEventServerAction,
+} from "@/lib/actions/admin";
 
 export default function SiemMonitorPage() {
   const [logs, setLogs] = useState<SecurityAuditLog[]>([]);
   const [severityFilter, setSeverityFilter] = useState<"ALL" | "INFO" | "WARN" | "CRITICAL">("ALL");
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSimulating, setIsSimulating] = useState(false);
+
+  const loadLogsFromDb = useCallback(async () => {
+    try {
+      const res = await getSiemAuditLogsServerAction();
+      if (res.success && Array.isArray(res.data)) {
+        setLogs(res.data as unknown as SecurityAuditLog[]);
+      }
+    } catch (err) {
+      console.warn("Gagal memuat SIEM logs dari PostgreSQL:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      const all = getStorageData<SecurityAuditLog[]>("resilio_security_logs", MOCK_SECURITY_LOGS);
-      setLogs(all);
+      void loadLogsFromDb();
     }, 0);
     return () => clearTimeout(timer);
-  }, []);
+  }, [loadLogsFromDb]);
 
-  const handleSimulateAttack = (type: "IDOR" | "HMAC" | "BREAK_GLASS") => {
-    const current = getStorageData<SecurityAuditLog[]>("resilio_security_logs", MOCK_SECURITY_LOGS);
-    let newEvent: SecurityAuditLog;
-
-    if (type === "IDOR") {
-      newEvent = {
-        id: generateSiemLogId("LOG-IDOR"),
-        timestamp: new Date().toLocaleString("id-ID"),
-        actorId: "ACTOR-UNAUTH-77",
-        actorName: "dr. Ilegal Sp.An",
-        actorRole: "NAKES",
-        action: "IDOR_BLOCKED",
-        targetResource: "/api/rme/record-P102-09",
-        ipAddress: "103.145.22.11 (External Probe)",
-        userAgent: "curl/8.1.2 (Security Scanner)",
-        severity: "CRITICAL",
-        detail: "BOLA Guard: Memblokir percobaan akses langsung rekam medis pasien P-102 tanpa consent atau sesi periksa aktif.",
-      };
-    } else if (type === "HMAC") {
-      newEvent = {
-        id: generateSiemLogId("LOG-HMAC"),
-        timestamp: new Date().toLocaleString("id-ID"),
-        actorId: "MALWARE-SIM",
-        actorName: "Infected Gateway Process",
-        actorRole: "GATEWAY",
-        action: "HMAC_MISMATCH",
-        targetResource: "/api/sync/batch",
-        ipAddress: "192.168.10.88",
-        userAgent: "Ransomware Tamper Agent",
-        severity: "CRITICAL",
-        detail: "Deteksi Kripto: Nilai HMAC-SHA256 korup pada transmisi payload rekam medis. Integritas gagal, sinkronisasi dibatalkan (Fail-Closed).",
-      };
-    } else {
-      newEvent = {
-        id: generateSiemLogId("LOG-BG"),
-        timestamp: new Date().toLocaleString("id-ID"),
-        actorId: "DOC-01",
-        actorName: "dr. Andi Pratama, Sp.PD",
-        actorRole: "NAKES",
-        action: "BREAK_GLASS_ACCESS",
-        targetResource: "/api/rme/break-glass/P-104",
-        ipAddress: "192.168.1.42 (IGD Bed 01)",
-        userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-        severity: "CRITICAL",
-        detail: "BREAK-GLASS EMERGENCY ACCESS: Dokter membuka rekam medis darurat pasien Dewi Lestari tanpa consent. Alasan klinis: Pasien Koma Syok Anafilaktik. Notifikasi prioritas tinggi diteruskan ke Admin Kemenkes.",
-      };
+  const handleSimulateAttack = async (type: "IDOR" | "HMAC" | "BREAK_GLASS") => {
+    setIsSimulating(true);
+    try {
+      await simulateSiemSecurityEventServerAction(type);
+      await loadLogsFromDb();
+    } finally {
+      setIsSimulating(false);
     }
-
-    const updated = [newEvent, ...current];
-    setStorageData("resilio_security_logs", updated);
-    setLogs(updated);
-  };
-
-  const handleClearLogs = () => {
-    setStorageData("resilio_security_logs", []);
-    setLogs([]);
   };
 
   const filteredLogs = logs.filter((l) =>
@@ -128,33 +89,38 @@ export default function SiemMonitorPage() {
             ))}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
+              type="button"
+              disabled={isSimulating}
               onClick={() => handleSimulateAttack("IDOR")}
-              className="px-3.5 py-2 bg-red-100 hover:bg-red-200 text-red-800 rounded-xl text-xs font-bold transition cursor-pointer border border-red-300"
+              className="px-3.5 py-2 bg-red-100 hover:bg-red-200 disabled:opacity-50 text-red-800 rounded-xl text-xs font-bold transition cursor-pointer border border-red-300"
             >
               Uji Serangan BOLA / IDOR
             </button>
             <button
+              type="button"
+              disabled={isSimulating}
               onClick={() => handleSimulateAttack("HMAC")}
-              className="px-3.5 py-2 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-xl text-xs font-bold transition cursor-pointer border border-amber-300"
+              className="px-3.5 py-2 bg-amber-100 hover:bg-amber-200 disabled:opacity-50 text-amber-900 rounded-xl text-xs font-bold transition cursor-pointer border border-amber-300"
             >
               Uji HMAC Mismatch
             </button>
             <button
+              type="button"
+              disabled={isSimulating}
               onClick={() => handleSimulateAttack("BREAK_GLASS")}
-              className="px-3.5 py-2 bg-purple-100 hover:bg-purple-200 text-purple-900 rounded-xl text-xs font-bold transition cursor-pointer border border-purple-300"
+              className="px-3.5 py-2 bg-purple-100 hover:bg-purple-200 disabled:opacity-50 text-purple-900 rounded-xl text-xs font-bold transition cursor-pointer border border-purple-300"
             >
               Uji Break-Glass IGD
             </button>
-            {logs.length > 0 && (
-              <button
-                onClick={handleClearLogs}
-                className="text-xs text-slate-400 hover:text-red-600 font-bold ml-2 cursor-pointer"
-              >
-                Bersihkan Log
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={loadLogsFromDb}
+              className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold cursor-pointer"
+            >
+              {isLoading ? "Memuat..." : "Muat Ulang DB"}
+            </button>
           </div>
         </div>
       </div>

@@ -334,6 +334,16 @@ export async function approveKycServerAction(
           status: AccountStatus.VERIFIED,
         },
       });
+
+      // Terapkan NIK, Nama KTP, dan Tanggal Lahir ke tabel `patients` BARU setelah disetujui Admin
+      await tx.patient.updateMany({
+        where: { userId: kyc.userId },
+        data: {
+          nik: kyc.nik,
+          name: kyc.namaLengkap,
+          birthDate: kyc.birthDate,
+        },
+      });
     });
 
     safeRevalidate("/admin/verifikasi-kyc");
@@ -695,30 +705,20 @@ export async function submitKycVerificationServerAction(params: {
     const kycId = `KYC-${Date.now().toString().slice(-6)}`;
     const birthDate = new Date(tanggalLahir);
 
-    await prisma.$transaction(async (tx) => {
-      await tx.patient.update({
-        where: { id: ownerId },
-        data: {
-          nik,
-          name: namaLengkap,
-          birthDate,
-        },
-      });
-
-      await tx.kycSubmission.create({
-        data: {
-          id: kycId,
-          userId: ownerId,
-          namaLengkap,
-          nik,
-          birthDate,
-          alamat,
-          ktpUrl,
-          selfieUrl,
-          watermarkText,
-          status: AccountStatus.PENDING,
-        },
-      });
+    // Jangan menimpa `patient.nik` sebelum disetujui Admin Kemenkes — simpan di antrean `kyc_submissions`
+    await prisma.kycSubmission.create({
+      data: {
+        id: kycId,
+        userId: ownerId,
+        namaLengkap,
+        nik,
+        birthDate,
+        alamat: (alamat || "").trim() || "Alamat belum dilengkapi",
+        ktpUrl,
+        selfieUrl,
+        watermarkText,
+        status: AccountStatus.PENDING,
+      },
     });
 
     safeRevalidate("/pasien");

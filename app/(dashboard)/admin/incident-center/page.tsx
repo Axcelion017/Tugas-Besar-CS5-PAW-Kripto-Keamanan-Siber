@@ -1,38 +1,72 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import {
-  MOCK_TROUBLE_TICKETS,
-  getStorageData,
-  setStorageData,
-  TroubleTicket,
-} from "@/lib/db/mockData";
+import { TroubleTicket } from "@/lib/db/mockData";
+import { getTroubleTicketsServerAction } from "@/lib/actions/ticket";
+import { updateTroubleTicketStatusServerAction } from "@/lib/actions/admin";
 
 export default function IncidentCenterPage() {
   const [tickets, setTickets] = useState<TroubleTicket[]>([]);
   const [filterKategori, setFilterKategori] = useState<string>("ALL");
   const [notif, setNotif] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const loadTicketsFromDb = useCallback(async () => {
+    try {
+      const res = await getTroubleTicketsServerAction();
+      if (res.success && Array.isArray(res.data)) {
+        const mapped: TroubleTicket[] = (
+          res.data as unknown as Array<{
+            id: string;
+            reporterId?: string | null;
+            reporterName: string;
+            reporterRole: string;
+            kategori: "BUG" | "SYNC_FAIL" | "DATA_MISMATCH" | "OTHER";
+            judul: string;
+            deskripsi: string;
+            status: "OPEN" | "INVESTIGATING" | "RESOLVED";
+            createdAt: Date | string;
+            faskesId?: string | null;
+          }>
+        ).map((t) => ({
+          id: t.id,
+          pengirimId: t.reporterId || "-",
+          pengirimNama: t.reporterName,
+          pengirimRole: t.reporterRole.toUpperCase() as TroubleTicket["pengirimRole"],
+          kategori: t.kategori,
+          judul: t.judul,
+          deskripsi: t.deskripsi,
+          status: t.status,
+          createdAt: new Date(t.createdAt).toLocaleString("id-ID"),
+          faskesTerkait: t.faskesId || undefined,
+        }));
+        setTickets(mapped);
+      }
+    } catch (err) {
+      console.warn("Load DB trouble tickets error:", err);
+    }
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      const list = getStorageData<TroubleTicket[]>("resilio_trouble_tickets", MOCK_TROUBLE_TICKETS);
-      setTickets(list);
+      void loadTicketsFromDb();
     }, 0);
     return () => clearTimeout(timer);
-  }, []);
+  }, [loadTicketsFromDb]);
 
-  const handleUpdateStatus = (
+  const handleUpdateStatus = async (
     ticketId: string,
     nextStatus: "OPEN" | "INVESTIGATING" | "RESOLVED"
   ) => {
-    const all = getStorageData<TroubleTicket[]>("resilio_trouble_tickets", MOCK_TROUBLE_TICKETS);
-    const updated = all.map((t) => (t.id === ticketId ? { ...t, status: nextStatus } : t));
-    setStorageData("resilio_trouble_tickets", updated);
-    setTickets(updated);
-
-    setNotif(`Status tiket ${ticketId} berhasil diperbarui menjadi ${nextStatus}.`);
-    setTimeout(() => setNotif(null), 3000);
+    setErrorMsg(null);
+    const res = await updateTroubleTicketStatusServerAction(ticketId, nextStatus);
+    if (!res.success) {
+      setErrorMsg(res.message || "Gagal memperbarui status tiket di PostgreSQL.");
+      return;
+    }
+    setNotif(res.message);
+    await loadTicketsFromDb();
   };
 
   const filtered = tickets.filter((t) =>
@@ -59,8 +93,14 @@ export default function IncidentCenterPage() {
       </div>
 
       {notif && (
-        <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-bold">
+        <div role="status" className="p-4 rounded-2xl bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-bold">
           {notif}
+        </div>
+      )}
+
+      {errorMsg && (
+        <div role="alert" className="p-4 rounded-2xl bg-red-50 border border-red-300 text-red-900 text-xs font-bold">
+          {errorMsg}
         </div>
       )}
 

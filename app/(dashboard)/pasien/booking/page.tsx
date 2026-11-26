@@ -4,17 +4,9 @@ import React, { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { getUserSession, UserSession } from "@/lib/auth/auth";
-import {
-  MOCK_FASKES,
-  MOCK_DOCTORS,
-  MOCK_APPOINTMENTS,
-  MOCK_ACCESS_GRANTS,
-  getStorageData,
-  setStorageData,
-  Appointment,
-  AccessGrant,
-} from "@/lib/db/mockData";
+import { Appointment } from "@/lib/db/mockData";
 import { BookingSchema } from "@/lib/validations/patient";
+import { getFaskesListServerAction } from "@/lib/actions/faskes";
 import {
   createAppointmentServerAction,
   getAppointmentsServerAction,
@@ -22,18 +14,46 @@ import {
   deleteAppointmentServerAction,
 } from "@/lib/actions/appointment";
 
+interface DbDoctorOption {
+  id: string;
+  name: string;
+  specialty: string;
+}
+
+interface DbFaskesOption {
+  id: string;
+  nama: string;
+  tipe: string;
+  status: "ACTIVE" | "QUARANTINED";
+  doctors: DbDoctorOption[];
+}
+
+function formatFaskesType(tipe: string): string {
+  if (tipe === "RUMAH_SAKIT") return "Rumah Sakit";
+  if (tipe === "KLINIK_PRATAMA") return "Klinik Pratama";
+  if (tipe === "PUSKESMAS") return "Puskesmas";
+  return tipe;
+}
+
+function getTodayIso(): string {
+  return new Date().toISOString().split("T")[0];
+}
+
 function BookingContent() {
   const searchParams = useSearchParams();
   const preselectedFaskes = searchParams.get("faskesId") || "FAS-01";
   const preselectedDokter = searchParams.get("dokterId") || "DOC-01";
+  const todayIso = getTodayIso();
 
   const [session, setSession] = useState<UserSession | null>(null);
+  const [faskesList, setFaskesList] = useState<DbFaskesOption[]>([]);
   const [faskesId, setFaskesId] = useState(preselectedFaskes);
   const [dokterId, setDokterId] = useState(preselectedDokter);
-  const [tanggal, setTanggal] = useState("2026-10-16");
+  const [tanggal, setTanggal] = useState(todayIso);
   const [jam, setJam] = useState("09:00 WIB");
   const [keluhanAwal, setKeluhanAwal] = useState("");
   const [autoConsent, setAutoConsent] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [notification, setNotification] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -44,34 +64,56 @@ function BookingContent() {
   useEffect(() => {
     async function loadData() {
       const s = getUserSession();
-      if (!s) return;
-      setSession(s);
+      if (s) setSession(s);
 
-      // Ambil antrean langsung dari database PostgreSQL
       try {
-        const aptsRes = await getAppointmentsServerAction({ patientId: s.id });
-        if (aptsRes.success && aptsRes.data) {
-          const mappedApts: Appointment[] = (aptsRes.data as unknown as Array<{
-            id: string;
-            patientId: string;
-            patient?: { name?: string; nik?: string };
-            faskesId: string;
-            doctorId: string;
-            doctor?: { name?: string };
-            poli: string;
-            tanggal: Date | string;
-            jam: string;
-            keluhanAwal: string;
-            status: string;
-            consentActive?: boolean;
-            consentPin?: string | null;
-          }>).map((a) => ({
+        const [faskesRes, aptsRes] = await Promise.all([
+          getFaskesListServerAction(),
+          s ? getAppointmentsServerAction({ patientId: s.id }) : Promise.resolve({ success: false, data: [] }),
+        ]);
+
+        if (faskesRes.success && Array.isArray(faskesRes.data)) {
+          const list = (faskesRes.data as unknown as DbFaskesOption[]).map((f) => ({
+            ...f,
+            tipe: formatFaskesType(f.tipe),
+          }));
+          setFaskesList(list);
+
+          const matchedFaskes = list.find((f) => f.id === preselectedFaskes) || list[0];
+          if (matchedFaskes) {
+            setFaskesId(matchedFaskes.id);
+            const matchedDoc =
+              matchedFaskes.doctors.find((d) => d.id === preselectedDokter) ||
+              matchedFaskes.doctors[0];
+            if (matchedDoc) setDokterId(matchedDoc.id);
+          }
+        }
+
+        if (s && aptsRes.success && aptsRes.data) {
+          const mappedApts: Appointment[] = (
+            aptsRes.data as unknown as Array<{
+              id: string;
+              patientId: string;
+              patient?: { name?: string; nik?: string };
+              faskesId: string;
+              faskes?: { nama?: string };
+              doctorId: string;
+              doctor?: { name?: string };
+              poli: string;
+              tanggal: Date | string;
+              jam: string;
+              keluhanAwal: string;
+              status: string;
+              consentActive?: boolean;
+              consentPin?: string | null;
+            }>
+          ).map((a) => ({
             id: a.id,
             pasienId: a.patientId,
             pasienNama: a.patient?.name || s.name,
             pasienNik: a.patient?.nik || s.nik || "-",
             faskesId: a.faskesId,
-            faskesNama: "Faskes Terdaftar",
+            faskesNama: a.faskes?.nama || "Faskes Terdaftar",
             dokterId: a.doctorId,
             dokterNama: a.doctor?.name || "Dokter DPJP",
             poli: a.poli,
@@ -92,7 +134,7 @@ function BookingContent() {
     }
 
     loadData();
-  }, []);
+  }, [preselectedDokter, preselectedFaskes]);
 
   const handleCancelAppointment = async (aptId: string) => {
     if (!confirm(`Apakah Anda yakin ingin membatalkan dan menghapus tiket antrean ${aptId}?`)) {
@@ -145,18 +187,28 @@ function BookingContent() {
   };
 
   const requestedFaskesNotFound =
-    !!searchParams.get("faskesId") && !MOCK_FASKES.some((f) => f.id === searchParams.get("faskesId"));
-  const currentFaskes = MOCK_FASKES.find((f) => f.id === faskesId) || MOCK_FASKES[0];
-  const availableDoctors = MOCK_DOCTORS.filter((d) => d.faskesId === currentFaskes.id);
+    faskesList.length > 0 &&
+    !!searchParams.get("faskesId") &&
+    !faskesList.some((f) => f.id === searchParams.get("faskesId"));
+  const currentFaskes = faskesList.find((f) => f.id === faskesId) || faskesList[0];
+  const availableDoctors = currentFaskes?.doctors || [];
   const currentDoctor =
-    availableDoctors.find((d) => d.id === dokterId) || availableDoctors[0] || MOCK_DOCTORS[0];
+    availableDoctors.find((d) => d.id === dokterId) || availableDoctors[0];
+  const isSelectedFaskesQuarantined = currentFaskes?.status === "QUARANTINED";
 
   const handleBookingSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
-    if (!session) return;
+    setNotification(null);
+    if (!session || !currentFaskes || !currentDoctor) return;
 
-    // Validasi input booking menggunakan Skema Zod
+    if (isSelectedFaskesQuarantined) {
+      setErrorMsg(
+        `Pemesanan ditolak: ${currentFaskes.nama} sedang berstatus KARANTINA (Kill-Switch Siber) oleh Admin Regulator.`
+      );
+      return;
+    }
+
     const validation = BookingSchema.safeParse({
       faskesId: currentFaskes.id,
       dokterId: currentDoctor.id,
@@ -171,9 +223,9 @@ function BookingContent() {
       return;
     }
 
-    // 1. Eksekusi Server Action untuk menyimpan langsung ke basis data PostgreSQL
+    setIsSubmitting(true);
     try {
-      await createAppointmentServerAction({
+      const res = await createAppointmentServerAction({
         faskesId: currentFaskes.id,
         dokterId: currentDoctor.id,
         tanggal,
@@ -183,56 +235,59 @@ function BookingContent() {
         autoConsent,
         patientId: session.id,
       });
-    } catch (err: unknown) {
-      console.warn("DB booking action fallback:", err);
-    }
 
-    const newAptId = generateId("APT-2026");
-    const newAppointment: Appointment = {
-      id: newAptId,
-      pasienId: session.id,
-      pasienNama: session.name,
-      pasienNik: session.nik || "3171012304800001",
-      faskesId: currentFaskes.id,
-      faskesNama: currentFaskes.nama,
-      dokterId: currentDoctor.id,
-      dokterNama: currentDoctor.name,
-      poli: currentDoctor.specialty,
-      tanggal,
-      jam,
-      keluhanAwal,
-      status: "WAITING",
-      consentActive: autoConsent,
-    };
+      if (!res.success || !res.data) {
+        setErrorMsg(res.message || "Gagal menyimpan jadwal antrean ke basis data PostgreSQL.");
+        return;
+      }
 
-    const allApts = getStorageData<Appointment[]>("resilio_appointments", MOCK_APPOINTMENTS);
-    const updatedApts = [newAppointment, ...allApts];
-    setStorageData("resilio_appointments", updatedApts);
-    setAppointments(updatedApts.filter((a) => a.pasienId === session.id || (session.nik && a.pasienNik === session.nik)));
-
-    // Jika Auto Consent dicentang, buat tiket izin akses (AccessGrant) untuk dokter
-    if (autoConsent) {
-      const allGrants = getStorageData<AccessGrant[]>("resilio_access_grants", MOCK_ACCESS_GRANTS);
-      const newGrant: AccessGrant = {
-        id: generateId("GRANT"),
-        pasienId: session.id,
-        pasienNama: session.name,
-        entityId: currentDoctor.id,
-        entityNama: currentDoctor.name,
-        entityType: "DOKTER",
-        scope: `Pemeriksaan Konsultasi (${newAptId})`,
-        validUntil: `${tanggal} 23:59 WIB`,
-        isRevoked: false,
-        createdAt: new Date().toLocaleString("id-ID"),
+      // Gunakan ID & PIN asli yang dikembalikan dari PostgreSQL (Single Source of Truth)
+      const created = res.data as {
+        id: string;
+        patientId: string;
+        faskesId: string;
+        faskes?: { nama?: string };
+        doctorId: string;
+        doctor?: { name?: string };
+        poli: string;
+        tanggal: string;
+        jam: string;
+        keluhanAwal: string;
+        status: string;
+        consentActive: boolean;
+        consentPin?: string | null;
       };
-      setStorageData("resilio_access_grants", [newGrant, ...allGrants]);
-    }
 
-    setNotification(
-      `Booking berhasil dibuat. Tiket izin akses (Consent) untuk ${currentDoctor.name} aktif pada ${tanggal}.`
-    );
-    setKeluhanAwal("");
-    setTimeout(() => setNotification(null), 5000);
+      const newAppointment: Appointment = {
+        id: created.id,
+        pasienId: created.patientId,
+        pasienNama: session.name,
+        pasienNik: session.nik || "-",
+        faskesId: created.faskesId,
+        faskesNama: created.faskes?.nama || currentFaskes.nama,
+        dokterId: created.doctorId,
+        dokterNama: created.doctor?.name || currentDoctor.name,
+        poli: created.poli,
+        tanggal: new Date(created.tanggal).toISOString().split("T")[0],
+        jam: created.jam,
+        keluhanAwal: created.keluhanAwal,
+        status: (created.status as Appointment["status"]) || "PENDING_ARRIVAL",
+        consentActive: created.consentActive,
+        consentPin: created.consentPin || undefined,
+      };
+
+      setAppointments((prev) => [newAppointment, ...prev]);
+      setNotification(
+        `Booking ${created.id} tersimpan di PostgreSQL${
+          created.consentPin ? ` (PIN Persetujuan DPJP: ${created.consentPin})` : ""
+        }.${autoConsent ? ` Auto-Consent untuk ${currentDoctor.name} telah dicatat di tabel access_grants.` : ""}`
+      );
+      setKeluhanAwal("");
+    } catch {
+      setErrorMsg("Terjadi gangguan koneksi saat menyimpan booking ke server.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -250,11 +305,11 @@ function BookingContent() {
           Pemesanan Jadwal Konsultasi & Pemberian Izin Akses Medis
         </h1>
         <p className="text-xs text-slate-500 font-medium">
-          Saat jadwal dikonfirmasi, sistem secara otomatis menerbitkan tiket izin akses sementara (Zero-Trust Gate) untuk dokter pemeriksa.
+          Seluruh pemesanan antrean, penerbitan 6-digit PIN DPJP, dan tiket izin Auto-Consent disimpan atomik di PostgreSQL.
         </p>
       </div>
 
-      {requestedFaskesNotFound && (
+      {requestedFaskesNotFound && currentFaskes && (
         <div className="p-4 rounded-2xl bg-amber-50 border border-amber-300 text-amber-900 text-xs font-bold flex items-center justify-between">
           <span>
             Peringatan: Fasilitas kesehatan dengan ID &quot;{searchParams.get("faskesId")}&quot; tidak terdaftar. Sistem mengarahkan ke faskes resmi: {currentFaskes.nama}.
@@ -265,14 +320,20 @@ function BookingContent() {
         </div>
       )}
 
+      {isSelectedFaskesQuarantined && currentFaskes && (
+        <div role="alert" className="p-4 rounded-2xl bg-red-50 border border-red-300 text-red-900 text-xs font-bold">
+          KILL-SWITCH AKTIF: {currentFaskes.nama} sedang berstatus KARANTINA oleh Admin Regulator. Pilih fasilitas kesehatan lain yang berstatus aktif.
+        </div>
+      )}
+
       {notification && (
-        <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold">
+        <div role="status" className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold">
           {notification}
         </div>
       )}
 
       {errorMsg && (
-        <div className="p-4 rounded-2xl bg-red-50 border border-red-300 text-red-900 text-xs font-bold">
+        <div role="alert" className="p-4 rounded-2xl bg-red-50 border border-red-300 text-red-900 text-xs font-bold">
           {errorMsg}
         </div>
       )}
@@ -287,31 +348,36 @@ function BookingContent() {
           <form onSubmit={handleBookingSubmit} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-bold text-slate-600 uppercase mb-1">
+                <label htmlFor="booking-faskes" className="block text-xs font-bold text-slate-600 uppercase mb-1">
                   Pilih Fasilitas Kesehatan
                 </label>
                 <select
-                  value={faskesId}
+                  id="booking-faskes"
+                  value={currentFaskes?.id || faskesId}
                   onChange={(e) => {
-                    setFaskesId(e.target.value);
-                    const newDocs = MOCK_DOCTORS.filter((d) => d.faskesId === e.target.value);
-                    if (newDocs[0]) setDokterId(newDocs[0].id);
+                    const nextId = e.target.value;
+                    setFaskesId(nextId);
+                    const nextFaskes = faskesList.find((f) => f.id === nextId);
+                    if (nextFaskes?.doctors[0]) {
+                      setDokterId(nextFaskes.doctors[0].id);
+                    }
                   }}
                   className="w-full px-4 py-2.5 rounded-xl border border-slate-300 font-semibold text-sm bg-white"
                 >
-                  {MOCK_FASKES.map((f) => (
+                  {faskesList.map((f) => (
                     <option key={f.id} value={f.id}>
-                      {f.nama} ({f.tipe})
+                      {f.nama} ({f.tipe}){f.status === "QUARANTINED" ? " [KARANTINA]" : ""}
                     </option>
                   ))}
                 </select>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-600 uppercase mb-1">
+                <label htmlFor="booking-dokter" className="block text-xs font-bold text-slate-600 uppercase mb-1">
                   Pilih Dokter & Spesialisasi
                 </label>
                 <select
+                  id="booking-dokter"
                   value={currentDoctor?.id || dokterId}
                   onChange={(e) => setDokterId(e.target.value)}
                   className="w-full px-4 py-2.5 rounded-xl border border-slate-300 font-semibold text-sm bg-white"
@@ -327,12 +393,14 @@ function BookingContent() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-bold text-slate-600 uppercase mb-1">
+                <label htmlFor="booking-tanggal" className="block text-xs font-bold text-slate-600 uppercase mb-1">
                   Tanggal Kunjungan Periksa
                 </label>
                 <input
+                  id="booking-tanggal"
                   type="date"
                   required
+                  min={todayIso}
                   value={tanggal}
                   onChange={(e) => setTanggal(e.target.value)}
                   className="w-full px-4 py-2.5 rounded-xl border border-slate-300 font-semibold text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
@@ -340,10 +408,11 @@ function BookingContent() {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-600 uppercase mb-1">
+                <label htmlFor="booking-jam" className="block text-xs font-bold text-slate-600 uppercase mb-1">
                   Sesi Jam Konsultasi
                 </label>
                 <select
+                  id="booking-jam"
                   value={jam}
                   onChange={(e) => setJam(e.target.value)}
                   className="w-full px-4 py-2.5 rounded-xl border border-slate-300 font-semibold text-sm bg-white"
@@ -358,10 +427,11 @@ function BookingContent() {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-600 uppercase mb-1">
+              <label htmlFor="booking-keluhan" className="block text-xs font-bold text-slate-600 uppercase mb-1">
                 Keluhan Awal & Gejala yang Dirasakan *
               </label>
               <textarea
+                id="booking-keluhan"
                 required
                 rows={3}
                 value={keluhanAwal}
@@ -382,16 +452,21 @@ function BookingContent() {
                 />
                 <span className="text-xs text-slate-700 leading-relaxed">
                   <strong>Pemberian Izin Akses Medis (Auto-Consent UU PDP):</strong> Saya memberikan izin kepada{" "}
-                  <strong>{currentDoctor?.name}</strong> untuk membaca riwayat rekam medis pribadi saya dan menulis hasil diagnosa selama masa pemeriksaan pada tanggal {tanggal}. Saya memahami bahwa izin ini dapat dicabut (Revoke) sewaktu-waktu.
+                  <strong>{currentDoctor?.name || "Dokter DPJP"}</strong> untuk membaca riwayat rekam medis pribadi saya dan menulis hasil diagnosa selama masa pemeriksaan pada tanggal {tanggal}. Izin tersimpan di tabel <code className="font-mono">access_grants</code> dan dapat dicabut (Revoke) sewaktu-waktu.
                 </span>
               </label>
             </div>
 
             <button
               type="submit"
-              className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md shadow-blue-600/30 transition cursor-pointer"
+              disabled={isSubmitting || isSelectedFaskesQuarantined || !currentDoctor}
+              className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-400 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md shadow-blue-600/30 transition cursor-pointer disabled:cursor-not-allowed"
             >
-              Konfirmasi Booking & Terbitkan Tiket Akses
+              {isSubmitting
+                ? "Menyimpan ke PostgreSQL..."
+                : isSelectedFaskesQuarantined
+                ? "Booking Diblokir (Faskes Karantina)"
+                : "Konfirmasi Booking & Terbitkan Tiket Akses"}
             </button>
           </form>
         </div>
@@ -413,81 +488,82 @@ function BookingContent() {
                   key={a.id}
                   className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2"
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-mono font-bold text-slate-500">
-                      {a.id}
-                    </span>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-mono font-bold text-slate-600">{a.id}</span>
                     <span
-                      className={`text-xs font-black uppercase px-2.5 py-0.5 rounded-full border ${
+                      className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full border ${
                         a.status === "WAITING" || a.status === "PENDING_ARRIVAL"
                           ? "bg-blue-100 text-blue-800 border-blue-200"
                           : a.status === "IN_PROGRESS" || a.status === "IN_EXAMINATION"
-                          ? "bg-amber-100 text-amber-800 border-amber-300 animate-pulse"
-                          : "bg-emerald-100 text-emerald-800 border-emerald-200"
+                          ? "bg-amber-100 text-amber-800 border-amber-300"
+                          : a.status === "COMPLETED"
+                          ? "bg-emerald-100 text-emerald-800 border-emerald-200"
+                          : "bg-slate-200 text-slate-700 border-slate-300"
                       }`}
                     >
                       {a.status}
                     </span>
                   </div>
-                  <h4 className="text-sm font-bold text-slate-800">{a.dokterNama}</h4>
-                  <p className="text-xs text-slate-500">{a.faskesNama} • {a.poli}</p>
-                  <p className="text-xs text-slate-600 font-semibold">
-                    Waktu: {a.tanggal} • {a.jam}
-                  </p>
-                  <p className="text-xs text-slate-500 italic">
-                    &quot;{a.keluhanAwal}&quot;
-                  </p>
 
-                  {/* Form Reschedule Jika Mode Edit Aktif */}
+                  <div>
+                    <p className="text-xs font-black text-slate-900">{a.dokterNama}</p>
+                    <p className="text-xs text-slate-600">
+                      {a.poli} • {a.faskesNama}
+                    </p>
+                    <p className="text-xs font-semibold text-blue-700 mt-1">
+                      Jadwal: {a.tanggal} ({a.jam})
+                    </p>
+                    {a.consentPin && (
+                      <p className="text-xs font-mono font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg mt-1.5 inline-block">
+                        PIN DPJP: {a.consentPin}
+                      </p>
+                    )}
+                  </div>
+
                   {editingAptId === a.id ? (
-                    <div className="p-3 bg-white rounded-xl border border-blue-200 space-y-2.5 mt-2">
-                      <span className="text-xs font-black text-blue-800 block uppercase">
-                        Ubah Jadwal Konsultasi (Reschedule - UPDATE):
-                      </span>
-                      <div className="grid grid-cols-2 gap-2">
-                        <input
-                          type="date"
-                          value={rescheduleDate}
-                          onChange={(e) => setRescheduleDate(e.target.value)}
-                          className="px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold"
-                        />
-                        <select
-                          value={rescheduleJam}
-                          onChange={(e) => setRescheduleJam(e.target.value)}
-                          className="px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold bg-white"
-                        >
-                          <option value="08:30 WIB">08:30 WIB</option>
-                          <option value="09:00 WIB">09:00 WIB</option>
-                          <option value="10:30 WIB">10:30 WIB</option>
-                          <option value="13:30 WIB">13:30 WIB</option>
-                          <option value="15:00 WIB">15:00 WIB</option>
-                        </select>
-                      </div>
-                      <div className="flex items-center gap-2 pt-1">
+                    <div className="pt-2 border-t border-slate-200 space-y-2">
+                      <input
+                        type="date"
+                        min={todayIso}
+                        value={rescheduleDate}
+                        onChange={(e) => setRescheduleDate(e.target.value)}
+                        className="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold"
+                      />
+                      <select
+                        value={rescheduleJam}
+                        onChange={(e) => setRescheduleJam(e.target.value)}
+                        className="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold bg-white"
+                      >
+                        <option value="08:30 WIB">08:30 WIB</option>
+                        <option value="09:00 WIB">09:00 WIB</option>
+                        <option value="10:30 WIB">10:30 WIB</option>
+                        <option value="13:30 WIB">13:30 WIB</option>
+                        <option value="15:00 WIB">15:00 WIB</option>
+                      </select>
+                      <div className="flex gap-2">
                         <button
                           type="button"
                           onClick={() => handleSaveReschedule(a.id)}
-                          className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition cursor-pointer"
+                          className="flex-1 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold cursor-pointer"
                         >
-                          Simpan Jadwal Baru
+                          Simpan
                         </button>
                         <button
                           type="button"
                           onClick={() => setEditingAptId(null)}
-                          className="px-3 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-xs font-bold transition cursor-pointer"
+                          className="flex-1 py-1.5 bg-slate-200 text-slate-700 rounded-lg text-xs font-bold cursor-pointer"
                         >
                           Batal
                         </button>
                       </div>
                     </div>
                   ) : (
-                    /* Tombol Aksi CRUD Lengkap: UPDATE & DELETE */
-                    <div className="flex items-center justify-between pt-2 border-t border-slate-200/60">
-                      <span className="text-xs font-mono font-bold text-blue-700">
-                        PIN: {a.consentPin || "884120"}
-                      </span>
-                      <div className="flex items-center gap-2">
-                        {a.status !== "COMPLETED" && (
+                    a.status !== "COMPLETED" && (
+                      <div className="pt-2 border-t border-slate-200 flex items-center justify-between gap-2">
+                        <span className="text-[11px] text-slate-500">
+                          {a.consentActive ? "Consent Aktif" : "Tanpa Auto-Consent"}
+                        </span>
+                        <div className="flex items-center gap-1.5">
                           <button
                             type="button"
                             onClick={() => {
@@ -496,21 +572,19 @@ function BookingContent() {
                               setRescheduleJam(a.jam);
                             }}
                             className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-700 rounded-lg text-xs font-bold border border-slate-300 transition cursor-pointer"
-                            title="Ubah Jadwal Kunjungan (UPDATE)"
                           >
                             Reschedule
                           </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => handleCancelAppointment(a.id)}
-                          className="px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-700 rounded-lg text-xs font-bold border border-red-200 transition cursor-pointer"
-                          title="Batalkan dan Hapus Antrean (DELETE)"
-                        >
-                          Batalkan
-                        </button>
+                          <button
+                            type="button"
+                            onClick={() => handleCancelAppointment(a.id)}
+                            className="px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-700 rounded-lg text-xs font-bold border border-red-200 transition cursor-pointer"
+                          >
+                            Batalkan
+                          </button>
+                        </div>
                       </div>
-                    </div>
+                    )
                   )}
                 </div>
               ))}
@@ -520,10 +594,6 @@ function BookingContent() {
       </div>
     </div>
   );
-}
-
-function generateId(prefix: string) {
-  return `${prefix}-${Date.now().toString().slice(-4)}`;
 }
 
 export default function PasienBookingPage() {

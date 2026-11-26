@@ -3,12 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
 import { BookingSchema } from "@/lib/validations/patient";
-import { AssignDpjpSchema } from "@/lib/validations/triage";
+import { AssignDpjpSchema, WalkInAdmisiSchema } from "@/lib/validations/triage";
 import {
   AppointmentStatus,
   AuditAction,
   AuditSeverity,
   FaskesStatus,
+  GrantEntityType,
   Prisma,
 } from "@prisma/client";
 import { randomInt } from "node:crypto";
@@ -86,24 +87,58 @@ export async function createAppointmentServerAction(
       };
     }
 
-    const created = await prisma.appointment.create({
-      data: {
-        id: aptId,
-        patientId,
-        faskesId,
-        doctorId: dokterId,
-        tanggal: new Date(tanggal),
-        jam,
-        poli,
-        keluhanAwal,
-        consentActive: autoConsent,
-        consentPin,
-        status: AppointmentStatus.PENDING_ARRIVAL,
-      },
+    const doctor = await prisma.doctor.findUnique({
+      where: { id: dokterId },
+      select: { id: true, name: true, specialty: true },
+    });
+
+    const created = await prisma.$transaction(async (tx) => {
+      const apt = await tx.appointment.create({
+        data: {
+          id: aptId,
+          patientId,
+          faskesId,
+          doctorId: dokterId,
+          tanggal: new Date(tanggal),
+          jam,
+          poli: doctor?.specialty || poli,
+          keluhanAwal,
+          consentActive: autoConsent,
+          consentPin,
+          status: AppointmentStatus.PENDING_ARRIVAL,
+        },
+        include: {
+          faskes: { select: { id: true, nama: true } },
+          doctor: { select: { id: true, name: true, specialty: true } },
+        },
+      });
+
+      // Simpan Auto-Consent langsung ke tabel `access_grants` PostgreSQL (bukan localStorage)
+      if (autoConsent) {
+        const visitDate = new Date(tanggal);
+        const validUntil = new Date(
+          Math.max(visitDate.getTime(), Date.now()) + 48 * 60 * 60 * 1000
+        );
+        await tx.accessGrant.create({
+          data: {
+            id: `AG-${Date.now().toString().slice(-6)}`,
+            patientId,
+            entityId: dokterId,
+            entityName: doctor?.name || "Dokter DPJP",
+            entityType: GrantEntityType.DOKTER,
+            scope: `Auto-Consent Konsultasi (${aptId})`,
+            validUntil,
+            isRevoked: false,
+          },
+        });
+      }
+
+      return apt;
     });
 
     safeRevalidate("/pasien");
     safeRevalidate("/pasien/booking");
+    safeRevalidate("/pasien/consent");
     safeRevalidate("/pasien/audit-log");
     safeRevalidate("/staf");
     safeRevalidate("/nakes");
@@ -111,7 +146,12 @@ export async function createAppointmentServerAction(
     return {
       success: true,
       message: "Jadwal kunjungan berhasil dipesan dan dicatat di basis data.",
-      data: created,
+      data: {
+        ...created,
+        tanggal: created.tanggal.toISOString(),
+        createdAt: created.createdAt.toISOString(),
+        checkInTime: created.checkInTime ? created.checkInTime.toISOString() : null,
+      },
     };
   } catch (error: unknown) {
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
@@ -175,6 +215,9 @@ export async function getAppointmentsServerAction(filters?: {
       include: {
         patient: {
           select: { id: true, name: true, nik: true, mrn: true, bloodType: true },
+        },
+        faskes: {
+          select: { id: true, nama: true, status: true },
         },
         doctor: {
           select: { id: true, name: true, specialty: true, strNumber: true },
@@ -512,5 +555,169 @@ export async function deleteAppointmentServerAction(
     }
     const msg = error instanceof Error ? error.message : "Kesalahan server";
     return { success: false, message: `Gagal membatalkan antrean: ${msg}` };
+  }
+}
+
+/**
+ * Server Action: Check-In Kedatangan Pasien di Loket Admisi Staf (PENDING_ARRIVAL -> WAITING_TRIAGE)
+ */
+export async function checkInAppointmentServerAction(
+  appointmentId: string
+): Promise<AppointmentActionResponse> {
+  const auth = await requireSession(["staf", "admin"], `checkInAppointment:${appointmentId}`);
+  if (!auth.ok) {
+    return { success: false, message: auth.message };
+  }
+
+  try {
+    const updated = await prisma.appointment.update({
+      where: { id: appointmentId },
+      data: {
+        status: AppointmentStatus.WAITING_TRIAGE,
+        checkInTime: new Date(),
+      },
+    });
+
+    await recordSecurityAuditBestEffort({
+      actorId: auth.session.id,
+      actorName: auth.session.name,
+      actorRole: auth.role,
+      action: AuditAction.CHECK_IN_TRIAGE,
+      targetResource: `/api/appointments/${appointmentId}/check-in`,
+      severity: AuditSeverity.INFO,
+      detail: `Staf ${auth.session.name} melakukan check-in kedatangan antrean ${appointmentId} menuju loket triase.`,
+    });
+
+    safeRevalidate("/staf");
+    safeRevalidate("/staf/triase");
+    safeRevalidate("/pasien");
+
+    return {
+      success: true,
+      message: `Pasien pada antrean ${appointmentId} berhasil Check-In dan dialihkan ke Loket Triase.`,
+      data: {
+        ...updated,
+        tanggal: updated.tanggal.toISOString(),
+        createdAt: updated.createdAt.toISOString(),
+        checkInTime: updated.checkInTime ? updated.checkInTime.toISOString() : null,
+      },
+    };
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : "Kesalahan server";
+    return { success: false, message: `Gagal melakukan check-in pasien: ${msg}` };
+  }
+}
+
+/**
+ * Server Action: Pendaftaran Pasien Walk-In Langsung di Loket Admisi (PostgreSQL)
+ */
+export async function createWalkInAppointmentServerAction(rawData: {
+  nik: string;
+  keluhan: string;
+  poli: string;
+}): Promise<AppointmentActionResponse> {
+  const auth = await requireSession(["staf", "admin"], "createWalkInAppointment");
+  if (!auth.ok) {
+    return { success: false, message: auth.message };
+  }
+
+  const validation = WalkInAdmisiSchema.safeParse(rawData);
+  if (!validation.success) {
+    return {
+      success: false,
+      message: validation.error.issues[0]?.message || "Format pendaftaran walk-in tidak valid.",
+    };
+  }
+
+  const { nik, keluhan, poli } = validation.data;
+  const faskesId = auth.session.faskesId || "FAS-01";
+
+  try {
+    const faskes = await prisma.faskes.findUnique({
+      where: { id: faskesId },
+      include: { doctors: { take: 1 } },
+    });
+
+    if (!faskes) {
+      return { success: false, message: "Fasilitas kesehatan tidak ditemukan." };
+    }
+
+    if (faskes.status === FaskesStatus.QUARANTINED) {
+      return {
+        success: false,
+        message: `Pendaftaran walk-in ditolak: ${faskes.nama} sedang berstatus KARANTINA.`,
+      };
+    }
+
+    const patient = await prisma.patient.findFirst({
+      where: { OR: [{ nik }, { id: nik }] },
+    });
+
+    if (!patient) {
+      return {
+        success: false,
+        message: `Pasien dengan NIK ${nik} belum terdaftar di basis data nasional JagaMedis.`,
+      };
+    }
+
+    const defaultDoctor = faskes.doctors[0] || (await prisma.doctor.findFirst());
+    if (!defaultDoctor) {
+      return { success: false, message: "Tidak ada dokter aktif tersedia di faskes ini." };
+    }
+
+    const aptId = `APT-WLK-${Date.now().toString().slice(-5)}`;
+    const consentPin = randomInt(100000, 1000000).toString();
+    const now = new Date();
+    const jamStr = `${now.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })} WIB`;
+
+    const created = await prisma.appointment.create({
+      data: {
+        id: aptId,
+        patientId: patient.id,
+        faskesId: faskes.id,
+        doctorId: defaultDoctor.id,
+        tanggal: now,
+        jam: jamStr,
+        poli,
+        keluhanAwal: keluhan,
+        consentActive: true,
+        consentPin,
+        status: AppointmentStatus.WAITING_TRIAGE,
+        checkInTime: now,
+      },
+      include: {
+        patient: { select: { id: true, name: true, nik: true, mrn: true } },
+        faskes: { select: { id: true, nama: true } },
+        doctor: { select: { id: true, name: true, specialty: true } },
+      },
+    });
+
+    await recordSecurityAuditBestEffort({
+      actorId: auth.session.id,
+      actorName: auth.session.name,
+      actorRole: auth.role,
+      action: AuditAction.CHECK_IN_TRIAGE,
+      targetResource: `/api/appointments/${aptId}`,
+      severity: AuditSeverity.INFO,
+      detail: `Staf ${auth.session.name} mendaftarkan pasien walk-in ${patient.name} (${aptId}) langsung ke Loket Triase.`,
+    });
+
+    safeRevalidate("/staf");
+    safeRevalidate("/staf/triase");
+    safeRevalidate("/nakes");
+
+    return {
+      success: true,
+      message: `Pasien walk-in ${patient.name} (${aptId}) berhasil didaftarkan ke Loket Triase.`,
+      data: {
+        ...created,
+        tanggal: created.tanggal.toISOString(),
+        createdAt: created.createdAt.toISOString(),
+        checkInTime: created.checkInTime ? created.checkInTime.toISOString() : null,
+      },
+    };
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : "Kesalahan basis data";
+    return { success: false, message: `Gagal mendaftarkan walk-in: ${msg}` };
   }
 }

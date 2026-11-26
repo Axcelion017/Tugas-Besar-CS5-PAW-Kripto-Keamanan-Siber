@@ -1,19 +1,63 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { MOCK_FASKES, Faskes, getStorageData } from "@/lib/db/mockData";
+import { getFaskesListServerAction } from "@/lib/actions/faskes";
+import { DashboardSkeleton } from "@/components/ui/Skeleton";
+
+interface DbFaskesItem {
+  id: string;
+  kodeFaskes: string;
+  nama: string;
+  tipe: string;
+  alamat: string;
+  kota: string;
+  kontak: string;
+  spesialisasiList: string[];
+  kategoriPenyakit: string[];
+  status: "ACTIVE" | "QUARANTINED";
+}
+
+function formatFaskesType(tipe: string): string {
+  if (tipe === "RUMAH_SAKIT") return "Rumah Sakit";
+  if (tipe === "KLINIK_PRATAMA") return "Klinik Pratama";
+  if (tipe === "PUSKESMAS") return "Puskesmas";
+  return tipe;
+}
 
 export default function FaskesSearchPage() {
-  const [faskesList] = useState<Faskes[]>(() =>
-    getStorageData<Faskes[]>("resilio_faskes_list", MOCK_FASKES)
-  );
+  const [faskesList, setFaskesList] = useState<DbFaskesItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedType, setSelectedType] = useState("SEMUA");
 
+  useEffect(() => {
+    async function loadFaskes() {
+      try {
+        const res = await getFaskesListServerAction();
+        if (res.success && Array.isArray(res.data)) {
+          const mapped: DbFaskesItem[] = (res.data as unknown as DbFaskesItem[]).map((f) => ({
+            ...f,
+            tipe: formatFaskesType(f.tipe),
+          }));
+          setFaskesList(mapped);
+        }
+      } catch (err) {
+        console.warn("Gagal memuat daftar faskes dari PostgreSQL:", err);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    loadFaskes();
+  }, []);
+
+  if (isLoading) {
+    return <DashboardSkeleton noticeText="Memuat direktori fasilitas kesehatan dari basis data..." />;
+  }
+
   const filtered = faskesList.filter((f) => {
-    const matchesType =
-      selectedType === "SEMUA" || f.tipe === selectedType;
+    const matchesType = selectedType === "SEMUA" || f.tipe === selectedType;
 
     const term = searchTerm.toLowerCase();
     const matchesSearch =
@@ -42,7 +86,7 @@ export default function FaskesSearchPage() {
           Pencarian Fasilitas Kesehatan Berdasarkan Penyakit & Spesialisasi
         </h1>
         <p className="text-xs text-slate-500 font-medium">
-          Temukan Rumah Sakit, Klinik Pratama, atau Puskesmas yang memiliki dokter spesialis sesuai keluhan Anda.
+          Data fasilitas kesehatan & status keamanan siber (Kill-Switch) dimuat langsung dari PostgreSQL.
         </p>
       </div>
 
@@ -59,10 +103,11 @@ export default function FaskesSearchPage() {
             />
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             {["SEMUA", "Rumah Sakit", "Klinik Pratama", "Puskesmas"].map((tipe) => (
               <button
                 key={tipe}
+                type="button"
                 onClick={() => setSelectedType(tipe)}
                 className={`px-3 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
                   selectedType === tipe
@@ -78,12 +123,13 @@ export default function FaskesSearchPage() {
 
         {/* Shortcut Gejala / Penyakit */}
         <div className="flex items-center gap-2 flex-wrap pt-2 border-t border-slate-100">
-          <span className="text-[11px] font-bold text-slate-400 uppercase">
+          <span className="text-[11px] font-bold text-slate-500 uppercase">
             Pintasan Gejala / Penyakit:
           </span>
           {symptomShortcuts.map((s) => (
             <button
               key={s}
+              type="button"
               onClick={() => setSearchTerm(s)}
               className="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-semibold border border-blue-200 transition cursor-pointer"
             >
@@ -92,6 +138,7 @@ export default function FaskesSearchPage() {
           ))}
           {searchTerm && (
             <button
+              type="button"
               onClick={() => setSearchTerm("")}
               className="text-xs text-red-600 font-bold hover:underline ml-2 cursor-pointer"
             >
@@ -131,7 +178,7 @@ export default function FaskesSearchPage() {
                   </div>
 
                   <span
-                    className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-full border ${
+                    className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-full border shrink-0 ${
                       f.status === "ACTIVE"
                         ? "bg-emerald-100 text-emerald-800 border-emerald-200"
                         : "bg-red-100 text-red-800 border-red-300"
@@ -163,7 +210,7 @@ export default function FaskesSearchPage() {
                     {f.kategoriPenyakit.map((kp) => (
                       <span
                         key={kp}
-                        className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200"
+                        className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200"
                       >
                         #{kp}
                       </span>
@@ -184,8 +231,8 @@ export default function FaskesSearchPage() {
                     Lihat Dokter & Booking →
                   </Link>
                 ) : (
-                  <span className="text-xs font-bold text-red-600">
-                    Akses Ditangguhkan (Kill-Switch)
+                  <span className="text-xs font-bold text-red-700">
+                    Booking Diblokir (Kill-Switch)
                   </span>
                 )}
               </div>
