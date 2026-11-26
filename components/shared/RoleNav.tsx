@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { UserSession, logoutUser, normalizeRole } from "@/lib/auth/auth";
 import { logoutServerAction } from "@/lib/actions/auth";
 import { LogoutModal } from "@/components/ui/LogoutModal";
+import { BrandIcon } from "@/components/shared/BrandLogo";
 import { getOutboxItems, OUTBOX_UPDATED_EVENT } from "@/lib/storage/indexedDb";
 import {
   IconActivity,
@@ -173,9 +174,7 @@ export function RoleNav({ session }: RoleNavProps) {
             )}
           </button>
           <Link href={`/${role}`} className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-red-600 rounded-lg flex items-center justify-center text-white font-black text-sm">
-              J
-            </div>
+            <BrandIcon size={32} className="shrink-0" />
             <span className="font-black text-slate-900 tracking-tight text-sm">
               JAGA<span className="text-red-600">MEDIS</span>
             </span>
@@ -197,15 +196,13 @@ export function RoleNav({ session }: RoleNavProps) {
           {/* Logo Brand */}
           <div className="p-6 border-b border-slate-100">
             <Link href={`/${role}`} className="flex items-center gap-3 group">
-              <div className="w-8 h-8 rounded-xl bg-red-600 flex items-center justify-center text-white font-black text-base shadow-sm shrink-0">
-                J
-              </div>
+              <BrandIcon size={36} className="shrink-0" />
               <div className="leading-tight">
                 <span className="font-black text-slate-900 tracking-tight text-sm group-hover:text-red-700 transition">
                   JAGA<span className="text-red-600">MEDIS</span>
                 </span>
                 <p className="text-[11px] text-slate-600 font-bold tracking-wider uppercase">
-                  Zero-Trust HIS
+                  Hospital Information System
                 </p>
               </div>
             </Link>
@@ -216,7 +213,7 @@ export function RoleNav({ session }: RoleNavProps) {
                 <span className="text-xs font-bold text-slate-800 truncate">
                   {session.name}
                 </span>
-                <span className={`text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full border ${roleBadgeColor}`}>
+                <span className={`text-[11px] font-extrabold uppercase px-2 py-0.5 rounded-full border ${roleBadgeColor}`}>
                   {session.role.toUpperCase()}
                 </span>
               </div>
@@ -286,6 +283,7 @@ export function RoleNav({ session }: RoleNavProps) {
         {/* Footer Sidebar & Logout */}
         <div className="p-4 border-t border-slate-100 space-y-2">
           <button
+            type="button"
             onClick={() => setShowLogoutModal(true)}
             className="w-full flex items-center justify-center gap-2 py-2.5 px-3 bg-slate-100 hover:bg-red-50 hover:text-red-700 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 transition cursor-pointer"
           >

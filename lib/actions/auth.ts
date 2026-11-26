@@ -8,6 +8,7 @@ export {
 export {
   registerPasienServerAction,
   registerPasienCepatServerAction,
+  registerNakesServerAction,
 } from "@/features/auth/register-actions";
 
 export {

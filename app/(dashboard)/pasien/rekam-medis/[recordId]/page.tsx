@@ -12,6 +12,7 @@ import {
   decryptMedicalRecordPayload,
 } from "@/features/medical-records/crypto-service";
 import { parsePrescriptionDetail } from "@/features/medical-records/prescription-parser";
+import { Breadcrumb } from "@/components/ui/Breadcrumb";
 
 type DecryptedSoapData = CanonicalSoapPayload;
 
@@ -142,17 +143,13 @@ export default function RecordDetailPage({
   if (notFound) {
     return (
       <div className="space-y-6">
-        <div className="flex items-center gap-2 text-xs font-bold text-blue-600 uppercase tracking-wider">
-          <Link href="/pasien" className="hover:underline">
-            Portal Pasien
-          </Link>
-          <span>/</span>
-          <Link href="/pasien/rekam-medis" className="hover:underline">
-            Rekam Medis
-          </Link>
-          <span>/</span>
-          <span>Berkas Tidak Ditemukan</span>
-        </div>
+        <Breadcrumb
+          items={[
+            { label: "Portal Pasien", href: "/pasien" },
+            { label: "Rekam Medis", href: "/pasien/rekam-medis" },
+            { label: "Berkas Tidak Ditemukan" },
+          ]}
+        />
 
         <div className="p-8 md:p-12 rounded-3xl bg-white border border-red-200 shadow-xl max-w-2xl mx-auto my-8 text-center space-y-5">
           <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600 font-black text-2xl">
@@ -254,17 +251,13 @@ export default function RecordDetailPage({
   return (
     <div className="space-y-6">
       {/* Breadcrumb */}
-      <div className="flex items-center gap-2 text-xs font-bold text-blue-600 uppercase tracking-wider">
-        <Link href="/pasien" className="hover:underline">
-          Portal Pasien
-        </Link>
-        <span>/</span>
-        <Link href="/pasien/rekam-medis" className="hover:underline">
-          Rekam Medis
-        </Link>
-        <span>/</span>
-        <span>Detail Berkas {recordId}</span>
-      </div>
+      <Breadcrumb
+        items={[
+          { label: "Portal Pasien", href: "/pasien" },
+          { label: "Rekam Medis", href: "/pasien/rekam-medis" },
+          { label: `Detail Berkas ${recordId}` },
+        ]}
+      />
 
       {/* Header Utama Berkas */}
       <div className="p-6 md:p-8 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-4">
@@ -292,18 +285,21 @@ export default function RecordDetailPage({
 
           <div className="flex flex-wrap items-center gap-2">
             <button
+              type="button"
               onClick={() => setIsPrintOpen(true)}
               className="px-4 py-2.5 bg-slate-900 hover:bg-black text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-sm transition cursor-pointer"
             >
               <span>Cetak / Unduh PDF</span>
             </button>
             <button
+              type="button"
               onClick={() => handleVerifyAndDecrypt(false)}
               className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-sm transition cursor-pointer"
             >
               Verifikasi & Dekripsi Asli
             </button>
             <button
+              type="button"
               onClick={() => handleVerifyAndDecrypt(true)}
               className="px-4 py-2.5 bg-red-100 hover:bg-red-200 text-red-700 rounded-xl text-xs font-black uppercase tracking-wider border border-red-300 transition cursor-pointer"
             >
@@ -333,11 +329,11 @@ export default function RecordDetailPage({
 
             <div className="grid grid-cols-2 gap-2 pt-2 border-t border-emerald-200/60 text-xs font-mono">
               <div>
-                <span className="text-slate-400 block text-[9px] uppercase font-sans font-bold">Nomor STR Dokter</span>
+                <span className="text-slate-400 block text-[11px] uppercase font-sans font-bold">Nomor STR Dokter</span>
                 <span className="text-slate-800 font-bold">{record.dokterStr}</span>
               </div>
               <div>
-                <span className="text-slate-400 block text-[9px] uppercase font-sans font-bold">Nomor SIP Praktik</span>
+                <span className="text-slate-400 block text-[11px] uppercase font-sans font-bold">Nomor SIP Praktik</span>
                 <span className="text-slate-800 font-bold">{record.dokterSip || "503/SIP.01/2026"}</span>
               </div>
             </div>
@@ -365,11 +361,11 @@ export default function RecordDetailPage({
 
             <div className="text-xs text-slate-700 space-y-1 pt-2 border-t border-blue-200/60">
               <div>
-                <span className="text-slate-400 block text-[9px] uppercase font-mono font-bold">NIP Petugas</span>
+                <span className="text-slate-400 block text-[11px] uppercase font-mono font-bold">NIP Petugas</span>
                 <span className="text-slate-800 font-mono font-bold">{record.perawatNip || "198804122015022001"}</span>
               </div>
               <div>
-                <span className="text-slate-400 block text-[9px] uppercase font-bold">Tindakan Klinis yang Dilakukan:</span>
+                <span className="text-slate-400 block text-[11px] uppercase font-bold">Tindakan Klinis yang Dilakukan:</span>
                 <p className="font-semibold text-slate-800 mt-0.5">
                   {record.tindakanStaf || "Pemeriksaan fisik tanda vital awal (tensi, nadi, suhu tubuh, saturasi O2), verifikasi alergi, dan penapisan tingkat kegawatdaruratan triase."}
                 </p>
@@ -561,7 +557,7 @@ export default function RecordDetailPage({
                       <div className="truncate flex-1">
                         <h4 className="font-black text-slate-900 text-xs truncate">{img.title}</h4>
                         <p className="text-[11px] text-slate-500 mt-0.5">{img.notes || "Citra radiologi terenkripsi biner"}</p>
-                        <span className="inline-block mt-1 text-[9px] font-mono text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                        <span className="inline-block mt-1 text-[11px] font-mono text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
                           HMAC Integritas Sah
                         </span>
                       </div>

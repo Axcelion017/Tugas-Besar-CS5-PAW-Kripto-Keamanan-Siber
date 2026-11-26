@@ -2,7 +2,7 @@
 
 > **Metadata Dokumen**
 > - **Proyek**: JagaMedis (sebelumnya Resilio-Health) — Cryptographic Offline-First HIS & RME
-> - **Versi Basis Kode**: `v0.3.3-fase4` (Milestone `v0.2` $\rightarrow$ `v0.3`)
+> - **Versi Basis Kode**: **`v0.3.4`** (Milestone `v0.2` $\rightarrow$ `v0.3`)
 > - **Tanggal Berlaku**: 26 November 2026
 > - **Cakupan Dokumen**:
 >   1. **Bagian A**: Panduan Simulasi Penggunaan Aplikasi *End-to-End* (5 Skenario Operasional & Pengujian Keamanan).
@@ -38,10 +38,10 @@ npm run dev
 ### Skenario 1: Siklus Layanan Klinis Rawat Jalan Normal (4 Peran Terintegrasi)
 *Tujuan: Membuktikan aliran data 100% PostgreSQL dari hulu ke hilir dengan enkripsi AEAD klien nyata dan cetak resume A4 terisolasi.*
 
-1. **Tahap Pasien — Booking & Auto-Consent (`budi`)**:
-   - Masuk sebagai `budi` di `/login` $\rightarrow$ buka `/pasien/faskes` $\rightarrow$ pilih **RSUP Dr. Sardjito** (`ACTIVE`).
-   - Buka `/pasien/booking`, pilih poliklinik & dokter **dr. Andi Wijaya, Sp.PD**, pilih tanggal hari ini, lalu klik **Konfirmasi Booking**.
-   - **Hasil Terverifikasi**: Sistem menerbitkan `bookingId` PostgreSQL, **PIN 6-digit persetujuan DPJP**, serta tiket *Auto-Consent* otomatis di `/pasien/consent`.
+1. **Tahap Pasien — Booking 3-Langkah, Family Proxy & Auto-Consent (`budi`)**:
+   - Masuk sebagai `budi` di `/login` $\rightarrow$ sistem otomatis mengarahkan langsung ke `/pasien` dengan menu pertama sidebar aktif (`bg-red-50/80 border-l-4 border-red-600`). *(Opsional: uji kelola anggota keluarga di `/pasien/profil?tab=keluarga`.)*
+   - Buka `/pasien/booking`, lengkapi **3 langkah** (*1. Faskes & Dokter*, *2. Tanggal & Slot Jam*, *3. Keluhan & Auto-Consent*), lalu klik **Konfirmasi Booking & Terbitkan Tiket**.
+   - **Hasil Terverifikasi**: Sistem menerbitkan `bookingId` PostgreSQL, **PIN 6-digit persetujuan DPJP** (dengan tombol **Salin** cepat), serta tiket *Auto-Consent* otomatis di `/pasien/consent`.
 2. **Tahap Staf Admisi — Check-In & Handoff (`suster_maya`)**:
    - Masuk sebagai `suster_maya` $\rightarrow$ di `/staf`, temukan antrean `budi` berstatus `SCHEDULED` $\rightarrow$ klik **Check-In Kedatangan** (status berubah ke `WAITING_TRIAGE`).
    - Klik tombol **Mulai Triase** (membawa parameter `?aptId=...` langsung ke `/staf/triase`).
@@ -95,9 +95,10 @@ npm run dev
 ### Skenario 4: Simulasi Serangan Siber (BOLA/IDOR, Manipulasi Ciphertext & Ransomware Kill-Switch)
 *Tujuan: Membuktikan pertahanan berlapis (Fail-Closed & Isolation) terhadap 3 ancaman utama KKS & Kriptografi.*
 
-1. **Uji BOLA / Eskalasi Cookie**:
+1. **Uji BOLA, Anti-Enumeration, Rate Limit (`429`) & Eskalasi Cookie**:
    - Di browser tanpa login, coba akses `/admin` $\rightarrow$ `proxy.ts` langsung me-redirect ke `/login`.
    - Coba panggil `curl -X POST http://localhost:3000/api/sync/outbox` tanpa cookie $\rightarrow$ HTTP **`401 Unauthorized`**.
+   - Coba login gagal dengan akun tak terdaftar vs sandi salah pada `POST /api/auth/session` $\rightarrow$ keduanya mengembalikan pesan **identik** (`"Kredensial atau kata sandi tidak valid."`, anti-CWE-204); pada percobaan ke-11 dalam 1 menit, server mengembalikan HTTP **`429 Too Many Requests`** + header `Retry-After`.
    - Masuk sebagai `budi`, coba manipulasi cookie `resilio_user_role=admin` via DevTools lalu muat ulang `/admin` $\rightarrow$ tetap ditolak (cookie non-HttpOnly diabaikan).
 2. **Uji Manipulasi Ciphertext (*Tampering* $\rightarrow$ *Fail-Closed*)**:
    - Ubah 1 karakter pada kolom `encrypted_payload` atau `hmac_digest` salah satu baris di tabel `medical_records` PostgreSQL.

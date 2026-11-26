@@ -164,7 +164,7 @@ export default function AdminOverviewPage() {
                   <div className="flex items-center gap-2">
                     <span className="font-mono text-[10px] text-slate-400">{log.timestamp}</span>
                     <span
-                      className={`text-[9px] font-black uppercase px-2 py-0.2 rounded font-mono ${
+                      className={`text-[11px] font-black uppercase px-2 py-0.2 rounded font-mono ${
                         log.severity === "CRITICAL"
                           ? "bg-red-200 text-red-900"
                           : "bg-emerald-100 text-emerald-800"
@@ -208,7 +208,7 @@ export default function AdminOverviewPage() {
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-slate-800">{t.judul}</span>
                     <span
-                      className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${
+                      className={`text-[11px] font-black uppercase px-2 py-0.5 rounded-full border ${
                         t.status === "OPEN"
                           ? "bg-amber-100 text-amber-800 border-amber-300"
                           : "bg-blue-100 text-blue-800 border-blue-200"

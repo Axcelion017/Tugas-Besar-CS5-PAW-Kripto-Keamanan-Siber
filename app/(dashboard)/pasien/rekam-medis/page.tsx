@@ -1,6 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import { Breadcrumb } from "@/components/ui/Breadcrumb";
+
+import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { getUserSession, UserSession } from "@/lib/auth/auth";
 import type { EncryptedMedicalRecord } from "@/lib/db/mockData";
@@ -11,6 +13,16 @@ import {
   decryptMedicalRecordPayload,
 } from "@/features/medical-records/crypto-service";
 import { parsePrescriptionDetail } from "@/features/medical-records/prescription-parser";
+import {
+  IconAlertTriangle,
+  IconCheck,
+  IconFileText,
+  IconLock,
+  IconSearch,
+  IconStethoscope,
+  IconUnlock,
+  IconUsers,
+} from "@/components/ui/Icons";
 
 type DecryptedRecordPayload = CanonicalSoapPayload;
 
@@ -26,82 +38,92 @@ interface EnrichedMedicalRecord extends EncryptedMedicalRecord {
 export default function RekamMedisPasienPage() {
   const [session, setSession] = useState<UserSession | null>(null);
   const [records, setRecords] = useState<EnrichedMedicalRecord[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [decryptedMap, setDecryptedMap] = useState<Record<string, DecryptedRecordPayload>>({});
   const [hmacStatusMap, setHmacStatusMap] = useState<Record<string, boolean>>({});
   const [decryptErrorMap, setDecryptErrorMap] = useState<Record<string, string>>({});
   const [isDecryptingAll, setIsDecryptingAll] = useState(false);
   const [filterQuery, setFilterQuery] = useState("");
+  const [viewFilter, setViewFilter] = useState<"ALL" | "LOCKED" | "UNLOCKED" | "ADDENDUM">("ALL");
 
   useEffect(() => {
+    let active = true;
     async function loadData() {
+      setIsLoading(true);
       const s = getUserSession();
-      if (!s) return;
+      if (!s || !active) {
+        if (active) setIsLoading(false);
+        return;
+      }
       setSession(s);
 
       let recordList: EnrichedMedicalRecord[] = [];
-
-      // 1. Ambil data riil dari PostgreSQL via Server Action
       try {
         const dbRes = await getMedicalRecordsServerAction({ patientId: s.id });
         if (dbRes.success && dbRes.data && dbRes.data.length > 0) {
-          recordList = (dbRes.data as unknown as Array<{
-            id: string;
-            patientId: string;
-            patient?: { name?: string };
-            faskesId: string;
-            faskes?: { nama?: string; alamat?: string };
-            doctor?: { name?: string; specialty?: string; strNumber?: string; sipNumber?: string };
-            appointment?: {
-              triageAssessment?: {
-                assessedBy?: { name?: string; nip?: string; posisi?: string };
-                catatanPerawat?: string;
-              };
-            };
-            primaryIcd10: string;
-            diagnosisShort: string;
-            encryptedPayload: string;
-            ivHex: string;
-            hmacDigest: string;
-            createdAt: string;
-            version: number;
-            addendumReason?: string | null;
-            medicalImages?: Array<{
+          recordList = (
+            dbRes.data as unknown as Array<{
               id: string;
-              title: string;
-              type: "RONTGEN" | "USG" | "LAB" | "EKG" | "FOTO_KLINIS";
-              encryptedBlobHex: string;
+              patientId: string;
+              patient?: { name?: string };
+              faskesId: string;
+              faskes?: { nama?: string; alamat?: string };
+              doctor?: { name?: string; specialty?: string; strNumber?: string; sipNumber?: string };
+              appointment?: {
+                triageAssessment?: {
+                  assessedBy?: { name?: string; nip?: string; posisi?: string };
+                  catatanPerawat?: string;
+                };
+              };
+              primaryIcd10: string;
+              diagnosisShort: string;
+              encryptedPayload: string;
               ivHex: string;
               hmacDigest: string;
-              mimeType: string;
-              notes?: string | null;
               createdAt: string;
-            }>;
-          }>).map((r) => ({
+              version: number;
+              addendumReason?: string | null;
+              medicalImages?: Array<{
+                id: string;
+                title: string;
+                type: "RONTGEN" | "USG" | "LAB" | "EKG" | "FOTO_KLINIS";
+                encryptedBlobHex: string;
+                ivHex: string;
+                hmacDigest: string;
+                mimeType: string;
+                notes?: string | null;
+                createdAt: string;
+              }>;
+            }>
+          ).map((r) => ({
             recordId: r.id,
             patientId: r.patientId,
             patientName: r.patient?.name || s.name,
             faskesId: r.faskesId,
-            faskesNama: r.faskes?.nama || "RSUP Dr. Sardjito",
-            dokterNama: r.doctor?.name || "dr. Andi Pratama, Sp.PD",
-            dokterStr: r.doctor?.strNumber || "31.1.1.100.2.22.123456",
-            dokterSip: r.doctor?.sipNumber || "503/SIP.DOKTER/2026/014",
-            dokterSpecialty: r.doctor?.specialty || "Spesialis Penyakit Dalam",
-            perawatNama: r.appointment?.triageAssessment?.assessedBy?.name || "Ns. Maya Indah, S.Kep",
-            perawatNip: r.appointment?.triageAssessment?.assessedBy?.nip || "198804122015022001",
+            faskesNama: r.faskes?.nama || "Fasilitas Kesehatan Terdaftar",
+            dokterNama: r.doctor?.name || "Dokter Pemeriksa (DPJP)",
+            dokterStr: r.doctor?.strNumber || "-",
+            dokterSip: r.doctor?.sipNumber || "-",
+            dokterSpecialty: r.doctor?.specialty || "Poliklinik Spesialis",
+            perawatNama: r.appointment?.triageAssessment?.assessedBy?.name || "Perawat Triase",
+            perawatNip: r.appointment?.triageAssessment?.assessedBy?.nip || "-",
             perawatPosisi: r.appointment?.triageAssessment?.assessedBy?.posisi || "Perawat Triase & Admisi",
-            tindakanStaf: r.appointment?.triageAssessment?.catatanPerawat || "Pengkajian tanda vital fisik & penapisan awal",
+            tindakanStaf:
+              r.appointment?.triageAssessment?.catatanPerawat ||
+              "Pengkajian tanda vital fisik & penapisan triase awal",
             primaryIcd10: r.primaryIcd10,
             diagnosisShort: r.diagnosisShort,
             encryptedPayload: r.encryptedPayload,
             ivHex: r.ivHex,
             hmacDigest: r.hmacDigest,
-            timestamp: new Date(r.createdAt).toLocaleString("id-ID", {
-              day: "numeric",
-              month: "long",
-              year: "numeric",
-              hour: "2-digit",
-              minute: "2-digit",
-            }) + " WIB",
+            timestamp:
+              new Date(r.createdAt).toLocaleString("id-ID", {
+                day: "numeric",
+                month: "short",
+                year: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              }) + " WIB",
             version: r.version,
             addendumReason: r.addendumReason || undefined,
             medicalImages: r.medicalImages?.map((img) => ({
@@ -118,13 +140,19 @@ export default function RekamMedisPasienPage() {
           }));
         }
       } catch {
-        // Biarkan recordList kosong secara jujur bila server tidak terjangkau (Fail-Closed & Anti-BOLA)
+        // Biarkan kosong secara jujur bila server tidak terjangkau (Fail-Closed & Anti-BOLA)
       }
 
-      setRecords(recordList);
+      if (active) {
+        setRecords(recordList);
+        setIsLoading(false);
+      }
     }
 
-    loadData();
+    void loadData();
+    return () => {
+      active = false;
+    };
   }, []);
 
   const patientKey = session?.encryptionKeyHex;
@@ -156,7 +184,6 @@ export default function RekamMedisPasienPage() {
       return;
     }
 
-    // Fail-Closed Murni: Blokir tampilan konten klinis, hapus data dekripsi, dan catat SIEM
     setHmacStatusMap((prev) => ({ ...prev, [rec.recordId]: false }));
     setDecryptedMap((prev) => {
       const next = { ...prev };
@@ -181,210 +208,304 @@ export default function RekamMedisPasienPage() {
     setIsDecryptingAll(false);
   };
 
-  const filteredRecords = records.filter(
-    (r) =>
-      r.diagnosisShort.toLowerCase().includes(filterQuery.toLowerCase()) ||
-      r.dokterNama.toLowerCase().includes(filterQuery.toLowerCase()) ||
-      r.faskesNama.toLowerCase().includes(filterQuery.toLowerCase()) ||
-      r.primaryIcd10.toLowerCase().includes(filterQuery.toLowerCase())
+  const decryptedCount = Object.keys(decryptedMap).length;
+  const totalImages = useMemo(
+    () => records.reduce((acc, r) => acc + (r.medicalImages?.length || 0), 0),
+    [records]
   );
 
+  const filteredRecords = useMemo(() => {
+    const q = filterQuery.trim().toLowerCase();
+    return records.filter((r) => {
+      const isOpen = Boolean(decryptedMap[r.recordId]);
+      if (viewFilter === "LOCKED" && isOpen) return false;
+      if (viewFilter === "UNLOCKED" && !isOpen) return false;
+      if (viewFilter === "ADDENDUM" && r.version <= 1) return false;
+      if (!q) return true;
+      return (
+        r.diagnosisShort.toLowerCase().includes(q) ||
+        r.dokterNama.toLowerCase().includes(q) ||
+        r.faskesNama.toLowerCase().includes(q) ||
+        r.primaryIcd10.toLowerCase().includes(q) ||
+        r.recordId.toLowerCase().includes(q)
+      );
+    });
+  }, [records, filterQuery, viewFilter, decryptedMap]);
+
   return (
-    <div className="space-y-8">
-      {/* Header Halaman */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 text-xs font-bold text-blue-600 uppercase tracking-wider">
-            <Link href="/pasien" className="hover:underline">
-              Portal Pasien
-            </Link>
-            <span>/</span>
-            <span>Rekam Medis Elektronik Terpadu (Permenkes 24/2022)</span>
-          </div>
-          <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight mt-1">
-            Riwayat Rekam Medis & Tenaga Kesehatan Pemeriksa
+          <Breadcrumb
+            items={[
+              { label: "Portal Pasien", href: "/pasien" },
+              { label: "Rekam Medis (RME)" },
+            ]}
+          />
+          <h1 className="text-2xl font-black text-slate-900 tracking-tight mt-1">
+            Riwayat Rekam Medis Elektronik
           </h1>
-          <p className="text-xs text-slate-500 font-medium mt-0.5">
-            Setiap catatan medis memuat informasi dokter DPJP yang mendiagnosis dan staf perawat yang melakukan tindakan fisik awal.
+          <p className="text-xs text-slate-600 font-medium mt-0.5 max-w-2xl">
+            Seluruh catatan pemeriksaan SOAP, tanda vital, dan resep obat dienkripsi di sisi klien sesuai{" "}
+            <strong>Permenkes No. 24/2022</strong> dan hanya dapat didekripsi dengan kunci privat Anda.
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleDecryptAll}
-            disabled={isDecryptingAll}
-            className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md transition cursor-pointer disabled:opacity-50"
-          >
-            {isDecryptingAll ? "Mendekripsi Kripto..." : "Buka & Dekripsi Semua"}
-          </button>
+        <button
+          type="button"
+          onClick={handleDecryptAll}
+          disabled={isDecryptingAll || records.length === 0}
+          className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-sm transition cursor-pointer disabled:opacity-50 self-start"
+        >
+          <IconUnlock size={15} />
+          <span>{isDecryptingAll ? "Mendekripsi Berkas..." : "Buka & Dekripsi Semua"}</span>
+        </button>
+      </div>
+
+      {/* Ringkasan KPI */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Total Berkas RME</p>
+            <p className="text-2xl font-black text-slate-900 mt-1">{records.length}</p>
+            <p className="text-[11px] text-slate-500 mt-0.5">Dokumen permanen (immutable)</p>
+          </div>
+          <div className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 text-slate-700 flex items-center justify-center">
+            <IconFileText size={18} />
+          </div>
+        </div>
+
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Terbuka di Layar</p>
+            <p className="text-2xl font-black text-emerald-700 mt-1">
+              {decryptedCount} <span className="text-sm font-bold text-slate-400">/ {records.length}</span>
+            </p>
+            <p className="text-[11px] text-slate-500 mt-0.5">Lolos verifikasi HMAC-SHA256</p>
+          </div>
+          <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 flex items-center justify-center">
+            <IconUnlock size={18} />
+          </div>
+        </div>
+
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Lampiran Citra</p>
+            <p className="text-2xl font-black text-slate-900 mt-1">{totalImages}</p>
+            <p className="text-[11px] text-slate-500 mt-0.5">Rontgen, USG, Lab, &amp; EKG terenkripsi</p>
+          </div>
+          <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-200 text-blue-700 flex items-center justify-center">
+            <IconLock size={18} />
+          </div>
         </div>
       </div>
 
-      {/* Bar Pencarian Cepat */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-3">
-        <span className="text-slate-400 text-xs font-bold font-mono">CARI</span>
-        <input
-          type="text"
-          value={filterQuery}
-          onChange={(e) => setFilterQuery(e.target.value)}
-          placeholder="Cari berdasarkan nama penyakit, dokter pemeriksa, atau rumah sakit..."
-          className="w-full text-xs font-semibold text-slate-800 placeholder-slate-400 outline-none bg-transparent"
-        />
-        {filterQuery && (
-          <button
-            onClick={() => setFilterQuery("")}
-            className="text-xs text-slate-400 hover:text-slate-600 font-bold px-2 py-1"
-          >
-            Reset
-          </button>
-        )}
+      {/* Bar Pencarian & Filter */}
+      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="relative flex-1">
+          <IconSearch
+            size={15}
+            className="text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"
+          />
+          <input
+            type="text"
+            value={filterQuery}
+            onChange={(e) => setFilterQuery(e.target.value)}
+            placeholder="Cari diagnosis, kode ICD-10, dokter pemeriksa, atau faskes..."
+            aria-label="Cari catatan rekam medis"
+            className="w-full pl-10 pr-16 py-2 text-xs font-semibold text-slate-800 placeholder-slate-400 rounded-xl border border-slate-200 focus:ring-2 focus:ring-slate-400 focus:outline-none"
+          />
+          {filterQuery && (
+            <button
+              type="button"
+              onClick={() => setFilterQuery("")}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] text-red-600 hover:underline font-bold px-1.5 py-0.5 cursor-pointer"
+            >
+              Reset
+            </button>
+          )}
+        </div>
+
+        <div className="inline-flex p-1 rounded-xl bg-slate-100 border border-slate-200 self-start">
+          {(
+            [
+              { id: "ALL", label: "Semua" },
+              { id: "LOCKED", label: "Terkunci" },
+              { id: "UNLOCKED", label: "Terbuka" },
+              { id: "ADDENDUM", label: "Addendum" },
+            ] as const
+          ).map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setViewFilter(tab.id)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                viewFilter === tab.id
+                  ? "bg-white text-slate-900 shadow-xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Daftar Kartu Rekam Medis Detail Pasien */}
-      <div className="space-y-6">
-        {filteredRecords.length === 0 ? (
-          <div className="p-12 text-center bg-white rounded-3xl border border-slate-200 text-slate-400 text-xs font-medium">
-            Tidak ditemukan catatan rekam medis yang sesuai dengan pencarian.
+      {/* Daftar Kartu RME */}
+      <div className="space-y-5">
+        {isLoading ? (
+          <div className="p-12 text-center bg-white rounded-3xl border border-slate-200 text-slate-500 text-xs font-medium">
+            Memuat berkas rekam medis terenkripsi dari PostgreSQL...
+          </div>
+        ) : filteredRecords.length === 0 ? (
+          <div className="p-12 text-center bg-white rounded-3xl border border-slate-200 space-y-1">
+            <p className="text-sm font-bold text-slate-700">
+              Tidak ada catatan rekam medis ditemukan
+            </p>
+            <p className="text-xs text-slate-500">
+              Coba ubah kata kunci pencarian atau pilih filter &ldquo;Semua&rdquo;.
+            </p>
           </div>
         ) : (
           filteredRecords.map((rec) => {
-            const isDecrypted = !!decryptedMap[rec.recordId];
+            const isDecrypted = Boolean(decryptedMap[rec.recordId]);
             const data = decryptedMap[rec.recordId];
             const hmacValid = hmacStatusMap[rec.recordId];
 
             return (
-              <div
+              <article
                 key={rec.recordId}
                 className="bg-white rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden"
               >
-                {/* Header Kartu: Tanggal, Faskes, dan Nomor Berkas */}
-                <div className="p-6 bg-slate-50 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-3">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-mono font-bold px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-200">
+                {/* Header Kartu */}
+                <div className="p-5 sm:p-6 bg-slate-50/80 border-b border-slate-200 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                  <div className="space-y-1.5 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[11px] font-mono font-bold px-2.5 py-0.5 rounded-md bg-slate-900 text-white">
                         {rec.recordId}
                       </span>
-                      <span className="text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-slate-200 text-slate-700">
-                        Versi {rec.version} {rec.version > 1 ? "(Addendum)" : "(Dokumen Utama)"}
+                      <span className="text-[11px] font-mono font-bold px-2.5 py-0.5 rounded-md bg-blue-50 text-blue-800 border border-blue-200">
+                        ICD-10: {rec.primaryIcd10}
                       </span>
-                      <span className="text-xs font-semibold text-slate-500">
-                        Waktu: {rec.timestamp}
+                      <span
+                        className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full border ${
+                          rec.version > 1
+                            ? "bg-amber-50 text-amber-800 border-amber-200"
+                            : "bg-white text-slate-700 border-slate-200"
+                        }`}
+                      >
+                        v{rec.version} {rec.version > 1 ? "Addendum" : "Dokumen Utama"}
                       </span>
+                      <span className="text-xs font-medium text-slate-500">{rec.timestamp}</span>
                     </div>
+
                     <h2 className="text-lg font-black text-slate-900 tracking-tight">
                       {rec.diagnosisShort}
                     </h2>
-                    <p className="text-xs font-bold text-slate-600">
-                      Fasilitas: <span className="text-slate-900">{rec.faskesNama}</span>
+                    <p className="text-xs font-semibold text-slate-600">
+                      {rec.faskesNama}
+                      {rec.addendumReason && (
+                        <span className="text-amber-800 ml-2">• Alasan: {rec.addendumReason}</span>
+                      )}
                     </p>
                   </div>
 
-                  <div className="flex items-center gap-2 self-start md:self-auto">
+                  <div className="flex items-center gap-2 flex-wrap shrink-0">
                     {!isDecrypted ? (
                       <button
+                        type="button"
                         onClick={() => handleDecryptSingle(rec)}
-                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-xs transition cursor-pointer"
+                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs transition cursor-pointer"
                       >
-                        Buka & Dekripsi Berkas
+                        <IconUnlock size={14} />
+                        <span>Dekripsi Berkas</span>
                       </button>
                     ) : (
-                      <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 text-[10px] font-black uppercase">
-                        ✓ Terdekripsi di Layar
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold">
+                        <IconCheck size={14} />
+                        <span>Terdekripsi</span>
                       </span>
                     )}
 
                     <Link
                       href={`/pasien/rekam-medis/${rec.recordId}`}
-                      className="px-4 py-2 bg-slate-900 hover:bg-black text-white rounded-xl text-xs font-black uppercase tracking-wider transition text-center"
+                      className="px-4 py-2 bg-slate-900 hover:bg-black text-white rounded-xl text-xs font-bold transition text-center"
                     >
-                      Lihat Detail Lengkap →
+                      Detail &amp; Cetak A4 →
                     </Link>
                   </div>
                 </div>
 
-                <div className="p-6 space-y-6">
-                  {/* KARTU ATRIBUSI: DOKTER YANG MENDIAGNOSIS & STAF PERAWAT TINDAKAN */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* 1. Dokter DPJP yang Mendiagnosis */}
-                    <div className="p-4 rounded-2xl bg-emerald-50/60 border border-emerald-200 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-black uppercase tracking-wider text-emerald-800 flex items-center gap-1.5">
-                          <span className="w-2 h-2 rounded-full bg-emerald-600 inline-block" />
-                          Dokter Pemeriksa & Penanggung Jawab (DPJP)
-                        </span>
-                        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md border border-emerald-300">
-                          Mendiagnosis
-                        </span>
+                <div className="p-5 sm:p-6 space-y-5">
+                  {/* Atribusi Tenaga Kesehatan — ringkas & bersih */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="p-4 rounded-2xl bg-slate-50/70 border border-slate-200/80 flex items-start gap-3">
+                      <div className="w-9 h-9 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 flex items-center justify-center shrink-0">
+                        <IconStethoscope size={16} />
                       </div>
-                      <div className="space-y-0.5">
-                        <h4 className="text-sm font-black text-slate-900">{rec.dokterNama}</h4>
-                        <p className="text-xs font-bold text-emerald-800">{rec.dokterSpecialty || "Spesialis Penyakit Dalam"}</p>
-                      </div>
-                      <div className="pt-2 border-t border-emerald-200/70 grid grid-cols-2 gap-2 text-[11px] font-mono">
-                        <div>
-                          <span className="text-slate-400 block text-[9px] uppercase font-sans">No. STR Resmi</span>
-                          <span className="text-slate-700 font-bold">{rec.dokterStr}</span>
-                        </div>
-                        <div>
-                          <span className="text-slate-400 block text-[9px] uppercase font-sans">No. SIP Praktik</span>
-                          <span className="text-slate-700 font-bold">{rec.dokterSip || "503/SIP.01/2026"}</span>
-                        </div>
+                      <div className="min-w-0 space-y-0.5">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-emerald-700">
+                          Dokter Penanggung Jawab (DPJP)
+                        </span>
+                        <p className="text-sm font-black text-slate-900 truncate">{rec.dokterNama}</p>
+                        <p className="text-xs font-semibold text-slate-600">{rec.dokterSpecialty}</p>
+                        <p className="text-[11px] font-mono text-slate-500 pt-1">
+                          STR: {rec.dokterStr} • SIP: {rec.dokterSip}
+                        </p>
                       </div>
                     </div>
 
-                    {/* 2. Staf Perawat yang Melakukan Tindakan & Triase */}
-                    <div className="p-4 rounded-2xl bg-blue-50/60 border border-blue-200 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-black uppercase tracking-wider text-blue-800 flex items-center gap-1.5">
-                          <span className="w-2 h-2 rounded-full bg-blue-600 inline-block" />
-                          Tenaga Medis Pelaksana Tindakan Awal (Perawat)
-                        </span>
-                        <span className="text-[10px] font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-md border border-blue-300">
-                          Pelaksana Tindakan
-                        </span>
+                    <div className="p-4 rounded-2xl bg-slate-50/70 border border-slate-200/80 flex items-start gap-3">
+                      <div className="w-9 h-9 rounded-xl bg-blue-50 border border-blue-200 text-blue-700 flex items-center justify-center shrink-0">
+                        <IconUsers size={16} />
                       </div>
-                      <div className="space-y-0.5">
-                        <h4 className="text-sm font-black text-slate-900">{rec.perawatNama || "Ns. Maya Indah, S.Kep"}</h4>
-                        <p className="text-xs font-bold text-blue-800">{rec.perawatPosisi || "Perawat Pelaksana Triase & Admisi"}</p>
-                      </div>
-                      <div className="pt-2 border-t border-blue-200/70 text-[11px] text-slate-600 space-y-1">
-                        <div>
-                          <span className="text-slate-400 block text-[9px] uppercase font-mono font-bold">NIP Petugas</span>
-                          <span className="text-slate-700 font-mono font-bold">{rec.perawatNip || "198804122015022001"}</span>
-                        </div>
-                        <div>
-                          <span className="text-slate-400 block text-[9px] uppercase font-bold">Tindakan yang Dilakukan</span>
-                          <span className="text-slate-800 font-semibold">{rec.tindakanStaf || "Pemeriksaan tanda vital, anamnesis awal, dan penapisan triase fisik"}</span>
-                        </div>
+                      <div className="min-w-0 space-y-0.5">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-blue-700">
+                          Perawat Pelaksana Triase
+                        </span>
+                        <p className="text-sm font-black text-slate-900 truncate">{rec.perawatNama}</p>
+                        <p className="text-xs font-semibold text-slate-600">{rec.perawatPosisi}</p>
+                        <p className="text-[11px] text-slate-500 pt-1 line-clamp-1">
+                          {rec.tindakanStaf}
+                        </p>
                       </div>
                     </div>
                   </div>
 
-                  {/* KONTEN TERDEKRIPSI / TERLINDUNGI */}
+                  {/* Error Fail-Closed */}
                   {decryptErrorMap[rec.recordId] && (
                     <div
                       role="alert"
                       className="p-4 rounded-2xl bg-red-50 border border-red-300 text-red-900 text-xs space-y-1"
                     >
-                      <p className="font-black uppercase tracking-wider text-red-700">
-                        PROSEDUR FAIL-CLOSED — VERIFIKASI INTEGRITAS GAGAL
+                      <p className="font-black uppercase tracking-wider text-red-700 flex items-center gap-1.5">
+                        <IconAlertTriangle size={14} />
+                        <span>Prosedur Fail-Closed — Verifikasi Integritas Gagal</span>
                       </p>
                       <p className="font-semibold">{decryptErrorMap[rec.recordId]}</p>
                       <p className="text-[11px] font-mono text-red-700">
-                        Insiden HMAC_MISMATCH telah dicatat ke audit keamanan. Konten medis diblokir demi keselamatan pasien.
+                        Insiden HMAC_MISMATCH telah dicatat ke audit keamanan. Konten medis diblokir.
                       </p>
                     </div>
                   )}
+
+                  {/* Konten Terkunci vs Terdekripsi */}
                   {!isDecrypted ? (
                     <div className="p-5 rounded-2xl bg-slate-50 border border-dashed border-slate-300 space-y-3 text-xs">
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                        <div className="space-y-0.5">
-                          <span className="font-bold text-slate-900 block">
-                            Rekam Medis Terlindungi &amp; Asli
-                          </span>
-                          <p className="text-xs text-slate-600">
-                            Catatan dokter, hasil pemeriksaan, dan resep obat Anda dijaga secara privat dan hanya dapat dibuka oleh Anda atau dokter berizin.
-                          </p>
+                        <div className="flex items-start gap-3">
+                          <div className="w-9 h-9 rounded-xl bg-white border border-slate-200 text-slate-700 flex items-center justify-center shrink-0">
+                            <IconLock size={16} />
+                          </div>
+                          <div className="space-y-0.5">
+                            <span className="font-bold text-slate-900 block">
+                              Rekam Medis Terlindungi &amp; Asli
+                            </span>
+                            <p className="text-xs text-slate-600">
+                              Catatan dokter, hasil pemeriksaan, dan resep obat Anda dijaga secara privat dan hanya dapat dibuka oleh Anda atau dokter berizin.
+                            </p>
+                          </div>
                         </div>
                         <button
                           type="button"
@@ -395,7 +516,7 @@ export default function RekamMedisPasienPage() {
                         </button>
                       </div>
 
-                      <details className="pt-2 border-t border-slate-200 text-slate-600">
+                      <details className="pt-2.5 border-t border-slate-200 text-slate-600">
                         <summary className="cursor-pointer font-bold text-[11px] text-slate-700 hover:text-slate-900">
                           Lihat Bukti Kriptografi (Opsional — AES-256-GCM &amp; HMAC-SHA256)
                         </summary>
@@ -407,107 +528,103 @@ export default function RekamMedisPasienPage() {
                       </details>
                     </div>
                   ) : (
-                    <div className="space-y-4 pt-2">
-                      {/* Grid Rincian Klinis: S, O, A, P */}
+                    <div className="space-y-4">
+                      {/* Subjective & Assessment */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                        {/* 1. Anamnesis / Keluhan Pasien */}
-                        <div className="p-4 rounded-2xl bg-white border border-slate-200 space-y-1.5 shadow-xs">
-                          <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">
-                            Keluhan yang Disampaikan Pasien (Subjective)
+                        <div className="p-4 rounded-2xl bg-white border border-slate-200 space-y-1.5">
+                          <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider">
+                            Keluhan Pasien (Subjective)
                           </span>
                           <p className="font-semibold text-slate-800 leading-relaxed">
                             {data?.subjective || "Tidak ada catatan keluhan."}
                           </p>
                         </div>
 
-                        {/* 2. Diagnosis Resmi ICD-10 WHO */}
-                        <div className="p-4 rounded-2xl bg-white border border-slate-200 space-y-1.5 shadow-xs">
-                          <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">
-                            Diagnosis Medis Resmi Dokter (Assessment)
+                        <div className="p-4 rounded-2xl bg-white border border-slate-200 space-y-1.5">
+                          <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider">
+                            Diagnosis Resmi (Assessment)
                           </span>
                           <p className="font-black text-slate-900 text-sm">
                             {data?.assessment?.icd10 || rec.primaryIcd10} —{" "}
                             {data?.assessment?.desc || rec.diagnosisShort}
                           </p>
                           <span className="inline-block text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                            Terdaftar di Katalog WHO ICD-10
+                            Katalog WHO ICD-10
                           </span>
                         </div>
                       </div>
 
-                      {/* 3. Tanda-Tanda Vital Hasil Pengukuran Perawat */}
-                      <div className="p-4 rounded-2xl bg-white border border-slate-200 space-y-2 shadow-xs">
-                        <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">
-                          Tanda-Tanda Vital Fisik (Diukur oleh Perawat Triase)
+                      {/* Tanda Vital */}
+                      <div className="p-4 rounded-2xl bg-white border border-slate-200 space-y-2.5">
+                        <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider block">
+                          Tanda Vital Fisik (Objective)
                         </span>
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
-                          <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100">
-                            <span className="text-[10px] font-bold text-slate-400 uppercase block">Tekanan Darah</span>
-                            <span className="text-sm font-black text-slate-800">
-                              {data?.vitalSigns?.systolic || 120} / {data?.vitalSigns?.diastolic || 80} mmHg
+                          <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                            <span className="text-[10px] font-bold text-slate-500 uppercase block">
+                              Tekanan Darah
+                            </span>
+                            <span className="text-sm font-black text-slate-900">
+                              {data?.vitalSigns?.systolic || 120}/{data?.vitalSigns?.diastolic || 80}{" "}
+                              <span className="text-[11px] font-semibold text-slate-500">mmHg</span>
                             </span>
                           </div>
-                          <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100">
-                            <span className="text-[10px] font-bold text-slate-400 uppercase block">Detak Jantung</span>
-                            <span className="text-sm font-black text-slate-800">
-                              {data?.vitalSigns?.heartRate || 75} bpm
+                          <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                            <span className="text-[10px] font-bold text-slate-500 uppercase block">
+                              Detak Jantung
+                            </span>
+                            <span className="text-sm font-black text-slate-900">
+                              {data?.vitalSigns?.heartRate || 75}{" "}
+                              <span className="text-[11px] font-semibold text-slate-500">bpm</span>
                             </span>
                           </div>
-                          <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100">
-                            <span className="text-[10px] font-bold text-slate-400 uppercase block">Suhu Tubuh</span>
-                            <span className="text-sm font-black text-slate-800">
-                              {data?.vitalSigns?.temperature || 36.5} °C
+                          <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                            <span className="text-[10px] font-bold text-slate-500 uppercase block">
+                              Suhu Tubuh
+                            </span>
+                            <span className="text-sm font-black text-slate-900">
+                              {data?.vitalSigns?.temperature || 36.5}{" "}
+                              <span className="text-[11px] font-semibold text-slate-500">°C</span>
                             </span>
                           </div>
-                          <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100">
-                            <span className="text-[10px] font-bold text-slate-400 uppercase block">Saturasi O2</span>
-                            <span className="text-sm font-black text-slate-800">
+                          <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                            <span className="text-[10px] font-bold text-slate-500 uppercase block">
+                              Saturasi O2
+                            </span>
+                            <span className="text-sm font-black text-slate-900">
                               {data?.vitalSigns?.spo2 || 98}%
                             </span>
                           </div>
                         </div>
                       </div>
 
-                      {/* 4. Resep Obat & Petunjuk Dokter */}
+                      {/* Resep & Rencana Tindak Lanjut */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                        <div className="p-4 rounded-2xl bg-white border border-slate-200 space-y-2 shadow-xs">
-                          <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">
-                            Resep Obat yang Diberikan (e-Prescription &amp; Detail Penggunaan)
+                        <div className="p-4 rounded-2xl bg-white border border-slate-200 space-y-2.5">
+                          <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider block">
+                            Resep Obat (e-Prescription)
                           </span>
                           {data?.plan?.resep && data.plan.resep.length > 0 ? (
-                            <div className="space-y-2.5">
+                            <div className="space-y-2">
                               {data.plan.resep.map((r: string, idx: number) => {
                                 const detail = parsePrescriptionDetail(r);
                                 return (
                                   <div
                                     key={idx}
-                                    className="p-3 rounded-2xl bg-blue-50/50 border border-blue-200/80 space-y-1.5"
+                                    className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1"
                                   >
-                                    <div className="flex items-center justify-between">
-                                      <div className="flex items-center gap-2">
-                                        <span className="font-bold text-blue-700 font-mono text-[10px] uppercase px-1.5 py-0.5 bg-blue-100 rounded">
-                                          Rx
-                                        </span>
-                                        <span className="font-black text-slate-900 text-xs">
-                                          {detail.medicineName} ({detail.dosage})
-                                        </span>
-                                      </div>
-                                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span className="font-black text-slate-900 text-xs">
+                                        {detail.medicineName} ({detail.dosage})
+                                      </span>
+                                      <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 shrink-0">
                                         {detail.instructions}
                                       </span>
                                     </div>
-
-                                    <div className="text-[11px] text-slate-700 space-y-0.5 pl-0.5">
-                                      <p>
-                                        <strong className="text-slate-900">Cara Minum:</strong> {detail.timing}
-                                      </p>
-                                      <p className="text-slate-600">
-                                        <strong className="text-slate-800">Tujuan Terapi:</strong> {detail.indication}
-                                      </p>
-                                      <p className="text-[10px] text-amber-800 italic">
-                                        Catatan: {detail.notes}
-                                      </p>
-                                    </div>
+                                    <p className="text-[11px] text-slate-600">
+                                      <strong className="text-slate-800">Cara Minum:</strong> {detail.timing} •{" "}
+                                      {detail.indication}
+                                    </p>
                                   </div>
                                 );
                               })}
@@ -517,31 +634,36 @@ export default function RekamMedisPasienPage() {
                           )}
                         </div>
 
-                        <div className="p-4 rounded-2xl bg-white border border-slate-200 space-y-2 shadow-xs">
-                          <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">
-                            Anjuran & Rencana Tindak Lanjut Dokter
+                        <div className="p-4 rounded-2xl bg-white border border-slate-200 space-y-2">
+                          <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider block">
+                            Anjuran &amp; Rencana Tindak Lanjut
                           </span>
                           <p className="font-semibold text-slate-800 leading-relaxed">
-                            {data?.plan?.tindakan || "Kontrol tensi rutin dan patuhi pola makan sehat."}
+                            {data?.plan?.tindakan || "Kontrol rutin dan patuhi anjuran pola hidup sehat."}
                           </p>
                         </div>
                       </div>
 
-                      {/* 5. Lampiran Citra Medis Penunjang (Rontgen/USG) */}
+                      {/* Lampiran Citra Medis */}
                       {rec.medicalImages && rec.medicalImages.length > 0 && (
-                        <div className="p-4 rounded-2xl bg-white border border-slate-200 space-y-2 shadow-xs">
-                          <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">
-                            Lampiran Citra Medis Penunjang Terenkripsi (Rontgen / USG)
+                        <div className="p-4 rounded-2xl bg-white border border-slate-200 space-y-2.5">
+                          <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider block">
+                            Lampiran Citra Medis Terenkripsi
                           </span>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             {rec.medicalImages.map((img) => (
-                              <div key={img.id} className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center gap-3">
-                                <div className="w-10 h-10 bg-slate-900 text-white rounded-lg flex items-center justify-center font-bold text-[10px]">
+                              <div
+                                key={img.id}
+                                className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center gap-3"
+                              >
+                                <div className="px-2.5 py-2 bg-slate-900 text-white rounded-lg font-mono font-bold text-[10px] shrink-0">
                                   {img.type}
                                 </div>
                                 <div className="truncate flex-1">
-                                  <p className="font-bold text-slate-800 text-xs truncate">{img.title}</p>
-                                  <p className="text-[10px] text-slate-500">{img.notes || "Citra radiologi sah"}</p>
+                                  <p className="font-bold text-slate-900 text-xs truncate">{img.title}</p>
+                                  <p className="text-[11px] text-slate-500 truncate">
+                                    {img.notes || "Citra penunjang terenkripsi"}
+                                  </p>
                                 </div>
                               </div>
                             ))}
@@ -549,21 +671,35 @@ export default function RekamMedisPasienPage() {
                         </div>
                       )}
 
-                      {/* Status Verifikasi Integritas HMAC */}
-                      <div className="p-3 bg-slate-50 rounded-xl flex items-center justify-between text-xs border border-slate-200">
-                        <span className="text-slate-500 text-[11px]">
-                          Verifikasi Integritas Kripto (HMAC-SHA256):
+                      {/* Status Integritas HMAC */}
+                      <div className="px-4 py-3 bg-slate-50 rounded-xl flex items-center justify-between gap-3 text-xs border border-slate-200">
+                        <span className="text-slate-600 font-medium">
+                          Verifikasi Integritas Kriptografi (HMAC-SHA256)
                         </span>
-                        <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md ${
-                          hmacValid !== false ? "bg-emerald-100 text-emerald-800" : "bg-red-100 text-red-800"
-                        }`}>
-                          {hmacValid !== false ? "✓ Data Otentik & Bebas Manipulasi" : "⚠️ Integritas Cacat"}
+                        <span
+                          className={`inline-flex items-center gap-1.5 text-[11px] font-black uppercase px-2.5 py-1 rounded-lg ${
+                            hmacValid !== false
+                              ? "bg-emerald-100 text-emerald-800"
+                              : "bg-red-100 text-red-800"
+                          }`}
+                        >
+                          {hmacValid !== false ? (
+                            <>
+                              <IconCheck size={13} />
+                              <span>Data Otentik &amp; Bebas Manipulasi</span>
+                            </>
+                          ) : (
+                            <>
+                              <IconAlertTriangle size={13} />
+                              <span>Integritas Cacat</span>
+                            </>
+                          )}
                         </span>
                       </div>
                     </div>
                   )}
                 </div>
-              </div>
+              </article>
             );
           })
         )}

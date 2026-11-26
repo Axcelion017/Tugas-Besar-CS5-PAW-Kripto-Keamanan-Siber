@@ -1,6 +1,6 @@
-# Arsitektur Aplikasi & Keputusan Desain Antarmuka — Resilio-Health (PAW)
+# Arsitektur Aplikasi & Keputusan Desain Antarmuka — JagaMedis (`v0.3.5` — PAW)
 
-Dokumen ini mendokumentasikan keputusan rancangan arsitektur, hierarki komponen antarmuka, strategi tata letak responsif, arsitektur *Offline-First* PWA, serta kontrak antarmuka bertipe (*strictly typed interfaces*) pada sistem Resilio-Health.
+Dokumen ini mendokumentasikan keputusan rancangan arsitektur, hierarki komponen antarmuka, strategi *Hybrid Feature-Modular*, Server Components, **REST API v1 berstandar RFC 9457** (`docs/PAW/rest_api_v1.md`), arsitektur *Offline-First* PWA, serta kontrak antarmuka bertipe (*strictly typed interfaces*) pada sistem **JagaMedis** (sebelumnya Resilio-Health).
 
 ---
 
@@ -46,95 +46,63 @@ Dokumen ini mendokumentasikan keputusan rancangan arsitektur, hierarki komponen 
   - **Stateful Invalidation (UU PDP)**: Mendukung pembatalan hak akses instan (*Instant Revocation*) di sisi server saat pasien mencabut persetujuan (*1-Click Revoke*) atau saat pengguna logout.
 
 ### 1.7 Integrasi Basis Data PostgreSQL Riil & Prisma 7 ORM (Clean Architecture Backend)
-- **Keputusan**: Mengintegrasikan basis data PostgreSQL 17 lokal (`localhost:5432/resilio_health`) menggunakan **Prisma 7 ORM** (`@prisma/client@7.10.1`, `@prisma/adapter-pg`, dan connection pool `pg`).
+- **Keputusan**: Mengintegrasikan basis data PostgreSQL 17 lokal (`localhost:5432/resilio_health`) menggunakan **Prisma 7 ORM** (`@prisma/client@7.10.1`, `@prisma/adapter-pg`, dan connection pool `pg`) dengan **17 model relasional & 14 enum** (termasuk tabel `sessions` persisten & `family_members` CRUD).
 - **Alasan**:
-  - **Integritas Referensial Medis Kepatuhan Regulasi**: Menegakkan aturan penghapusan `onDelete: Restrict` pada seluruh entitas rekam medis dan master faskes guna mematuhi kewajiban retensi data rekam medis selama 25 tahun sesuai amanat Permenkes No. 24/2022.
-  - **Pemisahan Modular Backend**: Logika database diisolasi di `prisma/` (skema & migrasi fisik SQL) dan `lib/db/prisma.ts` (singleton connection pool) sehingga terpisah jelas dari antarmuka presentasi Next.js.
-  - **Seeder Idempoten Berbasis Upsert**: Mengimplementasikan `prisma/seed.ts` dengan klausul `upsert` yang aman dieksekusi berulang kali tanpa memicu pelanggaran konstrain unik (*Unique Constraint Violation*).
+  - **Integritas Referensial Medis Kepatuhan Regulasi**: Menegakkan aturan penghapusan `onDelete: Restrict` pada seluruh entitas rekam medis dan master faskes guna mematuhi kewajiban retensi data rekam medis sesuai Permenkes No. 24/2022.
+  - **Pemisahan Modular Backend**: Logika database diisolasi di `prisma/` dan `lib/db/prisma.ts`, dengan seeder idempoten berbasis `upsert` yang menghasilkan enkripsi AEAD+HKDF nyata dan tanggal jadwal sinkron zona waktu WIB.
+
+### 1.8 *Hybrid Feature-Modular* (`features/`), Server Components, Core REST API v1 (RFC 9457) & `proxy.ts` (`v0.3.5`)
+- **Keputusan**: Memecah seluruh *god files* ke struktur domain `features/{auth,appointments,medical-records,dashboard,admin}/` ($\le 350$ baris pada seluruh modul inti), memigrasikan pembacaan awal `/beranda`, `/nakes`, & `/pasien` ke **Next.js 16 Server Components** (`queries.ts` + `<Suspense>`), memasang network boundary **`proxy.ts`**, serta menyediakan **17 Route Handlers Core REST API v1 (`/api/v1/*`) berstandar RFC 9457 (`application/problem+json`)** + 4 utilitas `/api/*` (`GET /api/health`, `GET/POST/DELETE /api/auth/session`, `POST /api/sync/outbox`, `GET/POST /api/attachments`). Rincian kontrak & backlog Phase B tercatat pada `docs/PAW/rest_api_v1.md`.
+- **Alasan**: Menghilangkan *RSC waterfall*, memenuhi standar maintainability **ISO/IEC 25010**, dan menyediakan kontrak HTTP presisi (`200/201/204/400/401/403/404/405/409/422/429/500`) dengan pemisahan aksi klinis spesifik (`/check-in`, `/triage`, `/assign-dpjp`, `/addenda`, `/revoke`, `/quarantine`).
 
 ---
 
-## 2. Struktur Rute & Hierarki Komponen (*Component Hierarchy*)
+## 2. Struktur Rute (53 Rute + `ƒ Proxy`) & Hierarki Modul
 
 ```text
+proxy.ts                           # Next.js 16 Network Boundary Route Guard (Cookie HttpOnly)
 app/
-├── layout.tsx                     # Root Layout: Server Component, Montserrat font, lang="id"
-├── loading.tsx                    # Root Suspense Shimmer Skeleton
-├── error.tsx                      # Root Application Error Boundary
-├── not-found.tsx                  # Global 404 Intelligent Page (Mempertahankan sesi aktif pengguna)
-├── page.tsx                       # Landing Page Publik (Hero, Integrasi 3 Mata Kuliah, Quick Demo)
-├── beranda/page.tsx               # Automatic Session Redirector (Mendistribusikan ke rute peran)
-│
-├── (auth)/                        # Route Group: Autentikasi & Registrasi Publik
-│   ├── login/page.tsx             # Login multi-role (Username/Email/NIK 16 digit + Quick Demo)
-│   ├── register/
-│   │   ├── pasien/page.tsx        # UR-P01, UR-P09: Pendaftaran Pasien NIK, Biodata, Alergi & e-KYC Watermark
-│   │   └── nakes/page.tsx         # UR-T01: Pendaftaran Dokter NIK, Nomor STR, SIP & Dokumen Kemenkes
-│   └── verifikasi-pending/page.tsx# Landing Page Pemberitahuan Kepatuhan Verifikasi KYC/KYD
-│
-└── (dashboard)/                   # Route Group: Area Terproteksi Multi-Role
-    ├── layout.tsx                 # Dashboard Layout: Zero-Trust Route Guard, RoleNav, NetworkBanner
-    ├── loading.tsx                # Dashboard Suspense Skeleton Shimmer
-    ├── error.tsx                  # In-Dashboard Error Boundary (Menangkap error tanpa memutus sesi)
-    │
-    ├── pasien/                    # Domain: PASIEN (UR-P01 s.d. UR-P12)
-    │   ├── page.tsx               # UR-P10, P11: Ringkasan, Family Proxy, Active Encounter PIN
-    │   ├── faskes/
-    │   │   ├── page.tsx           # UR-P02: Pencarian Faskes Pintar (Filter Gejala/Penyakit & Poli)
-    │   │   └── [faskesId]/page.tsx# UR-P03: Profil Faskes, Dokter Praktik, Jadwal & Kuota Harian (404-safe)
-    │   ├── booking/page.tsx       # UR-P04: Pemesanan Jadwal Periksa & Penerbitan Auto-Consent
-    │   ├── rekam-medis/
-    │   │   ├── page.tsx           # UR-P06, P12: Linimasa RME, Grafik Tensi, Dekripsi Citra Medis
-    │   │   └── [recordId]/page.tsx# Detail Bukti Hukum RME & Modul Pengujian Tamper Kripto (404-safe)
-    │   ├── consent/page.tsx       # UR-P05 & UR-P07: Manajemen Hak Akses, 1-Click Revoke & Transfer RME
-    │   ├── audit-log/page.tsx     # UR-P07: Transparansi Jejak Audit Siapa & Kapan Akses Data (UU PDP)
-    │   └── tiket-kendala/page.tsx # UR-P08: Pelaporan Masalah & Ketidaksesuaian Data Medis
-    │
-    ├── nakes/                     # Domain: DOKTER (DPJP) (UR-T01 s.d. UR-T10)
-    │   ├── page.tsx               # UR-T02: Stasiun Kerja, Status Praktik, Antrean Pasien Hari Ini
-    │   ├── periksa/[bookingId]/
-    │   │   └── page.tsx           # UR-T04, T07, T09, T10: SOAP, Citra Medis, Addendum & Alergi (404-safe)
-    │   ├── pasien-lookup/page.tsx # UR-T03 & T08: Lookup NIK, BOLA Gate & Break-Glass IGD
-    │   ├── rujukan/page.tsx       # UR-T06: Penerbitan Surat Rujukan Digital Lintas Faskes
-    │   └── offline-sync/page.tsx  # UR-T05 & T06: Status Antrean Sinkronisasi IndexedDB Offline
-    │
-    ├── staf/                      # Domain: STAF NAKES (TRIASE & ADMISI) (UR-S01 s.d. UR-S04)
-    │   ├── page.tsx               # UR-S01: Penerimaan Pasien (Check-in) & Antrean Walk-in Loket
-    │   ├── triase/page.tsx        # UR-S02: Input Triase Awal & Tanda Vital (Hijau/Kuning/Merah)
-    │   ├── assign-dpjp/page.tsx   # UR-S03: Penugasan Dokter DPJP & Active Encounter Ticket
-    │   └── rujukan/page.tsx       # UR-S04: Pengelolaan Administrasi Rujukan Masuk & Keluar
-    │
-    └── admin/                     # Domain: ADMIN REGULATOR (UR-A01 s.d. UR-A07)
-        ├── page.tsx               # Ringkasan Eksekutif, Status Sistem & Agregat Keamanan
-        ├── verifikasi-kyc/page.tsx# UR-A01 & A06: Antrean Verifikasi Visual KTP Ber-watermark + Selfie
-        ├── verifikasi-kyd/page.tsx# UR-A02: Verifikasi STR & SIP Dokter Konsil Kedokteran
-        ├── faskes/page.tsx        # UR-A03: Master Direktori Faskes & Ransomware Kill-Switch
-        ├── siem-monitor/page.tsx  # UR-A04 & A07: SIEM Live Feed (IDOR, Break-Glass, HMAC Alarms)
-        └── incident-center/page.tsx# UR-A05: Failed Sync Queue & Penanganan Tiket Masalah Teknis
+├── layout.tsx                     # Root Layout: Montserrat, PwaRegistrar, lang="id", manifest.json
+├── loading.tsx / error.tsx / not-found.tsx
+├── page.tsx                       # Landing Page Publik (Quick Demo dikendalikan env)
+├── api/
+│   ├── health/route.ts            # GET /api/health (Docker HEALTHCHECK + PostgreSQL ping)
+│   ├── auth/session/route.ts      # GET/POST/DELETE /api/auth/session (Rate Limit 429 & Anti-Enumeration)
+│   ├── sync/outbox/route.ts       # POST /api/sync/outbox (PWA IndexedDB Sync + AEAD/HMAC + Kill-Switch)
+│   ├── attachments/route.ts       # GET/POST /api/attachments (Citra Medis Terenkripsi Anti-BOLA 403)
+│   └── v1/                        # Core REST API v1 — RFC 9457 (17 Route Handlers, docs/PAW/rest_api_v1.md)
+│       ├── faskes/                # GET/POST, [id] (GET/PATCH/DELETE 409), [id]/quarantine (PATCH)
+│       ├── appointments/          # GET/POST, [id] (GET/PATCH/DELETE 409), check-in (POST), triage (PUT), assign-dpjp (POST)
+│       ├── medical-records/       # GET/POST (AEAD+HMAC), [id] (GET Anti-BOLA), [id]/addenda (POST immutable)
+│       ├── access-grants/         # GET/POST, [id]/revoke (POST 1-Click Revoke)
+│       ├── patients/me/family-members/ # GET/POST, [id] (PATCH/DELETE Anti-BOLA)
+│       └── trouble-tickets/       # GET/POST, [id] (GET/PATCH/DELETE 409)
+├── (auth)/                        # login, register/{pasien,nakes}, verifikasi-pending
+└── (dashboard)/                   # layout (skip-link #main-content, lg:sticky), loading, error (error.digest)
+    ├── beranda/page.tsx           # Server Component Ringkasan Terpadu
+    ├── pasien/                    # page (Server Component), profil (3 Tab + Family Proxy CRUD), faskes, [faskesId], booking (3 langkah), rekam-medis, [recordId], consent, audit-log, tiket-kendala
+    ├── nakes/                     # page (Server Component), jadwal (sinkron WIB), periksa/[bookingId], pasien-lookup (filter skala prioritas), [patientId], rujukan (master-detail pasien ditangani), offline-sync (IndexedDB)
+    ├── staf/                      # page (check-in/walk-in), triase (CDS vital kritis), assign-dpjp (PIN 6-digit), rujukan
+    └── admin/                     # page, verifikasi-kyc, verifikasi-kyd, faskes (Kill-Switch), siem-monitor, incident-center
 
-lib/
-├── actions/                      # Modul Server Actions ("use server")
-│   ├── clinical.ts               # Mutasi SOAP Medis, Validasi Semantik UR-T10, revalidatePath, redirect
-│   └── auth.ts                   # Login, Logout & Pengelolaan Cookie Sesi HttpOnly (resilio_session_token)
-├── auth/
-│   ├── auth.ts                   # Autentikasi 4-Role, Normalisasi Sesi & Route Guard
-│   └── sessionStore.ts           # Stateful Server Session Map (UU PDP Instant Revocation)
-├── crypto/
-│   ├── aes.ts                    # AES-256-GCM 96-bit CSPRNG IV & Web Crypto Engine
-│   └── hmac.ts                   # HMAC-SHA256 Keutuhan Data & Deteksi Tamper
-├── db/
-│   ├── prisma.ts                 # PrismaClient Singleton dengan PostgreSQL Pool Adapter
-│   └── mockData.ts               # Mock Data Komprehensif (4 Peran, 700+ baris)
-└── validations/                  # Skema Validasi Tipe Aman Zod v4
-    ├── clinical.ts               # PemeriksaanKlinisSchema (SOAP, Tensi, ICD-10, Medikolegal)
-    ├── auth.ts                   # LoginSchema, RegisterPasienSchema (e-KYC), RegisterNakesSchema (e-KYD)
-    ├── triage.ts                 # TriaseSchema, WalkInAdmisiSchema, AssignDpjpSchema (PIN)
-    └── patient.ts                # BookingSchema, TroubleTicketSchema, ConsentGrantSchema
+features/                          # Domain bisnis modular (actions, queries, & workspace UI <=350 baris)
+├── auth/                          # guard.ts, session-actions, register-actions, kyc-actions, profile-actions, family-actions, FamilyMemberManager
+├── appointments/                  # booking-actions, workflow-actions, dpjp-actions, queries, NakesDashboardClient
+├── medical-records/               # crypto-service, prescription-parser, exam/*, patient-detail/*, queries, PasienDashboardClient
+├── dashboard/                     # queries, BerandaClient
+└── admin/                         # overview, siem, verification, faskes, incident actions
 
-prisma/
-├── schema.prisma                 # Definisi Skema Relasional 16 Model (onDelete: Restrict)
-├── migrations/                   # Riwayat Migrasi Fisik SQL PostgreSQL
-└── seed.ts                       # Seeder Idempoten Berbasis Upsert (17 Tabel Terisi)
+lib/                               # Primitif & utilitas lintas domain
+├── actions/                       # Fasad re-export Server Actions ("use server")
+├── auth/                          # auth.ts, sessionStore.ts (PostgreSQL), rateLimit.ts (429/CWE-204), demoConfig.ts
+├── crypto/                        # aes.ts, hmac.ts (constant-time verify), hkdf.ts (RFC 5869)
+├── db/                            # prisma.ts & mockData.ts
+├── storage/                       # indexedDb.ts (resilio_offline_db: cached_active_patients, outbox, media_blobs)
+├── utils/                         # revalidate.ts (safeRevalidate tunggal)
+└── validations/                   # Skema Zod v4 (clinical, auth, triage, patient)
+
+public/                            # manifest.json, icon.svg, sw.js (PWA Service Worker aktif)
+prisma/                            # schema.prisma (17 model & 14 enum), migrations/, seed.ts
 ```
 
 ---
@@ -142,14 +110,15 @@ prisma/
 ## 3. Komponen Bersama (*Shared Components*)
 
 1. **`RoleNav.tsx` (`components/shared/RoleNav.tsx`)**:
-   - Sidebar navigasi adaptif yang secara otomatis memuat menu tautan spesifik sesuai peran aktif pengguna (Pasien, Nakes, Admin).
-   - Menggunakan ikon SVG vektor monokrom (`components/ui/Icons.tsx`) untuk menjamin tampilan bersih, profesional, dan bebas dari emoji.
-   - Terintegrasi dengan modal konfirmasi keluar sesi (`LogoutModal.tsx`).
-2. **`NetworkStatusBanner.tsx` (`components/shared/NetworkStatusBanner.tsx`)**:
-   - Indikator status jaringan waktu nyata (Hijau = Terhubung Server Pusat; Kuning = Mode Offline IndexedDB).
-   - Dilengkapi tombol simulasi pemutus jaringan dan *badge counter* jumlah berkas rekam medis yang sedang mengantre di IndexedDB.
-3. **`LogoutModal.tsx` (`components/ui/LogoutModal.tsx`)**:
-   - Dialog konfirmasi keluar sesi aksesibel yang membersihkan seluruh kunci sesi dan kredensial sementara di memori peramban.
+   - Sidebar navigasi adaptif 4 peran tanpa duplikasi `/beranda` (pasca-login langsung menuju dasbor peran masing-masing).
+   - Mempertahankan identitas merah JagaMedis dengan penanda aktif tepi kiri lembut (`bg-red-50/80 text-red-800 border-l-4 border-red-600` + `aria-current="page"`, kontras WCAG AAA 7.6:1 & anti-*alert fatigue* NISTIR 7804).
+   - Menampilkan lencana reaktif jumlah berkas luring IndexedDB (`OUTBOX_UPDATED_EVENT`) khusus pada menu dokter.
+2. **`NetworkStatusBanner.tsx` & `PwaRegistrar.tsx` (`components/shared/`)**:
+   - Mendaftarkan `public/sw.js`, memantau konektivitas `online`/`offline` peramban, dan menyinkronkan antrean `resilio_offline_db` ke `POST /api/sync/outbox`.
+3. **`Modal.tsx`, `ToastBanner.tsx` & `LogoutModal.tsx` (`components/ui/`)**:
+   - Komponen dialog (`role="dialog"`, `aria-modal="true"`, tutup `Escape`, pemulihan fokus) dan notifikasi melayang (`role="alert"`/`"status"`) berstandar WCAG 2.1 AA menggantikan 100% `window.alert()`/`window.confirm()`.
+4. **`PrintableMedicalResume.tsx` (`components/clinical/`)**:
+   - Lembar Resume Medis A4 terisolasi menggunakan `createPortal(..., document.body)` + `#jagamedis-print-portal` sehingga tampilan navigasi aplikasi tidak ikut tercetak.
 
 ---
 

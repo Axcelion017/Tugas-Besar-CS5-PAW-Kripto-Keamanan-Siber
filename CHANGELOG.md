@@ -4,6 +4,22 @@ Semua perubahan besar pada proyek JagaMedis (sebelumnya Resilio-Health) didokume
 
 ---
 
+## [v0.3.5] - 2026-11-26 — Core REST API v1 (Opsi A) Berstandar RFC 9457 Problem Details
+> Spesifikasi lengkap & backlog Phase B (Next Session): [docs/PAW/rest_api_v1.md](docs/PAW/rest_api_v1.md)
+
+### Fondasi HTTP & Validasi (`lib/api/` & `lib/validations/api-v1.ts`)
+- **RFC 9457 Problem Details (`lib/api/problem.ts`)**: Helper terpusat `problemResponse()` dengan header wajib `Content-Type: application/problem+json; charset=utf-8`, parser `parseJsonObject()` (`400`), `zodProblemResponse()` (`422` + `errors[]`), validasi ketat parameter path `[id]` pasca `await context.params` (`validatePathId()` $\rightarrow$ `400`), dan pemetaan error Prisma (`P2025` $\rightarrow$ `404`, `P2002`/`P2003` $\rightarrow$ `409`).
+- **Otorisasi API Terpusat (`lib/api/auth.ts`)**: `requireApiSession()` memverifikasi cookie HTTP-Only `resilio_session_token` terhadap tabel PostgreSQL `sessions`, menegakkan RBAC/Anti-BOLA, dan mencatat pelanggaran ke `security_audit_logs` (`IDOR_BLOCKED`).
+
+### 17 Route Handlers Domain Spesifik (`/api/v1/*`)
+- **Faskes & Kill-Switch**: `GET/POST /api/v1/faskes`, `GET/PATCH/DELETE /api/v1/faskes/[id]` (`409` bila masih berelasi `RESTRICT`), `PATCH /api/v1/faskes/[id]/quarantine`.
+- **Alur Kunjungan & Triase**: `GET/POST /api/v1/appointments`, `GET/PATCH/DELETE /api/v1/appointments/[id]`, `POST .../check-in`, `PUT .../triage` (idempoten 1:1 atomik), `POST .../assign-dpjp` (verifikasi PIN 6-digit + `ActiveEncounter`).
+- **Rekam Medis Zero-Knowledge & Addendum**: `GET/POST /api/v1/medical-records` (verifikasi kriptografi AEAD+HMAC), `GET /api/v1/medical-records/[id]` (Anti-BOLA), `POST /api/v1/medical-records/[id]/addenda` (*immutable* Permenkes 24/2022).
+- **Consent, Family Proxy & Trouble Tickets**: `GET/POST /api/v1/access-grants`, `POST /api/v1/access-grants/[id]/revoke`, `GET/POST /api/v1/patients/me/family-members`, `PATCH/DELETE /api/v1/patients/me/family-members/[id]`, `GET/POST /api/v1/trouble-tickets`, `GET/PATCH/DELETE /api/v1/trouble-tickets/[id]`.
+- **Dokumentasi Next Session & QA**: Mendokumentasikan 10 grup endpoint Phase B (Next Session) di `docs/PAW/rest_api_v1.md` dan menambahkan 19 tes kontrak REST API v1 (`tests/v035-rest-api-v1.test.ts`), total **75/75 tes Vitest lulus (100%)**.
+
+---
+
 ## [v0.3.4] - 2026-11-26 — Tahap A Auth Hardening, Rate Limiting, Anti-Enumeration & Poles UX Klinis
 > Rincian file & stempel waktu lengkap: [docs/perubahan/v0.3.4-auth-hardening-ux-2026-11-26.md](docs/perubahan/v0.3.4-auth-hardening-ux-2026-11-26.md)
 

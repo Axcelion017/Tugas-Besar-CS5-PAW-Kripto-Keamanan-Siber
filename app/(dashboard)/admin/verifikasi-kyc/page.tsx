@@ -1,7 +1,8 @@
 "use client";
 
+import { Breadcrumb } from "@/components/ui/Breadcrumb";
+
 import React, { useState, useEffect, useCallback } from "react";
-import Link from "next/link";
 import { KycSubmission } from "@/lib/db/mockData";
 import {
   approveKycServerAction,
@@ -102,13 +103,12 @@ export default function VerifikasiKycPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <div className="flex items-center gap-2 text-xs font-bold text-purple-700 uppercase tracking-wider">
-          <Link href="/admin" className="hover:underline">
-            Konsol Admin
-          </Link>
-          <span>/</span>
-          <span>Verifikasi Visual e-KYC & Auto-Watermark (UR-A01 & UR-A06)</span>
-        </div>
+        <Breadcrumb
+          items={[
+            { label: "Konsol Admin", href: "/admin" },
+            { label: "Verifikasi Visual e-KYC" },
+          ]}
+        />
         <h1 className="text-2xl font-black text-slate-900 tracking-tight mt-1">
           Antrean Verifikasi Dokumen Visual Pasien (e-KYC)
         </h1>
@@ -162,6 +162,7 @@ export default function VerifikasiKycPage() {
                   <td className="p-4 text-slate-600 max-w-xs">{item.alamat}</td>
                   <td className="p-4">
                     <button
+                      type="button"
                       onClick={() => setPreviewKyc(item)}
                       className="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold text-[11px] border border-blue-200 cursor-pointer"
                     >
@@ -185,12 +186,14 @@ export default function VerifikasiKycPage() {
                     {item.status === "PENDING" ? (
                       <div className="flex items-center justify-end gap-2">
                         <button
+                          type="button"
                           onClick={() => handleApprove(item)}
                           className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold uppercase transition cursor-pointer"
                         >
                           Setujui
                         </button>
                         <button
+                          type="button"
                           onClick={() => {
                             setSelectedKyc(item);
                             setShowRejectModal(true);
@@ -230,6 +233,7 @@ export default function VerifikasiKycPage() {
                 </p>
               </div>
               <button
+                type="button"
                 onClick={() => setPreviewKyc(null)}
                 className="text-slate-400 hover:text-slate-700 text-lg font-bold p-2"
               >
@@ -249,7 +253,7 @@ export default function VerifikasiKycPage() {
                     <p className="font-bold text-slate-800">REPUBLIK INDONESIA</p>
                     <p className="text-[11px] font-bold mt-1">NIK: {previewKyc.nik}</p>
                     <p className="text-[10px] mt-1">{previewKyc.namaLengkap}</p>
-                    <p className="text-[9px] text-slate-500">{previewKyc.alamat}</p>
+                    <p className="text-[11px] text-slate-500">{previewKyc.alamat}</p>
                   </div>
                   {/* Digital Watermark Overlay */}
                   <div className="absolute inset-0 bg-slate-900/20 backdrop-blur-[1px] flex items-center justify-center pointer-events-none p-2 text-center transform -rotate-12">
@@ -288,6 +292,7 @@ export default function VerifikasiKycPage() {
               </span>
               <div className="flex gap-2">
                 <button
+                  type="button"
                   onClick={() => {
                     setSelectedKyc(previewKyc);
                     setShowRejectModal(true);
@@ -297,6 +302,7 @@ export default function VerifikasiKycPage() {
                   Tolak Berkas
                 </button>
                 <button
+                  type="button"
                   onClick={() => handleApprove(previewKyc)}
                   className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl uppercase tracking-wider"
                 >
@@ -327,12 +333,14 @@ export default function VerifikasiKycPage() {
             />
             <div className="flex justify-end gap-2">
               <button
+                type="button"
                 onClick={() => setShowRejectModal(false)}
                 className="px-4 py-2 bg-slate-100 text-slate-700 text-xs font-bold rounded-xl"
               >
                 Batal
               </button>
               <button
+                type="button"
                 onClick={handleReject}
                 className="px-4 py-2 bg-red-600 text-white text-xs font-bold rounded-xl"
               >

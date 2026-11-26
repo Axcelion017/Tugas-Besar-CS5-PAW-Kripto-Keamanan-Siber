@@ -1,13 +1,13 @@
 "use client";
 
 import React, { useState, useEffect, Suspense } from "react";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Appointment, TriaseLevel } from "@/lib/db/mockData";
 import { TriaseSchema } from "@/lib/validations/triage";
 import { submitTriageServerAction } from "@/lib/actions/triage";
 import { getAppointmentsServerAction } from "@/lib/actions/appointment";
 import { PrintableMedicalResume } from "@/components/clinical/PrintableMedicalResume";
+import { Breadcrumb } from "@/components/ui/Breadcrumb";
 
 function TriaseContent() {
   const router = useRouter();
@@ -207,13 +207,12 @@ function TriaseContent() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 text-xs font-bold text-amber-700 uppercase tracking-wider">
-            <Link href="/staf" className="hover:underline">
-              Meja Staf Nakes
-            </Link>
-            <span>/</span>
-            <span>Pemeriksaan Awal & Triase Keperawatan (UR-S02)</span>
-          </div>
+          <Breadcrumb
+            items={[
+              { label: "Meja Staf Nakes", href: "/staf" },
+              { label: "Triase & Tanda Vital Awal" },
+            ]}
+          />
           <h1 className="text-2xl font-black text-slate-900 tracking-tight mt-1">
             Input Tanda-Tanda Vital Awal & Penentuan Tingkat Triase
           </h1>

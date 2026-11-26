@@ -2,10 +2,10 @@
 
 JagaMedis (sebelumnya Resilio-Health) adalah sistem informasi rekam medis rumah sakit berbasis web yang mengintegrasikan antarmuka responsif dan aksesibel, protokol pengawasan otorisasi *Zero-Trust*, ketahanan *Offline-First* (PWA & IndexedDB), serta perlindungan kerahasiaan dan integritas data klinis *end-to-end* menggunakan Web Crypto API standar W3C.
 
-Repositori ini digunakan secara berkelanjutan sepanjang semester untuk tiga mata kuliah terintegrasi:
-1. **Pengembangan Aplikasi Web (PAW)** — Milestone 2: Arsitektur Modular Multi-Role, Offline-First PWA & Aksesibilitas WCAG 2.1 AA (Tag: `v0.2`)
-2. **Kriptografi** — Tugas 2: Zero-Knowledge Client-Side Encryption (AES-256-GCM + HMAC-SHA256) & Deteksi Manipulasi Data (Tag: `v0.2`)
-3. **Keamanan Komputasi dan Siber (KKS)** — Tugas 2: Zero-Trust BOLA / IDOR Defense, KYC/KYD Verification, SIEM Monitor, & Ransomware Isolation Kill-Switch (Penanda: `sec-0.2`)
+Repositori ini digunakan secara berkelanjutan sepanjang semester untuk tiga mata kuliah terpadu (status aktual: **`v0.3.5` — transisi Milestone `v0.2` $\rightarrow$ `v0.3`**):
+1. **Pengembangan Aplikasi Web (PAW)** — Arsitektur *Hybrid Feature-Modular* (`features/`), Server Components (`<Suspense>`), **REST API v1 berstandar RFC 9457 (`17` route `/api/v1/*` + `4` utilitas `/api/*`, `docs/PAW/rest_api_v1.md`)**, Offline-First PWA (`manifest.json`, `sw.js`, IndexedDB `resilio_offline_db`), Family Proxy CRUD, & Aksesibilitas WCAG 2.1 AA/AAA
+2. **Kriptografi** — Zero-Knowledge Client-Side Encryption (`HKDF` RFC 5869 + `AES-256-GCM` + `AAD` Context Binding + *Constant-Time* `HMAC-SHA256` `crypto.subtle.verify`), Enkripsi Citra Biner, & Prinsip *Fail-Closed* Murni
+3. **Keamanan Komputasi dan Siber (KKS)** — Next.js 16 `proxy.ts`, Sesi Persisten PostgreSQL (`sessions`), Guard `requireSession()` & `requireApiSession()`, Zero-Trust BOLA/IDOR Defense, *Rate Limiting* (`HTTP 429`), Anti-*Account Enumeration* (`CWE-204`), OWASP Security Headers, Break-Glass IGD, & Ransomware Kill-Switch Server-Side (`HTTP 403`/`423`)
 
 ---
 
@@ -110,7 +110,7 @@ Sistem Resilio-Health dibangun dengan arsitektur teknologi modern yang terbagi k
 | **Data Visualization** | **Recharts** | `^2.15.0` | Visualisasi grafik tren tanda vital dinamis (Sistolik, Diastolik, Detak Jantung) pada dashboard pasien sesuai Permenkes 24/2022. |
 | **Client-Side Cryptography** | **W3C Web Crypto API** | Native Standard | Enkripsi simetris AES-256-GCM (kunci 256-bit unik pasien, CSPRNG IV 96-bit), enkripsi citra biner, dan tag integritas HMAC-SHA256 langsung di peramban (*Zero-Knowledge*). |
 | **Offline-First Engine** | **PWA Service Worker, Manifest & IndexedDB** | Web Standard | `public/manifest.json`, Service Worker (`public/sw.js`), IndexedDB (`resilio_offline_db`), dan endpoint REST `POST /api/sync/outbox` ber-verifikasi AEAD+HMAC. |
-| **Testing Suite** | **Vitest** | `^5.0.4` | Framework pengujian unit & integrasi otomatis berkecepatan tinggi memverifikasi **52 skenario** (kriptografi AEAD/HKDF, validasi Zod, RBAC, transaksi `RESTRICT`, serta seluruh *Quality Gates* Fase 1–4 mencakup keamanan, E2E DB, REST API, PWA, WCAG 2.1 AA, & DevOps). |
+| **Testing Suite** | **Vitest** | `^5.0.4` | Framework pengujian unit & integrasi otomatis berkecepatan tinggi memverifikasi **75 skenario** (10 berkas: kriptografi AEAD/HKDF, validasi Zod, RBAC, transaksi `RESTRICT`, serta seluruh *Quality Gates* Fase 1–4, Tahap A `v0.3.4`, dan kontrak REST API v1 RFC 9457 `v0.3.5`). |
 | **Linter & Code Quality** | **ESLint** | `^9.0.0` | Analisis statis kualitas kode dengan 0 error dan 0 warning. |
 
 ---
@@ -132,47 +132,65 @@ Aplikasi menyediakan tombol *Quick Demo* pada halaman masuk (`/login` dan `/`) u
 
 ```text
 .
+├── proxy.ts                      # Next.js 16 Network Boundary Route Guard (Cookie HttpOnly)
 ├── app/
-│   ├── (auth)/                   # Area Autentikasi Publik
-│   │   ├── login/page.tsx        # Login multi-role (Username/Email/NIK + 4-Role Demo)
-│   │   ├── register/             # Registrasi Pasien (NIK/KTP/Selfie e-KYC) & Nakes (STR/SIP e-KYD)
-│   │   └── verifikasi-pending/   # Pemberitahuan status antrean verifikasi
-│   ├── (dashboard)/              # Area Terproteksi Multi-Role
-│   │   ├── layout.tsx            # Zero-Trust Route Guard, RoleNav, NetworkBanner
-│   │   ├── pasien/               # 8 Rute Portal Pasien (UR-P01 s.d. UR-P12)
-│   │   ├── nakes/                # 5 Rute Stasiun Kerja Dokter DPJP (UR-T01 s.d. UR-T10)
+│   ├── (auth)/                   # Area Autentikasi Publik (login, register pasien/nakes, verifikasi-pending)
+│   ├── (dashboard)/              # Area Terproteksi Multi-Role (layout, loading, error, not-found)
+│   │   ├── beranda/              # Server Component Ringkasan Terpadu
+│   │   ├── pasien/               # 8 Rute Portal Pasien (UR-P01 s.d. UR-P12 + Profil & Family Proxy CRUD)
+│   │   ├── nakes/                # 7 Rute Stasiun Kerja Dokter DPJP (UR-T01 s.d. UR-T10 + Jadwal + Periksa)
 │   │   ├── staf/                 # 4 Rute Staf Nakes Triase & Admisi (UR-S01 s.d. UR-S04)
 │   │   └── admin/                # 6 Rute Konsol Admin Regulator (UR-A01 s.d. UR-A07)
-│   ├── beranda/page.tsx          # Automatic Session Redirector
-│   ├── layout.tsx                # Root Layout, Tipografi Montserrat & Metadata
-│   └── page.tsx                  # Landing Page Publik Interaktif
+│   ├── api/                      # 4 Endpoint REST Strategis (7 HTTP Handlers)
+│   │   ├── health/route.ts       # GET /api/health (Docker HEALTHCHECK & latensi PostgreSQL)
+│   │   ├── auth/session/route.ts # GET/POST/DELETE /api/auth/session (Bcrypt, Rate Limit 429, Anti-Enumeration)
+│   │   ├── sync/outbox/route.ts  # POST /api/sync/outbox (PWA IndexedDB Sync + AEAD/HMAC + Kill-Switch 423)
+│   │   └── attachments/route.ts  # GET/POST /api/attachments (Citra Medis Terenkripsi Anti-BOLA 403)
+│   ├── layout.tsx                # Root Layout, Montserrat, PwaRegistrar, & Metadata PWA
+│   └── page.tsx                  # Landing Page Publik (Quick Demo dikendalikan NEXT_PUBLIC_ENABLE_DEMO_LOGIN)
+├── features/                     # Arsitektur Hybrid Feature-Modular (<= 350 baris per modul inti)
+│   ├── auth/                     # guard.ts (requireSession), session/register/kyc/profile/family actions & FamilyMemberManager
+│   ├── appointments/             # booking, workflow, dpjp actions, queries, & NakesDashboardClient
+│   ├── medical-records/          # crypto-service, prescription-parser, exam/*, patient-detail/*, queries, & PasienDashboardClient
+│   ├── dashboard/                # queries.ts & BerandaClient
+│   └── admin/                    # SIEM, verifikasi KYC/KYD, master faskes, & incident actions
 ├── components/
-│   ├── shared/                   # RoleNav (Navigasi SVG), NetworkStatusBanner
-│   └── ui/                       # Icons.tsx (Vector Iconset), LogoutModal, StatCard, StatusBadge
+│   ├── clinical/                 # PrintableMedicalResume (Portal A4), DoctorCalendarSchedule, VitalSignsTrendChart
+│   ├── shared/                   # RoleNav (border-l-4 + lencana outbox dokter), NetworkStatusBanner, PwaRegistrar
+│   └── ui/                       # Icons.tsx (SVG Monokrom), Modal/ConfirmModal (WCAG), ToastBanner, LogoutModal, Skeleton
 ├── lib/
-│   ├── actions/                  # Next.js Server Actions: clinical.ts (SOAP & UR-T10) & auth.ts (Cookie Auth)
-│   ├── auth/                     # auth.ts (Normalisasi Peran) & sessionStore.ts (Stateful Sesi Server)
-│   ├── crypto/                   # aes.ts (AES-256-GCM), hmac.ts (HMAC-SHA256) & hkdf.ts (RFC 5869 KDF)
-│   ├── db/                       # prisma.ts (PostgreSQL Pool Adapter) & mockData.ts (Mock Persistence)
+│   ├── actions/                  # Fasad kompatibilitas Next.js Server Actions ("use server")
+│   ├── auth/                     # auth.ts, sessionStore.ts (PostgreSQL), rateLimit.ts (429/CWE-204), demoConfig.ts
+│   ├── crypto/                   # aes.ts (AES-256-GCM + Biner HKDF), hmac.ts (constant-time verify), hkdf.ts (RFC 5869)
+│   ├── db/                       # prisma.ts (PostgreSQL Pool Adapter) & mockData.ts (Tipe Data)
+│   ├── storage/                  # indexedDb.ts (resilio_offline_db: cached_active_patients, outbox, media_blobs)
+│   ├── utils/                    # revalidate.ts (helper tunggal safeRevalidate)
 │   └── validations/              # Skema Validasi Tipe Aman Zod v4 (clinical, auth, triage, patient)
+├── public/                       # manifest.json, icon.svg, & sw.js (PWA Service Worker aktif)
 ├── prisma/
-│   ├── schema.prisma             # Skema Relasional 16 Model Prisma 7 (onDelete: Restrict)
-│   ├── migrations/               # Riwayat Migrasi Fisik SQL PostgreSQL
-│   └── seed.ts                   # Seeder Idempoten Berbasis Upsert (17 Tabel Terisi)
-├── tests/
-│   ├── crypto.test.ts            # Pengujian Unit Kriptografi Vitest (7/7 Passed - AEAD, AAD, Fail-Closed & HKDF)
-│   ├── access-control.test.ts    # Pengujian Matriks Akses RBAC Vitest (8/8 Passed - 4 Positif vs 4 Negatif)
-│   └── validations.test.ts       # Pengujian Skema Validasi Zod Vitest (15/15 Passed)
+│   ├── schema.prisma             # Skema Relasional 17 Model & 14 Enum Prisma 7 (onDelete: Restrict)
+│   ├── migrations/               # Riwayat Migrasi Fisik SQL PostgreSQL (termasuk tabel sessions)
+│   └── seed.ts                   # Seeder Idempoten Berbasis Upsert (enkripsi AEAD+HKDF nyata & jadwal sinkron WIB)
+├── tests/                        # 9 Berkas Uji Otomatis Vitest — 56/56 Lulus (100%)
+│   ├── crypto.test.ts            # 8 tes Kriptografi (AEAD, AAD, Fail-Closed, HKDF, Citra Biner)
+│   ├── access-control.test.ts    # 8 tes Matriks RBAC (4 Positif vs 4 Negatif)
+│   ├── validations.test.ts       # 15 tes Skema Validasi Zod v4
+│   ├── transaction.test.ts       # 2 tes Integritas Referensial RESTRICT & Rollback Atomik
+│   ├── phase1-security-crypto.test.ts   # 7 tes Quality Gates Fase 1 (Auth, BOLA, PIN, AEAD, Headers)
+│   ├── phase2-end-to-end.test.ts        # 4 tes Quality Gates Fase 2 (Alur 4 Peran 100% DB & Kill-Switch)
+│   ├── phase3-architecture-pwa.test.ts  # 4 tes Quality Gates Fase 3 (REST API, PWA, Deduplikasi, Jadwal)
+│   ├── phase4-ui-a11y-devops.test.ts    # 4 tes Quality Gates Fase 4 (WCAG 2.1 AA, Print Isolation, Docker)
+│   └── v034-auth-hardening-ux.test.ts   # 4 tes Quality Gates v0.3.4 (Rate Limit 429, Anti-Enumeration, Modularity)
 └── docs/                         # Dokumentasi Terstruktur Laporan Tugas Besar
-    ├── audit/                    # Laporan Audit Baseline (v0.2) & Audit Ulang Menyeluruh + Traceability (v0.3)
+    ├── audit/                    # Laporan Audit Baseline (v0.2) & Audit Ulang Menyeluruh + Traceability (v0.3.4)
     ├── standar/                  # Matriks 30 Standar Acuan Internasional & Regulasi Nasional + Justifikasi
     ├── sop/                      # Panduan Simulasi Penggunaan, Diagram Alur & 7 SOP Operasional/Insiden
-    ├── perubahan/                # Log Perubahan Terstruktur per Fase Refactoring (Fase 1 s.d. Fase 4)
+    ├── perubahan/                # Log Perubahan Terstruktur per Fase Refactoring (Fase 1 s.d. Fase 4 + v0.3.4)
     ├── Tugas2/                   # Dokumen Resmi Bukti Penugasan 3 Mata Kuliah
     │   ├── PAW/LaporanTugas2.md  # Laporan Milestone 2 PAW (CRUD, Zod, DB, Pengujian, Screenshot)
     │   ├── Kriptografi/          # Laporan Tugas 2 Kripto (AEAD, Parameter, Fail-Closed, Demo)
     │   └── KKS/                  # Laporan Tugas 2 KKS (Matriks RBAC, Lynis, Image Scan, SBOM)
-    ├── database.md               # Spesifikasi Basis Data (Entitas, Relasi, CDM, LDM, PDM, DDL & Kamus Data)
+    ├── database.md               # Spesifikasi Basis Data (17 Entitas, Relasi, CDM, LDM, PDM, DDL & Kamus Data)
     ├── PAW/                      # kebutuhan.md, arsitektur.md & database.md
     ├── security/                 # asset-inventory.md, dfd.md, threat-model.md, risk-register.md
     └── cryptography/             # CRYPTO_SPEC.md
@@ -214,17 +232,17 @@ Aplikasi menyediakan tombol *Quick Demo* pada halaman masuk (`/login` dan `/`) u
   - **PAW**: `docs/Tugas2/PAW/LaporanTugas2.md` & `docs/pengujian-milestone2.md` (10 skenario pengujian 100% lulus).
   - **Kriptografi**: `docs/Tugas2/Kriptografi/LaporanTugas2_Kripto.md` (AEAD, IV 96-bit, AAD context binding, HKDF RFC 5869, 7 uji lulus).
   - **KKS**: `docs/Tugas2/KKS/LaporanTugas2_KKS.md` (Lynis 74, Trivy 0 critical, SBOM CycloneDX, 8 uji RBAC lulus).
-- **Kompilasi Antarmuka**: Seluruh 33 rute Next.js terkompilasi bersih tanpa galat TypeScript (`npm run build`).
-- **Pengujian Unit Otomatis**: Sebanyak **33 skenario uji unit** (8 kriptografi AEAD/HMAC/HKDF/Biner + 8 kontrol akses RBAC + 15 validasi skema Zod v4 + 2 transaksi & rollback Modul 6) lulus 100% (`npx vitest run`).
-- **Analisis Kualitas Kode**: Lolos analisis statis ESLint dengan 0 error dan 0 warning (`npm run lint`).
-- **Keamanan Sesi & Cookie HTTP-Only**: Penerbitan cookie sesi `resilio_session_token` (`HttpOnly`, `SameSite=Lax`, `Max-Age=14400`) via Server Action `lib/actions/auth.ts` terverifikasi aktif pada peramban.
-- **Integrasi Basis Data PostgreSQL & Prisma 7**: Migrasi fisik 16 entitas relasional dan seeder idempoten (`npx prisma db seed`) terverifikasi sukses mengisi 17 tabel fisik di database PostgreSQL lokal `resilio_health`.
+- **Kompilasi Antarmuka**: Seluruh **36 rute Next.js + `ƒ Proxy (Middleware)`** terkompilasi bersih tanpa galat TypeScript (`npx tsc --noEmit && npm run build`).
+- **Pengujian Otomatis**: Sebanyak **56 skenario uji otomatis** pada 9 berkas Vitest (8 kriptografi AEAD/HMAC/HKDF/Biner + 8 RBAC + 15 validasi Zod v4 + 2 transaksi/rollback + 7 Fase 1 + 4 Fase 2 + 4 Fase 3 + 4 Fase 4 + 4 `v0.3.4`) lulus 100% (`npx vitest run`).
+- **Analisis Kualitas Kode**: Lolos analisis statis ESLint 9 dengan 0 error dan 0 warning (`npm run lint`).
+- **Keamanan Sesi, Rate Limit & Anti-Enumeration**: Cookie sesi `resilio_session_token` (`HttpOnly`, `Secure` di produksi, `SameSite=Lax`, `Max-Age=14400`) tersimpan persisten di tabel `sessions` PostgreSQL, dilengkapi *sliding-window rate limiting* (`HTTP 429`) dan pesan error login seragam (CWE-204).
+- **Integrasi Basis Data PostgreSQL & Prisma 7**: Migrasi fisik **17 model relasional & 14 enum** (`onDelete: Restrict`) dan seeder idempoten (`npx prisma db seed`) terverifikasi sukses mengisi basis data PostgreSQL lokal `resilio_health`.
 
-### 8.3 Penggunaan Container, Virtual Node (VM), dan Verifikasi KKS (sec-0.2)
+### 8.3 Penggunaan Container, Virtual Node (VM), dan Verifikasi KKS (`v0.3.4`)
 Sistem menyediakan 3 komponen kontainer dan virtual node dengan fungsi keamanan spesifik:
 1. **Container `app` (Aplikasi Web Next.js 16)**:
-   - Dijalankan dari `Dockerfile` multi-stage build berbasis `node:20-alpine`.
-   - Menggunakan pengguna non-root `USER node` (UID 1000) dan pembatasan capability kernel (`cap_drop: ALL` di `docker-compose.yml`).
+   - Dijalankan dari `Dockerfile` multi-stage build berbasis **`node:24-alpine`** lengkap dengan `HEALTHCHECK` ke `GET /api/health`.
+   - Menggunakan pengguna non-root `USER node` (UID 1000) dan pembatasan capability kernel (`cap_drop: ALL`, `no-new-privileges:true` di `docker-compose.yml` dengan kredensial dari `.env`).
    - Bebas kerentanan critical (Trivy Scan: 0 Critical / 0 High).
 2. **Container `db` (Basis Data PostgreSQL 17)**:
    - Port 5432 **TIDAK dipublikasikan ke host publik** (`expose: 5432` hanya di dalam bridge `resilio_internal_net`).

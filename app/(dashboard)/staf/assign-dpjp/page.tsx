@@ -1,12 +1,12 @@
 "use client";
 
 import React, { useState, useEffect, Suspense } from "react";
-import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Appointment, TriaseLevel } from "@/lib/db/mockData";
 import { AssignDpjpSchema } from "@/lib/validations/triage";
 import { assignDpjpServerAction, getAppointmentsServerAction } from "@/lib/actions/appointment";
 import { getFaskesListServerAction } from "@/lib/actions/faskes";
+import { Breadcrumb } from "@/components/ui/Breadcrumb";
 
 interface DbDoctorOption {
   id: string;
@@ -215,13 +215,12 @@ function AssignDpjpContent() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <div className="flex items-center gap-2 text-xs font-bold text-amber-700 uppercase tracking-wider">
-          <Link href="/staf" className="hover:underline">
-            Meja Staf Nakes
-          </Link>
-          <span>/</span>
-          <span>Penugasan DPJP & Active Encounter Ticket (UR-S03)</span>
-        </div>
+        <Breadcrumb
+          items={[
+            { label: "Meja Staf Nakes", href: "/staf" },
+            { label: "Pengarahan Dokter (DPJP)" },
+          ]}
+        />
         <h1 className="text-2xl font-black text-slate-900 tracking-tight mt-1">
           Pengarahan Pasien ke Dokter Penanggung Jawab Pelayanan (DPJP)
         </h1>

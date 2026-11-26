@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { saveSession, normalizeRole } from "@/lib/auth/auth";
 import { isDemoLoginEnabled } from "@/lib/auth/demoConfig";
 import { loginServerAction } from "@/lib/actions/auth";
+import { BrandLogo } from "@/components/shared/BrandLogo";
 
 export default function HomePage() {
   const router = useRouter();
@@ -32,19 +33,7 @@ export default function HomePage() {
       {/* Navigation Bar */}
       <header className="bg-white/80 backdrop-blur-md border-b border-slate-200 sticky top-0 z-30 px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-red-600 rounded-xl flex items-center justify-center text-white font-black text-xl shadow-md shadow-red-200 shrink-0">
-              J
-            </div>
-            <div>
-              <span className="font-black text-slate-900 tracking-tight text-base sm:text-lg">
-                JAGA<span className="text-red-600">MEDIS</span>
-              </span>
-              <p className="text-[11px] text-slate-600 font-bold tracking-wider uppercase truncate">
-                Zero-Trust Hospital Information System
-              </p>
-            </div>
-          </div>
+          <BrandLogo size="md" subtitle="Hospital Information System" />
 
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <Link

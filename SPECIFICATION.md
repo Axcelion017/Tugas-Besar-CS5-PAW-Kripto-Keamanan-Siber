@@ -1,10 +1,11 @@
-# SYSTEM SPECIFICATION & TECHNICAL BLUEPRINT: RESILIO-HEALTH
+# SYSTEM SPECIFICATION & TECHNICAL BLUEPRINT: JAGAMEDIS (sebelumnya Resilio-Health)
+**Version & Status:** `v0.3.4` (Transisi Milestone `v0.2` $\rightarrow$ `v0.3`, 26 November 2026 — 36 Rute Next.js 16 + `ƒ Proxy`, 17 Model PostgreSQL, 56/56 Vitest Lulus)
 **Project Type:** Cryptographic Offline-First Hospital Information System (HIS) & Integrated Electronic Health Record (EHR / RME)
-**Regulatory Standard:** Permenkes RI No. 24 Tahun 2022 (Rekam Medis), UU PDP No. 27 Tahun 2022, & Standar Interoperabilitas SATUSEHAT (HL7 FHIR Readiness)
+**Regulatory Standard:** Permenkes RI No. 24 Tahun 2022 (Rekam Medis), UU PDP No. 27 Tahun 2022, UU Kesehatan No. 17 Tahun 2023, UU ITE No. 1 Tahun 2024, & Kesiapan Interoperabilitas SATUSEHAT (HL7 FHIR)
 **Core Pillars:**
-1. **Web Development (PAW):** Progressive Web App (PWA), Service Workers, IndexedDB Offline Queue, Background Sync API, Real-Time Multi-Role Dashboards.
-2. **Cryptography:** Client-Side Encryption AES-GCM 256 (Web Crypto API), PBKDF2 / Envelope Key Management, HMAC-SHA256 Payload & Binary Image Integrity, HKDF (RFC 5869) Key Separation.
-3. **Cyber Security:** Zero-Trust API Gateway, Contextual BOLA/IDOR Defense, Break-Glass Emergency Access Protocol, Auto-Watermarked e-KYC/e-KYD, Immutable Addendum-Only Audit Trail.
+1. **Web Development (PAW):** Next.js 16 App Router (*Hybrid Feature-Modular* `features/`), Server Components (`<Suspense>`), 4 Endpoint REST (`app/api/`), Progressive Web App (`manifest.json`, `sw.js`, IndexedDB `resilio_offline_db`), Family Proxy CRUD, Cetak Resume A4 Terisolasi (`createPortal`), & Aksesibilitas WCAG 2.1 AA/AAA + NISTIR 7804.
+2. **Cryptography:** Client-Side AEAD `AES-256-GCM` (CSPRNG 96-bit IV + AAD `PATIENT:{id}|RECORD:{id}|V:{v}`), `HKDF` (RFC 5869) Key Separation (`encKey` vs `macKey`) untuk payload SOAP & citra biner, *Constant-Time* `HMAC-SHA256` (`crypto.subtle.verify`, anti-CWE-208), & *Fail-Closed* Murni.
+3. **Cyber Security:** Next.js 16 `proxy.ts`, Sesi Persisten PostgreSQL (`sessions`), 52+ Guard `requireSession(allowedRoles)`, *Sliding-Window Rate Limiting* (`HTTP 429`), Anti-*Account Enumeration* (`CWE-204`), Contextual BOLA/IDOR Defense, Break-Glass Emergency Access Protocol (ISO 27799), Ransomware Kill-Switch Server-Side (`HTTP 423`), Auto-Watermarked e-KYC/e-KYD, & Immutable Addendum-Only Audit Trail.
 
 ---
 

@@ -23,6 +23,7 @@ import { ClinicalActionModals } from "@/features/medical-records/patient-detail/
 import { PatientProfileCard } from "@/features/medical-records/patient-detail/PatientProfileCard";
 import { PatientRecordsSection } from "@/features/medical-records/patient-detail/PatientRecordsSection";
 import type { DoctorMedicalRecordRow } from "@/features/medical-records/patient-detail/MedicalRecordItemCard";
+import { Breadcrumb } from "@/components/ui/Breadcrumb";
 
 type PatientDetailResponse = Awaited<ReturnType<typeof getPatientDetailForDoctorServerAction>>;
 
@@ -242,17 +243,13 @@ export function PatientDetailWorkspace({ patientId }: { patientId: string }) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-2 text-xs font-bold text-emerald-700 uppercase tracking-wider">
-        <Link href="/nakes" className="hover:underline">
-          Stasiun Nakes
-        </Link>
-        <span>/</span>
-        <Link href="/nakes/pasien-lookup" className="hover:underline">
-          Daftar Pasien
-        </Link>
-        <span>/</span>
-        <span>Rekam Medis Pasien</span>
-      </div>
+      <Breadcrumb
+        items={[
+          { label: "Stasiun Nakes", href: "/nakes" },
+          { label: "Daftar Pasien", href: "/nakes/pasien-lookup" },
+          { label: "Rekam Medis Pasien" },
+        ]}
+      />
 
       {notif && (
         <div

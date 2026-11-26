@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import Link from "next/link";
 import { getUserSession, UserSession } from "@/lib/auth/auth";
 import {
   MOCK_ACCESS_GRANTS,
@@ -12,6 +11,7 @@ import {
 import { getDoctorPatientListServerAction } from "@/lib/actions/clinical";
 import { getFaskesListServerAction } from "@/lib/actions/faskes";
 import { ToastBanner } from "@/components/ui/ToastBanner";
+import { Breadcrumb } from "@/components/ui/Breadcrumb";
 
 interface HandledPatientOption {
   id: string;
@@ -187,13 +187,12 @@ export default function NakesRujukanPage() {
   return (
     <div className="space-y-6">
       <div>
-        <div className="flex items-center gap-2 text-xs font-bold text-emerald-700 uppercase tracking-wider">
-          <Link href="/nakes" className="hover:underline">
-            Stasiun Nakes
-          </Link>
-          <span>/</span>
-          <span>Surat Rujukan Digital & Seamless Transfer (UR-T06)</span>
-        </div>
+        <Breadcrumb
+          items={[
+            { label: "Stasiun Nakes", href: "/nakes" },
+            { label: "Surat Rujukan Digital" },
+          ]}
+        />
         <h1 className="text-2xl font-black text-slate-900 tracking-tight mt-1">
           Penerbitan Surat Rujukan Digital Lintas Faskes
         </h1>

@@ -1,6 +1,6 @@
-# Spesifikasi Basis Data Terpadu — Resilio-Health
+# Spesifikasi Basis Data Terpadu — JagaMedis (`v0.3.4`)
 
-Dokumen ini mendokumentasikan perancangan basis data relasional sistem **Resilio-Health** (*Hospital Information System* berbasis *Zero-Trust*, Kriptografi *Client-Side*, dan *Offline-First* PWA). Dokumen ini memuat identifikasi entitas bisnis, pemetaan relasi antar-entitas, penentuan *Primary Key* dan *Foreign Key*, rancangan model data berjenjang (**CDM**, **LDM**, dan **PDM**), skrip DDL SQL PostgreSQL siap eksekusi, serta Kamus Data (*Data Dictionary*) lengkap.
+Dokumen ini mendokumentasikan perancangan basis data relasional sistem **JagaMedis** (sebelumnya Resilio-Health — *Hospital Information System* berbasis *Zero-Trust*, Kriptografi *Client-Side*, dan *Offline-First* PWA) dengan **17 model relasional & 14 enum** aktif di PostgreSQL 17 + Prisma 7. Dokumen ini memuat identifikasi entitas bisnis, pemetaan relasi antar-entitas, penentuan *Primary Key* dan *Foreign Key*, rancangan model data berjenjang (**CDM**, **LDM**, dan **PDM**), skrip DDL SQL PostgreSQL siap eksekusi, serta Kamus Data (*Data Dictionary*) lengkap.
 
 ---
 

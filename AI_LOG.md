@@ -4,6 +4,42 @@ Dokumen pencatatan penggunaan asisten kecerdasan buatan (AI) sesuai kebijakan in
 
 ---
 
+## 2026-11-26 — Core REST API v1 (Opsi A) Berstandar RFC 9457 Problem Details (`v0.3.5`)
+
+- **Tool**: Google Antigravity (Gemini Models)
+- **Branch**: `refactor/v0.3.4-auth-hardening-ux` (siap di-commit/cabang `feat/v0.3.5-rest-api-v1-rfc9457` oleh pengguna)
+- **Tujuan**:
+  1. Mengimplementasikan **Opsi A — Core REST API v1 (`/api/v1/*`)** sebanyak **17 Route Handler files** yang dipisah spesifik per domain & transisi status klinis dengan standar **RFC 9110** dan **RFC 9457 (`application/problem+json`)**.
+  2. Menerapkan `await context.params` (Next.js 16) + validasi ID ketat (`validatePathId`) sebelum kueri Prisma, guard `requireApiSession()` + Anti-BOLA + SIEM audit, verifikasi AEAD+HMAC pada penulisan/addendum RME, serta penolakan `409 Conflict` untuk relasi `RESTRICT` & transisi status ilegal.
+  3. Mendokumentasikan kontrak API aktif beserta **Backlog Phase B (Next Session)** pada `docs/PAW/rest_api_v1.md` dan menyinkronkan dokumen hidup (`README.md`, `CHANGELOG.md`, `KEPUTUSAN.md`, `docs/PAW/arsitektur.md`, `AI_LOG.md`).
+- **Ringkasan Prompt**: *"okeh ambil opsi A, untuk api yang lain itu bisa di dokumentasikan untuk next session."*
+- **Bagian yang Dihasilkan / Dimodifikasi**:
+  - Fondasi: `lib/api/problem.ts`, `lib/api/auth.ts`, `lib/validations/api-v1.ts`.
+  - 17 Route Handlers `/api/v1/*`: `faskes` (`route`, `[id]`, `[id]/quarantine`), `appointments` (`route`, `[id]`, `[id]/check-in`, `[id]/triage`, `[id]/assign-dpjp`), `medical-records` (`route`, `[id]`, `[id]/addenda`), `access-grants` (`route`, `[id]/revoke`), `patients/me/family-members` (`route`, `[id]`), `trouble-tickets` (`route`, `[id]`).
+  - Pengujian & Dokumentasi: `tests/v035-rest-api-v1.test.ts` (19 tes baru), `docs/PAW/rest_api_v1.md`, `README.md`, `CHANGELOG.md`, `KEPUTUSAN.md` (`ADR-21`), `docs/PAW/arsitektur.md`, `AI_LOG.md`.
+- **Cara Verifikasi**:
+  - `npx tsc --noEmit`: 0 error TypeScript.
+  - `npm run lint`: 0 error, 0 warning.
+  - `npx vitest run`: **10 berkas tes, 75/75 skenario lulus (100%)** dalam `1.30s`.
+  - `npm run build`: Kompilasi produksi sukses (**42 halaman statis + 21 Route Handlers API + `ƒ Proxy`**).
+
+---
+
+## 2026-11-26 — Sinkronisasi Menyeluruh Spesifikasi & Dokumentasi Proyek ke Kondisi Aktual `v0.3.4`
+
+- **Tool**: Google Antigravity (Gemini Models)
+- **Branch**: `refactor/v0.3.4-auth-hardening-ux`
+- **Tujuan**:
+  1. Menyelaraskan seluruh dokumen spesifikasi hidup (*living docs*) dengan arsitektur, keamanan, kriptografi, UX, dan hasil uji aktual **`v0.3.4`** (**36 rute Next.js 16 + `ƒ Proxy`**, **17 model relasional + 14 enum**, **54 panggilan `requireSession()`**, **9 berkas / 56 tes Vitest lulus 100%**, *Rate Limiting* `429`, Anti-*Account Enumeration* `CWE-204`, *Family Proxy* CRUD PostgreSQL, & isolasi cetak A4) tanpa mengubah arsip historis praktikum (`docs/praktikum/modul04..07.md`, `docs/Tugas2/*`).
+- **Ringkasan Prompt**: *"Update dokumen dokumen untuk menyesuaikan dengan spesifikasi sistem saat ini."*
+- **Bagian yang Dimutakhirkan**:
+  - Root: `README.md`, `SPECIFICATION.md`, `KEPUTUSAN.md` (penambahan `ADR-15` s.d. `ADR-20`), `AI_LOG.md`.
+  - Spesifikasi Teknis: `docs/keamanan.md`, `docs/cryptography/CRYPTO_SPEC.md`, `docs/PAW/arsitektur.md`, `docs/keterlacakan.md`, `docs/THREAT_MODEL.md` (penambahan `RSK-12`).
+  - Audit, Standar & SOP: `docs/audit/audit_ulang_menyeluruh_v0.3_26Nov2026.md` (`R2`/`R3`/`P-01`–`P-05b` ditutup, `56/56` Vitest), `docs/standar/matriks_standar_acuan_v0.3.md` (`CWE-204` & ASVS V2.2.1 terimplementasi), `docs/sop/simulasi_alur_dan_sop_jagamedis.md`.
+- **Cara Verifikasi**: Inspeksi langsung terhadap `git status -s` dan konsistensi metrik lintas dokumen terhadap hasil uji terakhir (`tsc` 0 error, `eslint` 0 warning, `56/56` Vitest lulus, `36/36` build sukses).
+
+---
+
 ## 2026-11-26 — Tahap A (`v0.3.4`): Auth Hardening (Rate Limit & Anti-Enumeration), Poles UX Klinis & Modularitas `<350` Baris
 
 - **Tool**: Google Antigravity (Gemini Models)

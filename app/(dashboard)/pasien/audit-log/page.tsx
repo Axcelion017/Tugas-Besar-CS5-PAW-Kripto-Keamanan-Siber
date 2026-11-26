@@ -6,6 +6,7 @@ import { getUserSession, UserSession } from "@/lib/auth/auth";
 import { getPatientAuditLogsServerAction } from "@/lib/actions/audit";
 import { DashboardSkeleton } from "@/components/ui/Skeleton";
 import { IconShield, IconEye, IconCheck } from "@/components/ui/Icons";
+import { Breadcrumb } from "@/components/ui/Breadcrumb";
 
 interface PatientNotification {
   id: string;
@@ -128,13 +129,12 @@ export default function PasienAuditLogPage() {
       {/* Header Halaman */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 text-xs font-bold text-blue-600 uppercase tracking-wider">
-            <Link href="/pasien" className="hover:underline">
-              Portal Pasien
-            </Link>
-            <span>/</span>
-            <span>Pemberitahuan Transparansi Akses Medis (UU PDP No. 27/2022)</span>
-          </div>
+          <Breadcrumb
+            items={[
+              { label: "Portal Pasien", href: "/pasien" },
+              { label: "Notifikasi Akses Medis" },
+            ]}
+          />
           <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight mt-1">
             Notifikasi Akses Rekam Medis
           </h1>

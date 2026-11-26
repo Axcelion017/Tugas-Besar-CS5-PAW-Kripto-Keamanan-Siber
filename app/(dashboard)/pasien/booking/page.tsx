@@ -16,6 +16,7 @@ import {
 import { ConfirmModal } from "@/components/ui/Modal";
 import { ToastBanner } from "@/components/ui/ToastBanner";
 import { IconCalendar, IconShield, IconBuilding } from "@/components/ui/Icons";
+import { Breadcrumb } from "@/components/ui/Breadcrumb";
 
 interface DbDoctorOption {
   id: string;
@@ -375,13 +376,12 @@ function BookingContent() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 text-xs font-bold text-blue-600 uppercase tracking-wider">
-            <Link href="/pasien" className="hover:underline">
-              Portal Pasien
-            </Link>
-            <span>/</span>
-            <span>Booking Pemeriksaan (UR-P04)</span>
-          </div>
+          <Breadcrumb
+            items={[
+              { label: "Portal Pasien", href: "/pasien" },
+              { label: "Booking Pemeriksaan" },
+            ]}
+          />
           <h1 className="text-2xl font-black text-slate-900 tracking-tight mt-1">
             Pemesanan Jadwal Konsultasi & Tiket Antrean
           </h1>

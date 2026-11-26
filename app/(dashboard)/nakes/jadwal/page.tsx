@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { getUserSession, UserSession } from "@/lib/auth/auth";
 import { getDoctorCalendarScheduleServerAction } from "@/lib/actions/clinical";
+import { Breadcrumb } from "@/components/ui/Breadcrumb";
 
 interface WeeklyAppointment {
   id: string;
@@ -140,13 +141,12 @@ export default function NakesJadwalMingguanPage() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 text-xs font-bold text-emerald-700 uppercase tracking-wider">
-            <Link href="/nakes" className="hover:underline">
-              Stasiun Nakes
-            </Link>
-            <span>/</span>
-            <span>Jadwal Praktik Mingguan</span>
-          </div>
+          <Breadcrumb
+            items={[
+              { label: "Stasiun Nakes", href: "/nakes" },
+              { label: "Jadwal Praktik Mingguan" },
+            ]}
+          />
           <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight mt-1">
             Jadwal Praktik Dokter Berbasis Kalender Mingguan
           </h1>
@@ -336,12 +336,12 @@ export default function NakesJadwalMingguanPage() {
                               <p className="font-black text-slate-900 text-xs truncate">
                                 {apt.patientName}
                               </p>
-                              <span className="text-[9px] font-mono text-slate-500 block">
+                              <span className="text-[11px] font-mono text-slate-500 block">
                                 {apt.patientMrn}
                               </span>
                             </div>
 
-                            <span className="inline-block text-[9px] font-bold text-slate-700 bg-white/80 px-1.5 py-0.5 rounded border border-slate-200 truncate max-w-full">
+                            <span className="inline-block text-[11px] font-bold text-slate-700 bg-white/80 px-1.5 py-0.5 rounded border border-slate-200 truncate max-w-full">
                               {apt.faskesName || "RSUP Dr. Sardjito"}
                             </span>
 

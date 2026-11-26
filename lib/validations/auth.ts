@@ -129,3 +129,36 @@ export const RegisterNakesSchema = z.object({
 });
 
 export type RegisterNakesInput = z.infer<typeof RegisterNakesSchema>;
+
+/**
+ * Skema Zod untuk Registrasi Nakes Persisten PostgreSQL (User PENDING + Doctor + KydSubmission)
+ */
+export const RegisterNakesDbSchema = RegisterNakesSchema.extend({
+  username: z
+    .string({ message: "Username wajib diisi." })
+    .trim()
+    .min(3, { message: "Username minimal 3 karakter." })
+    .max(50, { message: "Username maksimal 50 karakter." })
+    .regex(/^[a-zA-Z0-9_]+$/, {
+      message: "Username hanya boleh memuat huruf, angka, dan underscore.",
+    }),
+  email: z
+    .string({ message: "Alamat email wajib diisi." })
+    .trim()
+    .email({ message: "Format alamat email tidak valid." }),
+  password: z
+    .string({ message: "Kata sandi wajib diisi." })
+    .min(6, { message: "Kata sandi minimal 6 karakter." })
+    .max(100, { message: "Kata sandi maksimal 100 karakter." }),
+  faskesId: z
+    .string({ message: "Fasilitas kesehatan tempat bertugas wajib dipilih." })
+    .trim()
+    .min(3, { message: "Pilih fasilitas kesehatan yang valid." }),
+  dokumenStrFileName: z
+    .string({ message: "Nama berkas STR/SIP tidak valid." })
+    .trim()
+    .min(1, { message: "Berkas bukti STR/SIP wajib diunggah." })
+    .max(200),
+});
+
+export type RegisterNakesDbInput = z.infer<typeof RegisterNakesDbSchema>;
