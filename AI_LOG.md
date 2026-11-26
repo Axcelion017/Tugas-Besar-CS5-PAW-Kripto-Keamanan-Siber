@@ -4,6 +4,30 @@ Dokumen pencatatan penggunaan asisten kecerdasan buatan (AI) sesuai kebijakan in
 
 ---
 
+## 2026-11-26 — Audit Ulang Menyeluruh, Keterlacakan Penuh, Matriks Standar Acuan & SOP Operasional (`v0.3.3-fase4`)
+
+- **Tool**: Google Antigravity (Gemini Models)
+- **Branch**: `audit/re-audit-v0.3-standards-sop`
+- **Tujuan**:
+  1. Melakukan audit ulang menyeluruh secara langsung (*read-only*) terhadap seluruh basis kode pasca-eksekusi Fase 1–4 pada transisi Milestone `v0.2` $\rightarrow$ **`v0.3`** (`v0.3.3-fase4`) beserta pemetaan keterlacakan penuh (`Full Traceability`) antara temuan audit, kebutuhan pengguna (`UR-P/S/T/A`), berkas implementasi, dan bukti uji otomatis.
+  2. Menyusun katalog resmi **28 standar acuan internasional & regulasi nasional** pada direktori khusus `docs/standar/` yang memuat Nama Acuan, Isi/Klausul Inti, Justifikasi Pemilihan, serta Implementasi Nyata di proyek.
+  3. Menyusun panduan simulasi penggunaan aplikasi *end-to-end* (5 skenario), diagram alur sistem & penanganan insiden (Mermaid), serta 7 dokumen SOP resmi (`SOP-JM-01` s.d. `SOP-JM-07`) pada direktori khusus `docs/sop/`.
+- **Ringkasan Prompt**:
+  1. *"Buat branch terpisah untuk melakukan audit ulang keseluruhan, mentrace seluruhnya, membuat dokumen yang isinya standard acuan (nama acuan, isinya, justifikasi/alasan, penggunaannya dalam projek), berikan juga simulasi penggunaan aplikasi, alur, dan juga SOP penanganannya sesuai dengan standard."*
+  2. *"Opsi A, untuk simulasi alur dan SOP jangan di direktori yang sama dengan audit, kemudian yang matriks standar acuan itu juga sama namain direktori khusus untuk masing-masingnya, kalo yang audit tetap sama."*
+- **Bagian yang Dihasilkan / Dimodifikasi**:
+  - `docs/audit/audit_ulang_menyeluruh_v0.3_26Nov2026.md` (baru — skor perbandingan `v0.2` vs `v0.3.3-fase4`, matriks keterlacakan penuh, inventaris 4 REST API / 63 Server Actions / 52 `requireSession` / 17 model / 14 enum, 7 catatan residual jujur `R1`–`R7`, evaluasi efisiensi tabel DB 17 $\rightarrow$ 12–13 / UX `U1`–`U5` / relevansi fitur / audit login & strategi Email OTP + TOTP offline, serta peta jalan perbaikan terstandar `P-01`–`P-13` & cetak biru tentatif VPS `VPS-01`–`VPS-06`).
+  - `docs/standar/matriks_standar_acuan_v0.3.md` (baru — 30 standar acuan dalam 6 pilar lengkap dengan klausul inti, justifikasi, dan lokasi kode, termasuk CWE-204 & RFC 6238 TOTP).
+  - `docs/sop/simulasi_alur_dan_sop_jagamedis.md` (baru — 5 skenario simulasi penggunaan & serangan, 2 diagram Mermaid alur & insiden, serta `SOP-JM-01` s.d. `SOP-JM-07`).
+  - `AI_LOG.md` & `README.md` (pembaruan indeks direktori dokumentasi & metrik `v0.3.3-fase4`).
+- **Cara Verifikasi**:
+  - `npx tsc --noEmit`: 0 error TypeScript.
+  - `npm run lint`: 0 error, 0 warning.
+  - `npx vitest run`: **8 berkas tes, 52/52 skenario lulus (100%)** dalam `714ms`.
+  - Inspeksi grep langsung terhadap `prisma/schema.prisma` (17 model, 14 enum), `requireSession(` (52 pemanggilan), `window.alert/confirm` (0 kemunculan), dan catatan residual `localStorage`/ukuran berkas secara transparan.
+
+---
+
 ## 2026-11-26 — Fase 4 Refactoring (`P3 — Poles Milestone v0.3`): WCAG 2.1 AA, *Progressive Disclosure* & DevOps Hardening
 
 - **Tool**: Google Antigravity (Gemini Models)
