@@ -15,6 +15,10 @@ import {
   MOCK_ACCESS_GRANTS,
 } from "../lib/db/mockData";
 import { DEMO_USERS } from "../lib/auth/auth";
+import {
+  CanonicalSoapPayload,
+  encryptMedicalRecordPayload,
+} from "../features/medical-records/crypto-service";
 
 async function main() {
   console.log("🚀 Memulai proses database seeding idempoten JagaMedis...");
@@ -314,17 +318,52 @@ async function main() {
     }
   }
 
-  // 7. SEED REKAM MEDIS ELEKTRONIK TERENKRIPSI (MEDICAL_RECORDS & CITRA)
-  console.log("-> Seeding Encrypted Medical Records (AES-256-GCM + HMAC)...");
+  // 7. SEED REKAM MEDIS ELEKTRONIK TERENKRIPSI (HKDF + AES-256-GCM + AAD + HMAC-SHA256)
+  console.log("-> Seeding Encrypted Medical Records (HKDF + AES-256-GCM + AAD + HMAC)...");
   for (const record of MOCK_ENCRYPTED_RECORDS) {
+    const ownerPatient = MOCK_PATIENTS.find((p) => p.id === record.patientId);
+    const masterKey = ownerPatient?.encryptionKeyHex;
+
+    let encryptedPayload = record.encryptedPayload;
+    let ivHex = record.ivHex;
+    let hmacDigest = record.hmacDigest;
+
+    if (masterKey) {
+      let decodedSoap: CanonicalSoapPayload = {
+        subjective: `Kunjungan klinis untuk ${record.diagnosisShort}`,
+        assessment: { icd10: record.primaryIcd10, desc: record.diagnosisShort },
+        plan: { resep: [], tindakan: "Evaluasi klinis berkala" },
+      };
+
+      try {
+        if (/^[0-9a-fA-F]+$/.test(record.encryptedPayload) && record.encryptedPayload.length % 2 === 0) {
+          const text = Buffer.from(record.encryptedPayload, "hex").toString("utf-8").trim();
+          if (text.startsWith("{") && text.endsWith("}")) {
+            decodedSoap = JSON.parse(text) as CanonicalSoapPayload;
+          }
+        }
+      } catch {
+        // gunakan fallback struktur SOAP
+      }
+
+      const bundle = await encryptMedicalRecordPayload(decodedSoap, masterKey, {
+        patientId: record.patientId,
+        recordId: record.recordId,
+        version: record.version,
+      });
+      encryptedPayload = bundle.encryptedPayload;
+      ivHex = bundle.ivHex;
+      hmacDigest = bundle.hmacDigest;
+    }
+
     await prisma.medicalRecord.upsert({
       where: { id: record.recordId },
       update: {
         primaryIcd10: record.primaryIcd10,
         diagnosisShort: record.diagnosisShort,
-        encryptedPayload: record.encryptedPayload,
-        ivHex: record.ivHex,
-        hmacDigest: record.hmacDigest,
+        encryptedPayload,
+        ivHex,
+        hmacDigest,
         version: record.version,
         isBreakGlass: record.isBreakGlass || false,
       },
@@ -335,9 +374,9 @@ async function main() {
         faskesId: record.faskesId,
         primaryIcd10: record.primaryIcd10,
         diagnosisShort: record.diagnosisShort,
-        encryptedPayload: record.encryptedPayload,
-        ivHex: record.ivHex,
-        hmacDigest: record.hmacDigest,
+        encryptedPayload,
+        ivHex,
+        hmacDigest,
         version: record.version,
         isBreakGlass: record.isBreakGlass || false,
       },

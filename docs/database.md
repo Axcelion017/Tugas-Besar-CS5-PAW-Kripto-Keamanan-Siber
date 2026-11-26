@@ -6,7 +6,7 @@ Dokumen ini mendokumentasikan perancangan basis data relasional sistem **Resilio
 
 ## 1. Identifikasi Entitas Sistem
 
-Sistem Resilio-Health membagi struktur data ke dalam 15 entitas utama yang mendukung 4 peran pengguna (*Pasien*, *Staf Nakes Triase & Admisi*, *Dokter DPJP*, dan *Admin Regulator Kemenkes*), kepatuhan regulasi (UU PDP No. 27/2022 & Permenkes No. 24/2022), serta arsitektur keamanan *Zero-Knowledge*:
+Sistem JagaMedis (sebelumnya Resilio-Health) membagi struktur data ke dalam **17 entitas** yang mendukung 4 peran pengguna (*Pasien*, *Staf Nakes Triase & Admisi*, *Dokter DPJP*, dan *Admin Regulator Kemenkes*), kepatuhan regulasi (UU PDP No. 27/2022 & Permenkes No. 24/2022), sesi persisten server, serta arsitektur keamanan *Zero-Knowledge*:
 
 1. **`User` (`users`)**: Entitas induk autentikasi dan kredensial akses seluruh pengguna sistem (Pasien, Nakes, Staf, Admin).
 2. **`Faskes` (`faskes`)**: Entitas master data Fasilitas Pelayanan Kesehatan (Rumah Sakit, Klinik Pratama, Puskesmas) beserta status isolasi siber (*Kill-Switch*).
@@ -24,6 +24,7 @@ Sistem Resilio-Health membagi struktur data ke dalam 15 entitas utama yang mendu
 14. **`KycSubmission` (`kyc_submissions`)**: Entitas permohonan verifikasi identitas kependudukan digital (e-KYC) pasien dengan foto fisik KTP dan swafoto ber-watermark.
 15. **`KydSubmission` (`kyd_submissions`)**: Entitas permohonan verifikasi legalitas izin praktik dokter (e-KYD) dengan dokumen STR dan SIP resmi.
 16. **`TroubleTicket` (`trouble_tickets`)**: Entitas pelaporan kendala teknis sistem dan sengketa ketidaksesuaian data medis dari pengguna ke regulator.
+17. **`Session` (`sessions`)** *(ditambahkan pada Fase 1 — migrasi `20261126011004_add_persistent_sessions`)*: Entitas penyimpanan token sesi autentikasi HTTP-Only secara persisten di PostgreSQL (beserta `payload` JSON, `expiresAt`, dan status pencabutan `isRevoked`) agar sesi bertahan pasca-restart server dan mendukung invalidasi instan.
 
 ---
 
@@ -54,6 +55,7 @@ Sistem Resilio-Health membagi struktur data ke dalam 15 entitas utama yang mendu
 | `users` | Mengajukan berkas e-KYC | `kyc_submissions` | 1 : 0..N | ON DELETE CASCADE |
 | `users` | Mengajukan berkas e-KYD | `kyd_submissions` | 1 : 0..N | ON DELETE CASCADE |
 | `users` | Mengirimkan laporan kendala data | `trouble_tickets` | 1 : 0..N | ON DELETE SET NULL |
+| `users` | Memiliki sesi autentikasi HTTP-Only persisten | `sessions` | 1 : 0..N | ON DELETE CASCADE |
 
 ---
 
@@ -77,6 +79,7 @@ Sistem Resilio-Health membagi struktur data ke dalam 15 entitas utama yang mendu
 | `kyc_submissions` | `id` | `VARCHAR(32)` (`KYC-xxx`) | `user_id` | `users(id)` |
 | `kyd_submissions` | `id` | `VARCHAR(32)` (`KYD-xxx`) | `user_id` | `users(id)` |
 | `trouble_tickets` | `id` | `VARCHAR(32)` (`TCK-xxx`) | `reporter_id`, `faskes_id` | `users(id)`, `faskes(id)` |
+| `sessions` | `token` | `VARCHAR(64)` (CSPRNG UUID) | `user_id` | `users(id)` |
 
 ---
 

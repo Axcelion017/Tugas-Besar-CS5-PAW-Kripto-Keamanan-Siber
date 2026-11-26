@@ -164,7 +164,7 @@ export default function PasienListPage() {
           gender: (p.gender as "L" | "P") || "L",
           bloodType: p.bloodType || "O+",
           lastVisit: "Hari ini",
-          hasAccess: true,
+          hasAccess: Boolean(res.accessAllowed),
           statusKyc: "VERIFIED",
           allergies: p.allergies || [],
           emergencyContact: {
@@ -172,7 +172,7 @@ export default function PasienListPage() {
             relation: "Keluarga",
             phone: p.phone || "-",
           },
-          encryptionKeyHex: p.encryptionKeyHex || "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90",
+          encryptionKeyHex: p.encryptionKeyHex || "",
         };
 
         if (!res.accessAllowed) {

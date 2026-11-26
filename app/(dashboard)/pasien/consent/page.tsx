@@ -121,7 +121,7 @@ export default function ConsentManagerPage() {
     const all = getStorageData<AccessGrant[]>("resilio_access_grants", MOCK_ACCESS_GRANTS);
     const updated = all.map((g) => (g.id === grantId ? { ...g, isRevoked: true } : g));
     setStorageData("resilio_access_grants", updated);
-    setGrants(updated.filter((g) => g.pasienId === session?.id || g.pasienId === "P-101"));
+    setGrants(updated.filter((g) => g.pasienId === session?.id));
 
     // Tambahkan log audit siber
     const logs = getStorageData<SecurityAuditLog[]>("resilio_security_logs", MOCK_SECURITY_LOGS);

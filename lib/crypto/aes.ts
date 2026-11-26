@@ -1,3 +1,5 @@
+import { deriveSubKeysHKDF } from "./hkdf";
+
 // Helper konversi Hex <-> ArrayBuffer
 function hexToBuf(hex: string): Uint8Array {
   const bytes = new Uint8Array(hex.length / 2);
@@ -94,19 +96,27 @@ export async function decryptAES(
   return decoder.decode(decryptedBuf);
 }
 
-// Fungsi Enkripsi Berkas Biner (Citra Medis Rontgen / USG / Lab)
+/**
+ * Fungsi Enkripsi Berkas Biner (Citra Medis Rontgen / USG / Lab)
+ * Mematuhi NIST SP 800-57 & RFC 5869 (Key Separation): sub-kunci AES-GCM dan HMAC-SHA256
+ * diturunkan secara independen melalui HKDF sehingga satu kunci tidak pernah dipakai ganda.
+ */
 export async function encryptBinaryAttachment(
   binaryBuffer: ArrayBuffer,
-  keyHex: string,
+  masterKeyHex: string,
   aadText?: string
 ): Promise<{ ciphertextBuffer: ArrayBuffer; ivHex: string; binaryHmac: string }> {
   const encoder = new TextEncoder();
-  const rawKey = hexToBuf(keyHex);
+  const contextLabel = aadText || "binary-attachment";
+  const { encKeyHex, macKeyHex } = await deriveSubKeysHKDF(masterKeyHex, contextLabel);
+
+  const rawEncKey = hexToBuf(encKeyHex);
+  const rawMacKey = hexToBuf(macKeyHex);
   const iv = crypto.getRandomValues(new Uint8Array(12));
 
   const cryptoKey = await crypto.subtle.importKey(
     "raw",
-    rawKey as BufferSource,
+    rawEncKey as BufferSource,
     { name: "AES-GCM" },
     false,
     ["encrypt"]
@@ -128,10 +138,10 @@ export async function encryptBinaryAttachment(
     binaryBuffer as BufferSource
   );
 
-  // Hitung HMAC-SHA256 integritas biner
+  // Hitung HMAC-SHA256 integritas biner menggunakan sub-kunci MAC terpisah (HKDF)
   const hmacKey = await crypto.subtle.importKey(
     "raw",
-    rawKey as BufferSource,
+    rawMacKey as BufferSource,
     { name: "HMAC", hash: "SHA-256" },
     false,
     ["sign"]
@@ -145,20 +155,61 @@ export async function encryptBinaryAttachment(
   };
 }
 
-// Fungsi Dekripsi Berkas Biner (Citra Medis)
+/**
+ * Verifikasi integritas HMAC-SHA256 berkas biner secara constant-time (HKDF MAC Sub-Key).
+ */
+export async function verifyBinaryAttachmentHMAC(
+  ciphertextBuffer: ArrayBuffer,
+  expectedHmacHex: string,
+  masterKeyHex: string,
+  aadText?: string
+): Promise<boolean> {
+  if (!expectedHmacHex || !/^[0-9a-fA-F]{64}$/.test(expectedHmacHex)) {
+    return false;
+  }
+
+  try {
+    const contextLabel = aadText || "binary-attachment";
+    const { macKeyHex } = await deriveSubKeysHKDF(masterKeyHex, contextLabel);
+    const rawMacKey = hexToBuf(macKeyHex);
+    const expectedSig = hexToBuf(expectedHmacHex);
+
+    const hmacKey = await crypto.subtle.importKey(
+      "raw",
+      rawMacKey as BufferSource,
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["verify"]
+    );
+
+    return await crypto.subtle.verify(
+      "HMAC",
+      hmacKey,
+      expectedSig as BufferSource,
+      ciphertextBuffer as BufferSource
+    );
+  } catch {
+    return false;
+  }
+}
+
+// Fungsi Dekripsi Berkas Biner (Citra Medis) dengan sub-kunci enkripsi HKDF terpisah
 export async function decryptBinaryAttachment(
   ciphertextBuffer: ArrayBuffer,
   ivHex: string,
-  keyHex: string,
+  masterKeyHex: string,
   aadText?: string
 ): Promise<ArrayBuffer> {
   const encoder = new TextEncoder();
-  const rawKey = hexToBuf(keyHex);
+  const contextLabel = aadText || "binary-attachment";
+  const { encKeyHex } = await deriveSubKeysHKDF(masterKeyHex, contextLabel);
+
+  const rawEncKey = hexToBuf(encKeyHex);
   const iv = hexToBuf(ivHex);
 
   const cryptoKey = await crypto.subtle.importKey(
     "raw",
-    rawKey as BufferSource,
+    rawEncKey as BufferSource,
     { name: "AES-GCM" },
     false,
     ["decrypt"]

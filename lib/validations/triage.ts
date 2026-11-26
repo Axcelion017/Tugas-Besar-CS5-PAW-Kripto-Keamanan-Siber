@@ -87,11 +87,9 @@ export const AssignDpjpSchema = z.object({
   aptId: z.string({ message: "Pilih antrean pasien yang valid." }).min(1),
   doctorId: z.string({ message: "Pilih dokter DPJP yang bertugas." }).min(1),
   inputPin: z
-    .string()
+    .string({ message: "Kode PIN persetujuan pasien wajib diisi (6 digit angka)." })
     .trim()
-    .regex(/^\d{6}$/, { message: "Kode PIN persetujuan pasien harus berupa 6 digit angka." })
-    .optional()
-    .or(z.literal("")),
+    .regex(/^\d{6}$/, { message: "Kode PIN persetujuan pasien wajib berupa 6 digit angka." }),
 });
 
 export type AssignDpjpInput = z.infer<typeof AssignDpjpSchema>;

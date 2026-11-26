@@ -319,10 +319,10 @@ Aplikasi klinis memiliki standar usability lebih ketat dari aplikasi umum karena
 
 ---
 
-### Fase 0 — Prasyarat & Kunci Baseline
-- [ ] **F0.1**: Selesaikan Subbagian 5.1 (*peer review* PR teman) di `docs/praktikum/modul07.md` dan hapus blok panduan `[!IMPORTANT]`.
-- [ ] **F0.2**: Commit & push branch `Week-7`, selesaikan konflik 1 baris di `app/(dashboard)/layout.tsx` (pilih `"Beranda Terpadu JagaMedis"`), lalu merge PR #12 ke `main`.
-- [ ] **F0.3**: Buat branch baru dari `main`: `git checkout -b refactor/v1-clean-architecture`.
+### Fase 0 — Prasyarat & Kunci Baseline *(SELESAI — 26 Nov 2026)*
+- [x] **F0.1**: Selesaikan Subbagian 5.1 (*peer review* PR teman) di `docs/praktikum/modul07.md` dan hapus blok panduan `[!IMPORTANT]`.
+- [x] **F0.2**: Commit & push branch `Week-7`, selesaikan konflik 1 baris di `app/(dashboard)/layout.tsx` (pilih `"Beranda Terpadu JagaMedis"`), lalu merge PR #12 ke `main`.
+- [x] **F0.3**: Buat branch baru dari `main`: `git checkout -b refactor/fase-1-security-crypto` *(strategi 1 branch per fase)*.
 
 **Quality Gates Fase 0**:
 | Indikator Uji | Standar Acuan | Cara Menguji | Target Lulus |
@@ -333,19 +333,19 @@ Aplikasi klinis memiliki standar usability lebih ketat dari aplikasi umum karena
 
 ---
 
-### Fase 1 (`P0 — Kritis`) — Keamanan Server-Side, Sesi Persisten & Kriptografi Nyata
-- [ ] **F1.1 — Sesi Persisten & Auth Guard Terpusat**:
-  - *Target*: `prisma/schema.prisma`, `lib/auth/sessionStore.ts`, `features/auth/guard.ts` (baru), `middleware.ts` (baru), `app/api/auth/session/route.ts`, `lib/auth/auth.ts`.
-  - *Aksi*: Tambah model `Session` di PostgreSQL; buat `requireSession(allowedRoles)` berbasis `cookies()`; pasang `middleware.ts` untuk rute `/pasien`, `/staf`, `/nakes`, `/admin`; samakan `/api/auth/session` dengan Prisma + Bcrypt; hapus fallback cookie `resilio_user_role` dari `DEMO_USERS` dan hapus cabang plaintext password di `lib/actions/auth.ts:74-86`.
-- [ ] **F1.2 — Tutup Seluruh Celah BOLA & Kebocoran PII/Kunci**:
-  - *Target*: `lib/actions/{auth,clinical,consent,appointment,triage,faskes,ticket}.ts`.
-  - *Aksi*: Wajibkan `requireSession(...)` di baris pertama setiap Server Action; ambil `actorId`/`role` dari sesi server (bukan parameter klien); hapus kondisi `|| "DOC-01"` dan `|| "P-101"`; tambahkan cek `validUntil > now` pada `accessGrants`; jangan kirim `encryptionKeyHex`/`nik`/riwayat saat `accessAllowed === false`; cek kepemilikan `patientId` pada `getSingleMedicalRecordServerAction`; wajibkan `inputPin` terisi & cocok pada `assignDpjpServerAction`.
-- [ ] **F1.3 — Kriptografi AEAD Nyata & *Fail-Closed***:
-  - *Target*: `features/medical-records/crypto-service.ts` (baru), `lib/crypto/{hmac,aes}.ts`, `lib/actions/clinical.ts`, `app/(dashboard)/nakes/periksa/[bookingId]/page.tsx`, `app/(dashboard)/nakes/pasien-lookup/[patientId]/page.tsx`, `app/(dashboard)/pasien/rekam-medis/{page,[recordId]/page}.tsx`.
-  - *Aksi*: Ganti `===` di `lib/crypto/hmac.ts:42` dengan `crypto.subtle.verify("HMAC", ...)`; perbaiki key reuse di `encryptBinaryAttachment` memakai sub-kunci HKDF; terapkan `deriveSubKeysHKDF` + `encryptAES(..., aadText)` di alur SOAP; hapus enkripsi palsu Base64/Hex & IV/HMAC statis di `clinical.ts`; seragamkan 1 format JSON SOAP; tegakkan *fail-closed* (hapus fallback data klinis palsu `120/80` / `Amlodipine` saat dekripsi/HMAC gagal & catat `HMAC_MISMATCH`).
-- [ ] **F1.4 — HTTP Security Headers**:
+### Fase 1 (`P0 — Kritis`) — Keamanan Server-Side, Sesi Persisten & Kriptografi Nyata *(SELESAI & TERVERIFIKASI — 26 Nov 2026, 08:15 WIB; catatan lengkap: [fase-1-security-crypto-2026-11-26.md](../perubahan/fase-1-security-crypto-2026-11-26.md))*
+- [x] **F1.1 — Sesi Persisten & Auth Guard Terpusat**:
+  - *Target*: `prisma/schema.prisma`, `lib/auth/sessionStore.ts`, `features/auth/guard.ts` (baru), `proxy.ts` (baru — konvensi resmi Next.js 16 pengganti `middleware.ts`), `app/api/auth/session/route.ts`, `lib/auth/auth.ts`, `app/(dashboard)/layout.tsx`, `app/(auth)/login/page.tsx`.
+  - *Aksi*: Tambah model `Session` di PostgreSQL (`20261126011004_add_persistent_sessions`); buat `requireSession(allowedRoles)` berbasis `cookies()`; pasang `proxy.ts` untuk rute `/beranda`, `/pasien`, `/staf`, `/nakes`, `/admin`; samakan `/api/auth/session` dengan Prisma + Bcrypt; hapus fallback cookie `resilio_user_role` dari `DEMO_USERS` dan hapus cabang plaintext password di `lib/actions/auth.ts`.
+- [x] **F1.2 — Tutup Seluruh Celah BOLA & Kebocoran PII/Kunci**:
+  - *Target*: `lib/actions/{auth,clinical,consent,appointment,triage,faskes,ticket,audit}.ts`, `lib/validations/triage.ts`.
+  - *Aksi*: Wajibkan `requireSession(...)` di baris pertama setiap Server Action; ambil `actorId`/`role` dari sesi server (bukan parameter klien); hapus kondisi `|| "DOC-01"` dan `|| "P-101"`; tambahkan cek `validUntil > now` pada `accessGrants`; jangan kirim `encryptionKeyHex`/NIK utuh/riwayat saat `accessAllowed === false`; cek kepemilikan `patientId` pada `getSingleMedicalRecordServerAction`; wajibkan `inputPin` 6-digit terisi & cocok pada `assignDpjpServerAction`.
+- [x] **F1.3 — Kriptografi AEAD Nyata & *Fail-Closed***:
+  - *Target*: `features/medical-records/crypto-service.ts` (baru), `lib/crypto/{hmac,aes}.ts`, `lib/actions/clinical.ts`, `prisma/seed.ts`, `app/(dashboard)/nakes/periksa/[bookingId]/page.tsx`, `app/(dashboard)/nakes/pasien-lookup/[patientId]/page.tsx`, `app/(dashboard)/pasien/rekam-medis/{page,[recordId]/page}.tsx`.
+  - *Aksi*: Ganti `===` di `lib/crypto/hmac.ts` dengan `crypto.subtle.verify("HMAC", ...)`; perbaiki key reuse di `encryptBinaryAttachment` memakai sub-kunci HKDF; terapkan `deriveSubKeysHKDF` + `encryptAES(..., aadText)` di alur SOAP & seeder; hapus enkripsi palsu Base64/Hex & IV/HMAC statis di `clinical.ts`; seragamkan 1 format JSON SOAP (`CanonicalSoapPayload`) + Addendum immutable; tegakkan *fail-closed* (hapus fallback data klinis palsu `120/80` / `Amlodipine` saat dekripsi/HMAC gagal & catat `HMAC_MISMATCH`).
+- [x] **F1.4 — HTTP Security Headers**:
   - *Target*: `next.config.ts`.
-  - *Aksi*: Tambahkan header `Content-Security-Policy`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy`, dan `Permissions-Policy`.
+  - *Aksi*: Tambahkan header `Content-Security-Policy`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy`, `Permissions-Policy`, dan `X-DNS-Prefetch-Control`.
 
 **Quality Gates Fase 1**:
 | Indikator Uji | Standar Acuan | Cara Menguji | Target Lulus |

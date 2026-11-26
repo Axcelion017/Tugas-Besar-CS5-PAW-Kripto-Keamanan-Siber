@@ -32,7 +32,7 @@ Resilio-Health menyelesaikan permasalahan tersebut dengan:
 | **Penyimpanan Data** | Mock memory & `localStorage` statis. | **Database Relasional Fisik PostgreSQL 17** via Prisma ORM 7 (`@prisma/adapter-pg`). |
 | **Operasi CRUD** | Mutasi state lokal di peramban. | **CRUD Lengkap 100% Persisten**: Antrean (`appointments`) dan Izin Akses (`access_grants`) mendukung Create, Read, Update, dan Delete melalui Server Actions. |
 | **Validasi Masukan** | Pengecekan atribut dasar HTML5. | **Pertahanan Berlapis Zod v4**: Validasi tipe data ketat, batas fisiologis tensi, format NIK 16 digit, dan medikolegal di sisi server. |
-| **Autentikasi & Sesi** | Variabel state klien. | **Stateful Session Cookies HTTP-Only** (`resilio_session_token`, Max-Age 4 jam, SameSite Lax) dan instan revoke UU PDP. |
+| **Autentikasi & Sesi** | Variabel state klien. | **Sesi Persisten PostgreSQL (`sessions`) + Cookie HTTP-Only** (`resilio_session_token`), Next.js 16 `proxy.ts`, `requireSession(allowedRoles)`, 100% `bcrypt.compare`, & HTTP Security Headers. |
 | **Onboarding Pengguna** | Pendaftaran monolitik panjang. | **Progressive Onboarding & Restricted Mode**: Pendaftaran akun cepat, edit data mandiri, dan gembok fitur medis sebelum e-KYC NIK disetujui. |
 | **Kedaulatan Portabilitas RME** | Mock transfer izin. | **Digital Medical Passport Tanpa Kertas**: Izin rujukan lintas faskes persisten dengan kontrol *1-Click Revoke*. |
 
@@ -87,7 +87,7 @@ Sistem menerapkan arsitektur modular Next.js App Router dengan pemisahan wilayah
 | **Kerahasiaan (Confidentiality)** | AES-256-GCM | NIST SP 800-38D | Enkripsi simetris data klinis SOAP & Citra Medis menggunakan kunci 256-bit unik pasien |
 | **Inisialisasi Keacakan (IV)** | 96-bit CSPRNG Nonce | W3C Web Crypto | `crypto.getRandomValues()` 12 bytes unik per rekam medis (Mencegah IV Reuse) |
 | **Context Binding (AAD)** | Additional Authenticated Data | NIST SP 800-38D | Mengikat identitas pasien & faskes ke ciphertext; mencegah manipulasi / transfer antar pasien |
-| **Keutuhan Data (Integrity)** | HMAC-SHA256 | RFC 2104 | Verifikasi keutuhan ciphertext; tolak dekripsi jika terjadi perubahan 1 bit (*Fail-Closed*) |
+| **Keutuhan Data (Integrity)** | HMAC-SHA256 (*Constant-Time*) | RFC 2104 / NIST SP 800-107 | Verifikasi `crypto.subtle.verify` anti-timing attack (CWE-208); tolak dekripsi jika 1 bit berubah (*Fail-Closed* murni + log `HMAC_MISMATCH`) |
 | **Pemisahan Kunci (Key Separation)** | HKDF (SHA-256) | RFC 5869 | Menurunkan sub-kunci independen (kunci enkripsi vs kunci MAC) dari satu Master Key pasien |
 | **Penyimpanan Kredensial** | Bcrypt (Salt Rounds = 10) | OWASP Password Storage | Slow hashing memori-keras pada tabel `users` PostgreSQL mencegah serangan brute force |
 | **Penyimpanan (Storage)** | Zero-Knowledge Store | UU PDP No. 27/2022 | Server dan Admin basis data hanya menyimpan opaque ciphertext |
@@ -110,7 +110,7 @@ Sistem Resilio-Health dibangun dengan arsitektur teknologi modern yang terbagi k
 | **Data Visualization** | **Recharts** | `^2.15.0` | Visualisasi grafik tren tanda vital dinamis (Sistolik, Diastolik, Detak Jantung) pada dashboard pasien sesuai Permenkes 24/2022. |
 | **Client-Side Cryptography** | **W3C Web Crypto API** | Native Standard | Enkripsi simetris AES-256-GCM (kunci 256-bit unik pasien, CSPRNG IV 96-bit), enkripsi citra biner, dan tag integritas HMAC-SHA256 langsung di peramban (*Zero-Knowledge*). |
 | **Offline-First Engine** | **PWA Service Worker & IndexedDB** | Web Standard | PWA Service Worker (`public/sw.js`) dengan penyimpanan biner IndexedDB berkapasitas besar untuk ketahanan operasional saat internet rumah sakit terputus. |
-| **Testing Suite** | **Vitest** | `^5.0.4` | Framework pengujian unit otomatis berkecepatan tinggi untuk memverifikasi 19 skenario kriptografi dan batas validasi skema. |
+| **Testing Suite** | **Vitest** | `^5.0.4` | Framework pengujian unit & integrasi otomatis berkecepatan tinggi memverifikasi **40 skenario** (kriptografi AEAD/HKDF, validasi Zod, RBAC, transaksi `RESTRICT`, & *Quality Gates* keamanan Fase 1). |
 | **Linter & Code Quality** | **ESLint** | `^9.0.0` | Analisis statis kualitas kode dengan 0 error dan 0 warning. |
 
 ---

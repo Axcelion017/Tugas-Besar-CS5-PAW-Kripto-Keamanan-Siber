@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/db/prisma";
 import { AuditAction, AuditSeverity, UserRole } from "@prisma/client";
+import { requireSession } from "@/features/auth/guard";
 
 export interface AuditLogActionResponse {
   success: boolean;
@@ -11,21 +12,27 @@ export interface AuditLogActionResponse {
 
 /**
  * Server Action: Mengambil Jejak Notifikasi Akses Medis (Audit Log) untuk Pasien
- * Menampilkan aktivitas siapa dan faskes apa yang mengakses/merujuk data medis pasien
+ * Pasien hanya dapat melihat audit log miliknya sendiri (Anti-BOLA).
  */
-export async function getPatientAuditLogsServerAction(patientId: string = "P-101") {
+export async function getPatientAuditLogsServerAction(patientId?: string) {
+  const auth = await requireSession(["pasien", "admin"], "getPatientAuditLogs");
+  if (!auth.ok) {
+    return { success: false, message: auth.message, data: [] };
+  }
+
+  const targetPatientId = auth.role === "admin" && patientId ? patientId : auth.session.id;
+
   try {
-    // Ambil log yang menargetkan pasien ini atau aktornya adalah pasien ini
     const logs = await prisma.securityAuditLog.findMany({
       where: {
         OR: [
-          { targetResource: { contains: patientId } },
-          { actorId: patientId },
-          { detail: { contains: patientId } },
+          { targetResource: { contains: targetPatientId } },
+          { actorId: targetPatientId },
+          { detail: { contains: targetPatientId } },
         ],
       },
       orderBy: { timestamp: "desc" },
-      take: 20,
+      take: 30,
     });
 
     return { success: true, data: logs };
@@ -36,26 +43,25 @@ export async function getPatientAuditLogsServerAction(patientId: string = "P-101
 }
 
 /**
- * Server Action: Mencatat Notifikasi Kejadian Akses Baru ke Basis Data PostgreSQL
+ * Server Action: Mencatat Notifikasi Kejadian Akses / Keamanan Baru ke PostgreSQL
+ * Identitas aktor (actorId, actorName, actorRole) dikunci dari sesi server terverifikasi
+ * agar klien tidak dapat memalsukan identitas log SIEM.
  */
 export async function createAuditLogServerAction(params: {
   actorId?: string;
-  actorName: string;
-  actorRole: "pasien" | "nakes" | "staf" | "admin";
+  actorName?: string;
+  actorRole?: "pasien" | "nakes" | "staf" | "admin";
   action: AuditAction;
   targetResource: string;
   severity?: AuditSeverity;
   detail: string;
 }): Promise<AuditLogActionResponse> {
-  const {
-    actorId,
-    actorName,
-    actorRole,
-    action,
-    targetResource,
-    severity = AuditSeverity.INFO,
-    detail,
-  } = params;
+  const auth = await requireSession(["pasien", "nakes", "staf", "admin"], "createAuditLog");
+  if (!auth.ok) {
+    return { success: false, message: auth.message };
+  }
+
+  const { action, targetResource, severity = AuditSeverity.INFO, detail } = params;
 
   try {
     const roleMap: Record<string, UserRole> = {
@@ -67,9 +73,9 @@ export async function createAuditLogServerAction(params: {
 
     const saved = await prisma.securityAuditLog.create({
       data: {
-        actorId,
-        actorName,
-        actorRole: roleMap[actorRole] || UserRole.pasien,
+        actorId: auth.session.id,
+        actorName: auth.session.name,
+        actorRole: roleMap[auth.role] || UserRole.pasien,
         action,
         targetResource,
         ipAddress: "127.0.0.1",

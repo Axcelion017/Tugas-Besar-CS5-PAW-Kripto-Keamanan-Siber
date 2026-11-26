@@ -82,7 +82,7 @@ export default function PasienDashboardPage() {
             familyMembers: (p.familyMembers as unknown as FamilyMember[]) || [],
             lastVisit: "-",
             hasAccess: true,
-            encryptionKeyHex: p.encryptionKeyHex || s.encryptionKeyHex || "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90",
+            encryptionKeyHex: p.encryptionKeyHex || s.encryptionKeyHex || "",
             statusKyc: dbRes.data.statusAccount === "VERIFIED" ? "VERIFIED" : "PENDING",
           };
         }
@@ -114,7 +114,7 @@ export default function PasienDashboardPage() {
             familyMembers: [],
             lastVisit: "-",
             hasAccess: true,
-            encryptionKeyHex: "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90",
+            encryptionKeyHex: s.encryptionKeyHex || "",
             statusKyc: "PENDING",
           };
         }

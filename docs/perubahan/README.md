@@ -1,0 +1,13 @@
+# Direktori Pencatatan Perubahan (Change Log & Refactor History) — JagaMedis
+
+Direktori `docs/perubahan/` berfungsi sebagai arsip resmi dan terstruktur untuk mencatat setiap perubahan berkas, migrasi basis data, stempel waktu pengerjaan, serta bukti pengujian (*Quality Gates*) pada tiap fase perombakan arsitektur **JagaMedis** berdasarkan Master Plan di [audit_menyeluruh_jagamedis_22Nov2026.md](../audit/audit_menyeluruh_jagamedis_22Nov2026.md).
+
+## Indeks Catatan Perubahan per Fase
+
+| Fase | Branch Git | Tanggal & Waktu (WIB) | Fokus Utama | Status | Dokumen Rincian |
+| :--- | :--- | :--- | :--- | :---: | :--- |
+| **Fase 0** | `Week-7` $\rightarrow$ `main` | 22–26 Nov 2026 | Penguncian baseline Modul 7 & merge PR #12 | **SELESAI** | Tercatat di [AI_LOG.md](../../AI_LOG.md) & [modul07.md](../praktikum/modul07.md) |
+| **Fase 1** (`P0`) | `refactor/fase-1-security-crypto` | 26 Nov 2026, 07:55–08:15 WIB | Sesi Persisten DB, `proxy.ts` & `requireSession`, Anti-BOLA, Kriptografi AEAD+HKDF+AAD *Fail-Closed*, HTTP Security Headers | **SELESAI & TERVERIFIKASI** | [fase-1-security-crypto-2026-11-26.md](./fase-1-security-crypto-2026-11-26.md) |
+| **Fase 2** (`P1`) | *(Rencana)* `refactor/fase-2-end-to-end-db` | — | Eliminasi *Split-Brain* `localStorage` & integritas alur End-to-End 4 peran 100% PostgreSQL | **BELUM DIMULAI** | — |
+| **Fase 3** (`P2`) | *(Rencana)* `refactor/fase-3-architecture-pwa` | — | Pemecahan *God Files* ke `features/`, Server Components, & Aktivasi Penuh PWA Offline-First | **BELUM DIMULAI** | — |
+| **Fase 4** (`P3`) | *(Rencana)* `refactor/fase-4-ui-a11y-qa` | — | Usability Klinis (NISTIR 7804), Aksesibilitas WCAG 2.1 AA, & E2E Testing + DevOps | **BELUM DIMULAI** | — |

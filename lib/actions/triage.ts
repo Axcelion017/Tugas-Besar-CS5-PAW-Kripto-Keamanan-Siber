@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
 import { TriaseSchema } from "@/lib/validations/triage";
-import { TriaseLevel } from "@prisma/client";
+import { AuditAction, AuditSeverity, TriaseLevel } from "@prisma/client";
+import { requireSession, recordSecurityAuditBestEffort } from "@/features/auth/guard";
 
 function safeRevalidate(path: string) {
   try {
@@ -21,13 +22,18 @@ export interface TriageActionResponse {
 
 /**
  * Server Action: Pengkajian Triase Awal Pasien (Tanda Vital & Triase Level)
- * Menyimpan data ke tabel `triage_assessments` di PostgreSQL
+ * Dibatasi khusus Staf Triase, Nakes, atau Admin (`requireSession`).
  */
 export async function submitTriageServerAction(
   appointmentId: string,
   rawData: Record<string, unknown>,
-  staffId: string = "STF-01"
+  staffIdParam?: string
 ): Promise<TriageActionResponse> {
+  const auth = await requireSession(["staf", "nakes", "admin"], `submitTriage:${appointmentId}`);
+  if (!auth.ok) {
+    return { success: false, message: auth.message };
+  }
+
   const validation = TriaseSchema.safeParse(rawData);
   if (!validation.success) {
     return {
@@ -58,12 +64,26 @@ export async function submitTriageServerAction(
       return { success: false, message: "Tiket kunjungan pasien tidak ditemukan." };
     }
 
+    // Pastikan staffId valid mengacu pada tabel staff_members di DB (derive dari sesi staf)
+    let resolvedStaffId = auth.role === "staf" ? auth.session.id : staffIdParam || "STF-01";
+    const staffExists = await prisma.staffMember.findUnique({ where: { id: resolvedStaffId } });
+    if (!staffExists) {
+      const fallbackStaff = await prisma.staffMember.findFirst({
+        where: { faskesId: apt.faskesId },
+        select: { id: true },
+      });
+      if (!fallbackStaff) {
+        return { success: false, message: "Identitas staf pemeriksa triase tidak valid." };
+      }
+      resolvedStaffId = fallbackStaff.id;
+    }
+
     const triageId = `TRG-${appointmentId.slice(-4)}`;
 
     const saved = await prisma.triageAssessment.upsert({
       where: { appointmentId },
       update: {
-        staffId,
+        staffId: resolvedStaffId,
         systolic,
         diastolic,
         heartRate,
@@ -78,7 +98,7 @@ export async function submitTriageServerAction(
       create: {
         id: triageId,
         appointmentId,
-        staffId,
+        staffId: resolvedStaffId,
         systolic,
         diastolic,
         heartRate,
@@ -92,15 +112,20 @@ export async function submitTriageServerAction(
       },
     });
 
+    await recordSecurityAuditBestEffort({
+      actorId: auth.session.id,
+      actorName: auth.session.name,
+      actorRole: auth.role,
+      action: AuditAction.CHECK_IN_TRIAGE,
+      targetResource: `/api/triage/${appointmentId}`,
+      severity: AuditSeverity.INFO,
+      detail: `Pengkajian triase pasien antrean ${appointmentId} disimpan dengan kategori ${triaseLevel}.`,
+    });
+
     safeRevalidate("/staf");
     safeRevalidate("/staf/triase");
     safeRevalidate("/nakes");
 
-    // =========================================================================
-    // [PERBAIKAN / SOLUSI GALAT 2]:
-    // Melakukan sanitasi instans class Prisma.Decimal menjadi JavaScript primitive number
-    // sehingga mematuhi aturan serialisasi React Server Component (RSC) Next.js.
-    // =========================================================================
     return {
       success: true,
       message: "Pengkajian tanda vital dan kategori triase berhasil disimpan ke basis data.",

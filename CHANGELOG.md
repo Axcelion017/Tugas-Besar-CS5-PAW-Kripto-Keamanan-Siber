@@ -1,6 +1,24 @@
 # CHANGELOG — JagaMedis
 
-Semua perubahan besar pada proyek Resilio-Health didokumentasikan di sini.
+Semua perubahan besar pada proyek JagaMedis (sebelumnya Resilio-Health) didokumentasikan di sini.
+
+---
+
+## [v0.3.0-fase1] - 2026-11-26 — Fase 1 Hardening: Keamanan Server-Side, Sesi Persisten & Kriptografi AEAD Nyata
+> Rincian file & stempel waktu lengkap: [docs/perubahan/fase-1-security-crypto-2026-11-26.md](docs/perubahan/fase-1-security-crypto-2026-11-26.md)
+
+### Keamanan & Autentikasi Server-Side (`F1.1` & `F1.2`)
+- **Sesi Persisten PostgreSQL (`sessions`)**: Menambahkan model `Session` (migrasi `20261126011004_add_persistent_sessions`) sehingga sesi HTTP-Only bertahan saat server restart dan langsung hangus saat logout.
+- **Guard Terpusat & Next.js 16 Proxy**: Menambahkan `features/auth/guard.ts` (`requireSession(allowedRoles)`) dan `proxy.ts` (konvensi resmi Next.js 16 pengganti `middleware.ts`) untuk proteksi rute dashboard.
+- **Penghapusan Vektor Eskalasi**: Menghapus pemulihan sesi berbasis cookie non-HttpOnly `resilio_user_role` di `lib/auth/auth.ts` (diganti `syncSessionFromServer()` via `GET /api/auth/session`) serta menghapus seluruh cabang perbandingan password plaintext & fallback `DEMO_USERS` (kini 100% `bcrypt.compare`).
+- **Pertahanan Anti-BOLA/IDOR Menyeluruh**: Memasang `requireSession` di seluruh Server Actions (`auth`, `appointment`, `clinical`, `consent`, `faskes`, `ticket`, `triage`, `audit`), menghapus bypass `|| "DOC-01"` & `|| "P-101"`, menegakkan `validUntil > now`, masking NIK di server, menyembunyikan PII/`encryptionKeyHex` saat akses ditolak, serta mewajibkan PIN 6-digit pada penugasan DPJP (`assignDpjpServerAction`).
+
+### Kriptografi Nyata & HTTP Security Headers (`F1.3` & `F1.4`)
+- **Layanan Kriptografi RME Terpusat (`features/medical-records/crypto-service.ts`)**: Menerapkan HKDF Key Separation (RFC 5869) + AES-256-GCM (IV acak 96-bit CSPRNG) + AAD terikat (`PATIENT:{id}|RECORD:{id}|V:{v}`) + Encrypt-then-MAC HMAC-SHA256.
+- **Anti-Timing Attack & Key Separation Biner**: Mengganti komparasi string `===` pada `lib/crypto/hmac.ts` menjadi *constant-time* `crypto.subtle.verify("HMAC", ...)` (mitigasi CWE-208) dan memisahkan sub-kunci HKDF pada `encryptBinaryAttachment` / `decryptBinaryAttachment`.
+- **Fail-Closed Murni & Immutable Addendum**: Menghapus seluruh enkripsi palsu Base64/Hex, static IV/HMAC, hardcoded fallback keys, serta fallback data klinis fiktif (`120/80`, `Amlodipine`). Kegagalan HMAC/dekripsi langsung memblokir tampilan, memunculkan alert, dan mencatat `HMAC_MISMATCH` ke SIEM. Penambahan resep/prosedur kini membuat versi Addendum baru.
+- **HTTP Security Headers (`next.config.ts`)**: Menambahkan `Content-Security-Policy`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy`, dan `Permissions-Policy`.
+- **Pengujian Otomatis**: Menambahkan 7 skenario uji *Quality Gates* Fase 1 (`tests/phase1-security-crypto.test.ts`), total **40/40 tes Vitest lulus (100%)**.
 
 ---
 

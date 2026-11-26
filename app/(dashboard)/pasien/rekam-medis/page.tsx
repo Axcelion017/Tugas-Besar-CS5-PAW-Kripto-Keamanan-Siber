@@ -3,37 +3,15 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { getUserSession, UserSession } from "@/lib/auth/auth";
-import { decryptAES } from "@/lib/crypto/aes";
-import { verifyHMAC } from "@/lib/crypto/hmac";
 import { getStorageData, EncryptedMedicalRecord } from "@/lib/db/mockData";
 import { getMedicalRecordsServerAction } from "@/lib/actions/clinical";
+import { createAuditLogServerAction } from "@/lib/actions/audit";
+import {
+  CanonicalSoapPayload,
+  decryptMedicalRecordPayload,
+} from "@/features/medical-records/crypto-service";
 
-interface DecryptedRecordPayload {
-  subjective?: string;
-  vitalSigns?: {
-    systolic?: number;
-    diastolic?: number;
-    heartRate?: number;
-    temperature?: number;
-    spo2?: number;
-  };
-  assessment?: {
-    icd10?: string;
-    desc?: string;
-  };
-  plan?: {
-    resep?: string[];
-    tindakan?: string;
-  };
-  meta?: {
-    dokterId?: string;
-    dokterNama?: string;
-    dokterStr?: string;
-    faskesNama?: string;
-    timestamp?: string;
-  };
-  [key: string]: unknown;
-}
+type DecryptedRecordPayload = CanonicalSoapPayload;
 
 interface EnrichedMedicalRecord extends EncryptedMedicalRecord {
   dokterSip?: string;
@@ -44,121 +22,7 @@ interface EnrichedMedicalRecord extends EncryptedMedicalRecord {
   tindakanStaf?: string;
 }
 
-const DEFAULT_RECORDS: EnrichedMedicalRecord[] = [
-  {
-    recordId: "REC-2026-001",
-    patientId: "P-101",
-    patientName: "Budi Santoso",
-    faskesId: "FAS-01",
-    faskesNama: "RSUP Dr. Sardjito",
-    dokterStr: "31.1.1.100.2.22.123456",
-    dokterNama: "dr. Andi Pratama, Sp.PD",
-    dokterSpecialty: "Spesialis Penyakit Dalam (Internal Medicine)",
-    dokterSip: "503/SIP.DOKTER/2026/014",
-    perawatNama: "Ns. Maya Indah, S.Kep",
-    perawatNip: "198804122015022001",
-    perawatPosisi: "Perawat Pelaksana Triase & Admisi Rawat Jalan",
-    tindakanStaf: "Pengkajian tanda vital fisik, penapisan risiko jatuh, dan pemantauan saturasi O2 loket",
-    primaryIcd10: "I10",
-    diagnosisShort: "Hipertensi Esensial (Tekanan Darah Tinggi)",
-    encryptedPayload:
-      "7b227375626a656374697665223a2250617369656e206d656e67656c75682074656e676b756b2062657261742064616e20707573696e67222c22766974616c5369676e73223a7b22737973746f6c6963223a3134352c2264696173746f6c6963223a39322c22686561727452617465223a38322c2274656d7065726174757265223a33362e367d2c226173736573736d656e74223a7b226963643130223a22493130222c2264657363223a22486970657274656e7369204573656e7369616c227d2c22706c616e223a7b227265736570223a5b22416d6c6f646970696e652031306d6720317831222c224b616e646573617274616e20386d6720317831225d2c2274696e64616b616e223a224b6f6e74726f6c2074656e73692032206d696e676775206c616769227d7d",
-    ivHex: "1a2b3c4d5e6f7a8b9c0d1e2f",
-    hmacDigest: "5f8d93c18b7642e09a3d4c1b72e5a9c8f01b2c3d4e5f60718293a4b5c6d7e8f9",
-    timestamp: "10 Oktober 2026, 10:30 WIB",
-    version: 1,
-    medicalImages: [
-      {
-        id: "IMG-01",
-        title: "Foto Rontgen Thorax AP/PA",
-        type: "RONTGEN",
-        encryptedBlobHex: "42494e4152595f585241595f54484f524158",
-        ivHex: "1a2b3c4d5e6f7a8b9c0d1e2f",
-        hmacDigest: "5f8d93c18b7642e09a3d4c1b72e5a9c8f01b2c3d4e5f60718293a4b5c6d7e8f9",
-        mimeType: "image/jpeg",
-        timestamp: "10 Oktober 2026",
-        notes: "Cor dan pulmo dalam batas normal, kardiomegali ringan (CTR ~52%).",
-      },
-    ],
-  },
-  {
-    recordId: "REC-2026-002",
-    patientId: "P-101",
-    patientName: "Budi Santoso",
-    faskesId: "FAS-01",
-    faskesNama: "RSUP Dr. Sardjito",
-    dokterStr: "31.1.1.100.2.22.123456",
-    dokterNama: "dr. Andi Pratama, Sp.PD",
-    dokterSpecialty: "Spesialis Penyakit Dalam (Internal Medicine)",
-    dokterSip: "503/SIP.DOKTER/2026/014",
-    perawatNama: "Ns. Maya Indah, S.Kep",
-    perawatNip: "198804122015022001",
-    perawatPosisi: "Perawat Pelaksana Triase & Admisi Rawat Jalan",
-    tindakanStaf: "Pemeriksaan gula darah sewaktu (GDS) dan edukasi kepatuhan obat",
-    primaryIcd10: "E11",
-    diagnosisShort: "Diabetes Melitus Tipe 2 (Gula Darah)",
-    encryptedPayload:
-      "7b227375626a656374697665223a224c656d61732064616e20736572696e672068617573222c22766974616c5369676e73223a7b22737973746f6c6963223a3133302c2264696173746f6c6963223a38352c22686561727452617465223a37362c2274656d7065726174757265223a33362e357d2c226173736573736d656e74223a7b226963643130223a22453131222c2264657363223a224469616265746573204d656c6974757320546970652032227d2c22706c616e223a7b227265736570223a5b224d6574666f726d696e203530306d6720327831225d2c2274696e64616b616e223a22446965742072656e6461682067756c61227d7d",
-    ivHex: "2b3c4d5e6f7a8b9c0d1e2f3a",
-    hmacDigest: "6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6071",
-    timestamp: "25 September 2026, 09:15 WIB",
-    version: 1,
-  },
-];
-
-async function smartDecryptPayload(
-  payload: string,
-  ivHex: string,
-  keyHex: string
-): Promise<DecryptedRecordPayload | null> {
-  if (!payload) return null;
-
-  // 1. Coba dekripsi AES-256-GCM native
-  try {
-    const plain = await decryptAES(payload, ivHex, keyHex);
-    return JSON.parse(plain) as DecryptedRecordPayload;
-  } catch {
-    // lanjut
-  }
-
-  // 2. Coba jika hex string JSON
-  try {
-    const cleanHex = payload.trim();
-    if (/^[0-9a-fA-F]+$/.test(cleanHex) && cleanHex.length % 2 === 0) {
-      const buf = new Uint8Array(cleanHex.length / 2);
-      for (let i = 0; i < cleanHex.length; i += 2) {
-        buf[i / 2] = parseInt(cleanHex.substring(i, i + 2), 16);
-      }
-      const text = new TextDecoder().decode(buf);
-      if (text.trim().startsWith("{") && text.trim().endsWith("}")) {
-        return JSON.parse(text.trim()) as DecryptedRecordPayload;
-      }
-    }
-  } catch {
-    // lanjut
-  }
-
-  // 3. Coba jika Base64 JSON
-  try {
-    const decodedBase64 = atob(payload);
-    if (decodedBase64.trim().startsWith("{") && decodedBase64.trim().endsWith("}")) {
-      return JSON.parse(decodedBase64.trim()) as DecryptedRecordPayload;
-    }
-  } catch {
-    // lanjut
-  }
-
-  // 4. Coba langsung string JSON plaintext
-  try {
-    if (payload.trim().startsWith("{") && payload.trim().endsWith("}")) {
-      return JSON.parse(payload.trim()) as DecryptedRecordPayload;
-    }
-  } catch {
-    // ignore
-  }
-
-  return null;
-}
+// Helper pengurai detail resep obat untuk tampilan pasien
 
 interface PrescriptionDetail {
   medicineName: string;
@@ -289,6 +153,7 @@ export default function RekamMedisPasienPage() {
   const [records, setRecords] = useState<EnrichedMedicalRecord[]>([]);
   const [decryptedMap, setDecryptedMap] = useState<Record<string, DecryptedRecordPayload>>({});
   const [hmacStatusMap, setHmacStatusMap] = useState<Record<string, boolean>>({});
+  const [decryptErrorMap, setDecryptErrorMap] = useState<Record<string, string>>({});
   const [isDecryptingAll, setIsDecryptingAll] = useState(false);
   const [filterQuery, setFilterQuery] = useState("");
 
@@ -381,10 +246,10 @@ export default function RekamMedisPasienPage() {
         // fallback
       }
 
-      // 2. Jika DB kosong, gabungkan dengan mock data lokal
+      // 2. Fallback offline hanya mengambil berkas milik sesi pasien saat ini (Anti-BOLA, tidak pernah membocorkan P-101)
       if (recordList.length === 0) {
-        const stored = getStorageData<EnrichedMedicalRecord[]>("resilio_records", DEFAULT_RECORDS);
-        recordList = stored.length > 0 ? stored : DEFAULT_RECORDS;
+        const stored = getStorageData<EnrichedMedicalRecord[]>("resilio_records", []);
+        recordList = stored.filter((r) => r.patientId === s.id);
       }
 
       setRecords(recordList);
@@ -393,41 +258,50 @@ export default function RekamMedisPasienPage() {
     loadData();
   }, []);
 
-  const patientKey =
-    session?.encryptionKeyHex ||
-    "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90";
+  const patientKey = session?.encryptionKeyHex;
 
   const handleDecryptSingle = async (rec: EnrichedMedicalRecord) => {
-    try {
-      // 1. Verifikasi Integritas HMAC
-      let isIntegrityValid = false;
-      try {
-        isIntegrityValid = await verifyHMAC(rec.encryptedPayload, rec.hmacDigest, patientKey);
-      } catch {
-        isIntegrityValid = false;
-      }
-      setHmacStatusMap((prev) => ({ ...prev, [rec.recordId]: isIntegrityValid }));
+    setDecryptErrorMap((prev) => {
+      const next = { ...prev };
+      delete next[rec.recordId];
+      return next;
+    });
 
-      // 2. Dekripsi Data Cerdas (Mendukung AES-GCM, Hex JSON, Base64 & Plain)
-      const parsedData = await smartDecryptPayload(rec.encryptedPayload, rec.ivHex, patientKey);
-
-      if (parsedData) {
-        setDecryptedMap((prev) => ({ ...prev, [rec.recordId]: parsedData }));
-      } else {
-        // Fallback data terstruktur jika format payload memerlukan adaptasi
-        setDecryptedMap((prev) => ({
-          ...prev,
-          [rec.recordId]: {
-            subjective: "Pemeriksaan medis rawat jalan poliklinik spesialis.",
-            vitalSigns: { systolic: 120, diastolic: 80, heartRate: 75, temperature: 36.5, spo2: 98 },
-            assessment: { icd10: rec.primaryIcd10, desc: rec.diagnosisShort },
-            plan: { resep: ["Obat terapi sesuai indikasi dokter penanggung jawab"], tindakan: "Kontrol evaluasi berkala" },
-          },
-        }));
+    const result = await decryptMedicalRecordPayload(
+      {
+        encryptedPayload: rec.encryptedPayload,
+        ivHex: rec.ivHex,
+        hmacDigest: rec.hmacDigest,
+      },
+      patientKey,
+      {
+        patientId: rec.patientId,
+        recordId: rec.recordId,
+        version: rec.version,
       }
-    } catch (e: unknown) {
-      console.warn("Decrypt single error:", e);
+    );
+
+    if (result.ok) {
+      setHmacStatusMap((prev) => ({ ...prev, [rec.recordId]: true }));
+      setDecryptedMap((prev) => ({ ...prev, [rec.recordId]: result.data }));
+      return;
     }
+
+    // Fail-Closed Murni: Blokir tampilan konten klinis, hapus data dekripsi, dan catat SIEM
+    setHmacStatusMap((prev) => ({ ...prev, [rec.recordId]: false }));
+    setDecryptedMap((prev) => {
+      const next = { ...prev };
+      delete next[rec.recordId];
+      return next;
+    });
+    setDecryptErrorMap((prev) => ({ ...prev, [rec.recordId]: result.message }));
+
+    await createAuditLogServerAction({
+      action: "HMAC_MISMATCH",
+      targetResource: `/api/rme/record/${rec.recordId}`,
+      severity: "CRITICAL",
+      detail: `Fail-Closed Triggered di Portal Pasien (${result.errorCode}): ${result.message}`,
+    }).catch(() => {});
   };
 
   const handleDecryptAll = async () => {
@@ -618,6 +492,20 @@ export default function RekamMedisPasienPage() {
                   </div>
 
                   {/* KONTEN TERDEKRIPSI / TERLINDUNGI */}
+                  {decryptErrorMap[rec.recordId] && (
+                    <div
+                      role="alert"
+                      className="p-4 rounded-2xl bg-red-50 border border-red-300 text-red-900 text-xs space-y-1"
+                    >
+                      <p className="font-black uppercase tracking-wider text-red-700">
+                        PROSEDUR FAIL-CLOSED — VERIFIKASI INTEGRITAS GAGAL
+                      </p>
+                      <p className="font-semibold">{decryptErrorMap[rec.recordId]}</p>
+                      <p className="text-[11px] font-mono text-red-700">
+                        Insiden HMAC_MISMATCH telah dicatat ke audit keamanan. Konten medis diblokir demi keselamatan pasien.
+                      </p>
+                    </div>
+                  )}
                   {!isDecrypted ? (
                     <div className="p-5 rounded-2xl bg-slate-50 border border-dashed border-slate-300 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
                       <div className="space-y-0.5">
