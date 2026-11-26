@@ -30,7 +30,7 @@ Resilio-Health menyelesaikan permasalahan tersebut dengan:
 | Aspek Pengembangan | Milestone 1 (`v0.1`) — Baseline Antarmuka | Milestone 2 (`v0.2`) — Integrasi Server & DB |
 | :--- | :--- | :--- |
 | **Penyimpanan Data** | Mock memory & `localStorage` statis. | **Database Relasional Fisik PostgreSQL 17** via Prisma ORM 7 (`@prisma/adapter-pg`). |
-| **Operasi CRUD** | Mutasi state lokal di peramban. | **CRUD Lengkap 100% Persisten**: Antrean (`appointments`) dan Izin Akses (`access_grants`) mendukung Create, Read, Update, dan Delete melalui Server Actions. |
+| **Operasi CRUD** | Mutasi state lokal di peramban. | **Alur End-to-End 4 Peran 100% PostgreSQL**: Seluruh alur Pasien, Staf Triase, Dokter DPJP, dan Konsol Admin bebas *split-brain* `localStorage` dengan transaksi atomik & penegakan Kill-Switch server-side. |
 | **Validasi Masukan** | Pengecekan atribut dasar HTML5. | **Pertahanan Berlapis Zod v4**: Validasi tipe data ketat, batas fisiologis tensi, format NIK 16 digit, dan medikolegal di sisi server. |
 | **Autentikasi & Sesi** | Variabel state klien. | **Sesi Persisten PostgreSQL (`sessions`) + Cookie HTTP-Only** (`resilio_session_token`), Next.js 16 `proxy.ts`, `requireSession(allowedRoles)`, 100% `bcrypt.compare`, & HTTP Security Headers. |
 | **Onboarding Pengguna** | Pendaftaran monolitik panjang. | **Progressive Onboarding & Restricted Mode**: Pendaftaran akun cepat, edit data mandiri, dan gembok fitur medis sebelum e-KYC NIK disetujui. |
@@ -110,7 +110,7 @@ Sistem Resilio-Health dibangun dengan arsitektur teknologi modern yang terbagi k
 | **Data Visualization** | **Recharts** | `^2.15.0` | Visualisasi grafik tren tanda vital dinamis (Sistolik, Diastolik, Detak Jantung) pada dashboard pasien sesuai Permenkes 24/2022. |
 | **Client-Side Cryptography** | **W3C Web Crypto API** | Native Standard | Enkripsi simetris AES-256-GCM (kunci 256-bit unik pasien, CSPRNG IV 96-bit), enkripsi citra biner, dan tag integritas HMAC-SHA256 langsung di peramban (*Zero-Knowledge*). |
 | **Offline-First Engine** | **PWA Service Worker & IndexedDB** | Web Standard | PWA Service Worker (`public/sw.js`) dengan penyimpanan biner IndexedDB berkapasitas besar untuk ketahanan operasional saat internet rumah sakit terputus. |
-| **Testing Suite** | **Vitest** | `^5.0.4` | Framework pengujian unit & integrasi otomatis berkecepatan tinggi memverifikasi **40 skenario** (kriptografi AEAD/HKDF, validasi Zod, RBAC, transaksi `RESTRICT`, & *Quality Gates* keamanan Fase 1). |
+| **Testing Suite** | **Vitest** | `^5.0.4` | Framework pengujian unit & integrasi otomatis berkecepatan tinggi memverifikasi **44 skenario** (kriptografi AEAD/HKDF, validasi Zod, RBAC, transaksi `RESTRICT`, *Quality Gates* keamanan Fase 1, & alur End-to-End 4 peran PostgreSQL Fase 2). |
 | **Linter & Code Quality** | **ESLint** | `^9.0.0` | Analisis statis kualitas kode dengan 0 error dan 0 warning. |
 
 ---

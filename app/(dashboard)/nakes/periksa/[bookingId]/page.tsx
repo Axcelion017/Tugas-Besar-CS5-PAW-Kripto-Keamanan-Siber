@@ -23,7 +23,10 @@ import {
   EncryptedMedicalImage,
 } from "@/lib/db/mockData";
 import { PemeriksaanKlinisSchema } from "@/lib/validations/clinical";
-import { submitPemeriksaanKlinisAction } from "@/lib/actions/clinical";
+import {
+  submitPemeriksaanKlinisAction,
+  getAppointmentForExamServerAction,
+} from "@/lib/actions/clinical";
 import { PrintableMedicalResume } from "@/components/clinical/PrintableMedicalResume";
 
 
@@ -108,58 +111,82 @@ export default function ClinicalExaminationPage({
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
+    let mounted = true;
+
+    async function loadExamContext() {
       const s = getUserSession();
-      if (s) {
-        setSession(s);
-        const allApts = getStorageData<Appointment[]>("resilio_appointments", MOCK_APPOINTMENTS);
-        const aptList = allApts.length > 0 ? allApts : MOCK_APPOINTMENTS;
-        const apt = aptList.find((a) => a.id === bookingId) || MOCK_APPOINTMENTS.find((a) => a.id === bookingId);
-        
-        if (!apt) {
-          setNotFound(true);
-          setIsLoading(false);
-          return;
-        }
-
-        setAppointment(apt);
-        setSubjective(apt.keluhanAwal);
-        // Jika ada tanda vital dari perawat triase, otomatis isi
-        if (apt.triaseVitals) {
-          setSystolic(apt.triaseVitals.systolic.toString());
-          setDiastolic(apt.triaseVitals.diastolic.toString());
-          setHeartRate(apt.triaseVitals.heartRate.toString());
-          setTemperature(apt.triaseVitals.temperature.toString());
-          setSpo2(apt.triaseVitals.spo2.toString());
-        }
-
-        const allPatients = getStorageData<Patient[]>("resilio_patients", MOCK_PATIENTS);
-        const patientList = allPatients.length > 0 ? allPatients : MOCK_PATIENTS;
-        const foundPatient =
-          patientList.find((pt) => pt.id === apt.pasienId || (apt.pasienNik && pt.nik === apt.pasienNik)) ||
-          MOCK_PATIENTS.find((pt) => pt.id === apt.pasienId || (apt.pasienNik && pt.nik === apt.pasienNik));
-        
-        if (!foundPatient) {
-          setNotFound(true);
-          setIsLoading(false);
-          return;
-        }
-
-        const safePatient: Patient = {
-          ...foundPatient,
-          allergies: Array.isArray(foundPatient.allergies) ? foundPatient.allergies : [],
-          emergencyContact: foundPatient.emergencyContact || {
-            name: "Keluarga Terdaftar",
-            relation: "Keluarga",
-            phone: "-",
-          },
-        };
-
-        setPatient(safePatient);
+      if (!s) {
+        if (mounted) setIsLoading(false);
+        return;
       }
-      setIsLoading(false);
-    }, 0);
-    return () => clearTimeout(timer);
+      if (mounted) setSession(s);
+
+      // 1. Utamakan PostgreSQL sebagai Single Source of Truth
+      try {
+        const dbRes = await getAppointmentForExamServerAction(bookingId);
+        if (mounted && dbRes.success && dbRes.data) {
+          const { appointment: dbApt, patient: dbPatient } = dbRes.data;
+          setAppointment(dbApt as unknown as Appointment);
+          setSubjective(dbApt.keluhanAwal || "");
+          if (dbApt.triaseVitals) {
+            setSystolic(String(dbApt.triaseVitals.systolic));
+            setDiastolic(String(dbApt.triaseVitals.diastolic));
+            setHeartRate(String(dbApt.triaseVitals.heartRate));
+            setTemperature(String(dbApt.triaseVitals.temperature));
+            setSpo2(String(dbApt.triaseVitals.spo2));
+          }
+          setPatient(dbPatient as unknown as Patient);
+          setIsLoading(false);
+          return;
+        }
+      } catch (err) {
+        console.warn("Exam DB load error:", err);
+      }
+
+      // 2. Fallback offline hanya jika browser benar-benar offline
+      if (mounted && !navigator.onLine) {
+        const allApts = getStorageData<Appointment[]>("resilio_appointments", MOCK_APPOINTMENTS);
+        const apt = allApts.find((a) => a.id === bookingId);
+        if (apt) {
+          setAppointment(apt);
+          setSubjective(apt.keluhanAwal);
+          if (apt.triaseVitals) {
+            setSystolic(apt.triaseVitals.systolic.toString());
+            setDiastolic(apt.triaseVitals.diastolic.toString());
+            setHeartRate(apt.triaseVitals.heartRate.toString());
+            setTemperature(apt.triaseVitals.temperature.toString());
+            setSpo2(apt.triaseVitals.spo2.toString());
+          }
+          const allPatients = getStorageData<Patient[]>("resilio_patients", MOCK_PATIENTS);
+          const foundPatient = allPatients.find(
+            (pt) => pt.id === apt.pasienId || (apt.pasienNik && pt.nik === apt.pasienNik)
+          );
+          if (foundPatient) {
+            setPatient({
+              ...foundPatient,
+              allergies: Array.isArray(foundPatient.allergies) ? foundPatient.allergies : [],
+              emergencyContact: foundPatient.emergencyContact || {
+                name: "Keluarga Terdaftar",
+                relation: "Keluarga",
+                phone: "-",
+              },
+            });
+            setIsLoading(false);
+            return;
+          }
+        }
+      }
+
+      if (mounted) {
+        setNotFound(true);
+        setIsLoading(false);
+      }
+    }
+
+    loadExamContext();
+    return () => {
+      mounted = false;
+    };
   }, [bookingId]);
 
   if (notFound) {
@@ -317,8 +344,28 @@ export default function ClinicalExaminationPage({
           .split("\n")
           .map((r) => r.trim())
           .filter(Boolean),
-        tindakan: planAction,
+        tindakan: `[ICD-9: ${icd9Procedure}] ${planAction || "Observasi klinis"}`,
       },
+      // Sertakan seluruh input klinis Tab 2–5 ke dalam payload terenkripsi AEAD
+      gcs: {
+        eye: Number(gcsEye),
+        verbal: Number(gcsVerbal),
+        motor: Number(gcsMotor),
+        total: Number(gcsEye) + Number(gcsVerbal) + Number(gcsMotor),
+      },
+      icd9Procedure,
+      dischargeDisposition,
+      suratSakit: berikanSuratSakit ? { lamaHari: Number(lamaHariSakit) } : null,
+      rujukan: isRujukan
+        ? {
+            faskesId: rujukanFaskesId,
+            faskesNama: rujukanTujuan,
+            dokterId: rujukanDokterId,
+            urgensi: rujukanUrgensi,
+            alasan: rujukanAlasan,
+          }
+        : null,
+      jadwalKontrol,
       meta: {
         dokterId: session.id,
         dokterNama: session.name,
@@ -444,7 +491,43 @@ export default function ClinicalExaminationPage({
           Stasiun Nakes
         </Link>
         <span>/</span>
-        <span>Pemeriksaan Klinis DPJP (SOAP, Citra Medis & Kriptografi)</span>
+        <span>Pemeriksaan Klinis SOAP ({appointment.id})</span>
+      </div>
+
+      {/* STICKY PATIENT BANNER (NISTIR 7804 — Patient Identification Safety di seluruh 5 tab) */}
+      <div className="sticky top-14 z-10 bg-slate-900 text-white px-4 sm:px-6 py-3 rounded-2xl shadow-md border border-slate-700 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2.5 text-xs">
+          <span className="font-black text-sm text-white">{patient.name}</span>
+          <span className="font-mono text-[11px] bg-white/10 px-2 py-0.5 rounded-md text-slate-200">
+            {patient.mrn}
+          </span>
+          <span className="text-slate-300">
+            {patient.gender === "L" ? "Laki-laki" : "Perempuan"}, {patient.age} th • Gol. {patient.bloodType}
+          </span>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {patientAllergies.length > 0 ? (
+            <span className="px-2.5 py-1 rounded-full bg-red-600 text-white text-[11px] font-black uppercase tracking-wider">
+              ALERGI: {patientAllergies.join(", ")}
+            </span>
+          ) : (
+            <span className="px-2.5 py-1 rounded-full bg-emerald-600/30 text-emerald-200 border border-emerald-500/40 text-[11px] font-bold">
+              Tanpa Alergi Obat Tercatat
+            </span>
+          )}
+          <span
+            className={`px-2.5 py-1 rounded-full text-[11px] font-black uppercase ${
+              appointment.triaseLevel === "MERAH"
+                ? "bg-red-600 text-white"
+                : appointment.triaseLevel === "KUNING"
+                ? "bg-amber-500 text-slate-950"
+                : "bg-emerald-600 text-white"
+            }`}
+          >
+            Triase: {appointment.triaseLevel || "HIJAU"}
+          </span>
+        </div>
       </div>
 
       {/* Header Info Pasien & Triase */}

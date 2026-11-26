@@ -1,31 +1,23 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { getUserSession, UserSession } from "@/lib/auth/auth";
-import {
-  MOCK_APPOINTMENTS,
-  MOCK_PATIENTS,
-  getStorageData,
-  setStorageData,
-  Appointment,
-  Patient,
-} from "@/lib/db/mockData";
-import { SkeletonDisruptionNotice } from "@/components/ui/Skeleton";
+import { Appointment } from "@/lib/db/mockData";
+import { SkeletonDisruptionNotice, DashboardSkeleton } from "@/components/ui/Skeleton";
 import { WalkInAdmisiSchema } from "@/lib/validations/triage";
-
-function generateWalkInId(prefix: string) {
-  return `${prefix}-${Date.now().toString().slice(-4)}`;
-}
-
-function generatePin() {
-  return Math.floor(100000 + Math.random() * 900000).toString();
-}
+import {
+  getAppointmentsServerAction,
+  checkInAppointmentServerAction,
+  createWalkInAppointmentServerAction,
+} from "@/lib/actions/appointment";
 
 export default function StafAdmisiPage() {
   const [session, setSession] = useState<UserSession | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [patients, setPatients] = useState<Patient[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmittingWalkIn, setIsSubmittingWalkIn] = useState(false);
+  const [checkingInId, setCheckingInId] = useState<string | null>(null);
 
   // State Pendaftaran Pasien Walk-In
   const [showWalkInModal, setShowWalkInModal] = useState(false);
@@ -33,63 +25,110 @@ export default function StafAdmisiPage() {
   const [walkInKeluhan, setWalkInKeluhan] = useState("");
   const [walkInPoli, setWalkInPoli] = useState("Poli Penyakit Dalam");
   const [notif, setNotif] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [walkInError, setWalkInError] = useState<string | null>(null);
   const [isOfflineMode, setIsOfflineMode] = useState(false);
+
+  const loadAppointmentsFromDb = useCallback(async () => {
+    try {
+      const res = await getAppointmentsServerAction();
+      if (res.success && Array.isArray(res.data)) {
+        const mapped: Appointment[] = (
+          res.data as unknown as Array<{
+            id: string;
+            patientId: string;
+            patient?: { name?: string; nik?: string };
+            faskesId: string;
+            faskes?: { nama?: string };
+            doctorId: string;
+            doctor?: { name?: string };
+            poli: string;
+            tanggal: string;
+            jam: string;
+            keluhanAwal: string;
+            status: string;
+            consentActive?: boolean;
+            checkInTime?: string | null;
+          }>
+        ).map((a) => ({
+          id: a.id,
+          pasienId: a.patientId,
+          pasienNama: a.patient?.name || "Pasien Terdaftar",
+          pasienNik: a.patient?.nik || "-",
+          faskesId: a.faskesId,
+          faskesNama: a.faskes?.nama || "RSUP Dr. Sardjito",
+          dokterId: a.doctorId,
+          dokterNama: a.doctor?.name || "Dokter DPJP",
+          poli: a.poli,
+          tanggal: new Date(a.tanggal).toISOString().split("T")[0],
+          jam: a.jam,
+          keluhanAwal: a.keluhanAwal,
+          status: (a.status as Appointment["status"]) || "PENDING_ARRIVAL",
+          consentActive: !!a.consentActive,
+          checkInTime: a.checkInTime
+            ? new Date(a.checkInTime).toLocaleTimeString("id-ID", {
+                hour: "2-digit",
+                minute: "2-digit",
+              }) + " WIB"
+            : undefined,
+        }));
+        setAppointments(mapped);
+      }
+    } catch (err) {
+      console.warn("Gagal memuat daftar antrean loket dari PostgreSQL:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => {
       const mode = localStorage.getItem("resilio_network_mode");
       setIsOfflineMode(mode === "offline");
+      const s = getUserSession();
+      if (s) setSession(s);
+      void loadAppointmentsFromDb();
     }, 0);
+
     const checkOffline = () => {
       const mode = localStorage.getItem("resilio_network_mode");
       setIsOfflineMode(mode === "offline");
     };
     window.addEventListener("storage", checkOffline);
+
     return () => {
       clearTimeout(timer);
       window.removeEventListener("storage", checkOffline);
     };
-  }, []);
+  }, [loadAppointmentsFromDb]);
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      const s = getUserSession();
-      if (s) {
-        setSession(s);
-        const allApts = getStorageData<Appointment[]>("resilio_appointments", MOCK_APPOINTMENTS);
-        setAppointments(allApts);
-        const allPts = getStorageData<Patient[]>("resilio_patients", MOCK_PATIENTS);
-        setPatients(allPts);
+  const handleCheckIn = async (aptId: string) => {
+    setErrorMsg(null);
+    setNotif(null);
+    setCheckingInId(aptId);
+
+    try {
+      const res = await checkInAppointmentServerAction(aptId);
+      if (!res.success) {
+        setErrorMsg(res.message || "Gagal melakukan check-in pasien.");
+        return;
       }
-    }, 0);
-    return () => clearTimeout(timer);
-  }, []);
 
-  const handleCheckIn = (aptId: string) => {
-    const allApts = getStorageData<Appointment[]>("resilio_appointments", MOCK_APPOINTMENTS);
-    const updated = allApts.map((a) =>
-      a.id === aptId
-        ? {
-            ...a,
-            status: "WAITING_TRIAGE" as const,
-            checkInTime: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) + " WIB",
-          }
-        : a
-    );
-    setStorageData("resilio_appointments", updated);
-    setAppointments(updated);
-    setNotif(`Pasien ${aptId} berhasil check-in. Pasien diarahkan ke Ruang Triase Keperawatan.`);
-    setTimeout(() => setNotif(null), 4000);
+      setNotif(res.message || `Pasien ${aptId} berhasil check-in dan diarahkan ke Ruang Triase.`);
+      await loadAppointmentsFromDb();
+    } catch {
+      setErrorMsg("Terjadi kesalahan jaringan saat check-in pasien.");
+    } finally {
+      setCheckingInId(null);
+    }
   };
 
-  const [walkInError, setWalkInError] = useState<string | null>(null);
-
-  const handleRegisterWalkIn = (e: React.FormEvent) => {
+  const handleRegisterWalkIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setWalkInError(null);
+    setErrorMsg(null);
     const cleanNik = walkInNik.trim();
 
-    // Validasi menggunakan Skema Zod
     const validation = WalkInAdmisiSchema.safeParse({
       nik: cleanNik,
       keluhan: walkInKeluhan,
@@ -101,53 +140,50 @@ export default function StafAdmisiPage() {
       return;
     }
 
-    const existingPatient = patients.find((p) => p.nik === cleanNik);
+    setIsSubmittingWalkIn(true);
+    try {
+      const res = await createWalkInAppointmentServerAction({
+        nik: cleanNik,
+        keluhan: walkInKeluhan,
+        poli: walkInPoli,
+      });
 
-    const patientName = existingPatient ? existingPatient.name : "Pasien Umum Walk-in";
-    const patientId = existingPatient ? existingPatient.id : generateWalkInId("P");
+      if (!res.success) {
+        setWalkInError(res.message || "Gagal mendaftarkan pasien walk-in ke PostgreSQL.");
+        return;
+      }
 
-    const newApt: Appointment = {
-      id: generateWalkInId("APT-WALKIN"),
-      pasienId: patientId,
-      pasienNama: patientName,
-      pasienNik: cleanNik,
-      faskesId: session?.faskesId || "FAS-01",
-      faskesNama: session?.faskesName || "RSUP Dr. Sardjito",
-      dokterId: "DOC-01",
-      dokterNama: "dr. Andi Pratama, Sp.PD",
-      poli: walkInPoli,
-      tanggal: new Date().toISOString().split("T")[0],
-      jam: "Loket Langsung",
-      keluhanAwal: walkInKeluhan || "Pendaftaran langsung di loket faskes",
-      status: "WAITING_TRIAGE",
-      consentActive: true,
-      consentPin: generatePin(),
-      checkInTime: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) + " WIB",
-    };
-
-    const allApts = getStorageData<Appointment[]>("resilio_appointments", MOCK_APPOINTMENTS);
-    const updated = [newApt, ...allApts];
-    setStorageData("resilio_appointments", updated);
-    setAppointments(updated);
-
-    setShowWalkInModal(false);
-    setWalkInNik("");
-    setWalkInKeluhan("");
-    setNotif(`Pasien walk-in ${patientName} (NIK: ${cleanNik}) berhasil didaftarkan langsung ke Ruang Triase.`);
-    setTimeout(() => setNotif(null), 4000);
+      setShowWalkInModal(false);
+      setWalkInNik("");
+      setWalkInKeluhan("");
+      setNotif(res.message || "Pasien walk-in berhasil didaftarkan ke Loket Triase.");
+      await loadAppointmentsFromDb();
+    } catch {
+      setWalkInError("Terjadi kendala koneksi saat mendaftarkan pasien walk-in.");
+    } finally {
+      setIsSubmittingWalkIn(false);
+    }
   };
 
-  if (!session) return null;
+  if (isLoading || !session) {
+    return <DashboardSkeleton noticeText="Memuat antrean loket admisi dari basis data PostgreSQL..." />;
+  }
 
-  const pendingCheckIn = appointments.filter((a) => a.status === "PENDING_ARRIVAL" || a.status === "WAITING");
+  const pendingCheckIn = appointments.filter(
+    (a) => a.status === "PENDING_ARRIVAL" || a.status === "WAITING"
+  );
   const waitingTriage = appointments.filter((a) => a.status === "WAITING_TRIAGE");
-  const waitingDoctor = appointments.filter((a) => a.status === "WAITING_DOCTOR" || a.status === "IN_EXAMINATION");
+  const waitingDoctor = appointments.filter(
+    (a) =>
+      a.status === "WAITING_DOCTOR" ||
+      a.status === "IN_EXAMINATION" ||
+      a.status === "IN_PROGRESS"
+  );
 
   return (
     <div className="space-y-6">
-      {/* Notice ketika terjadi gangguan jaringan / mode offline */}
       {isOfflineMode && (
-        <SkeletonDisruptionNotice message="Terdeteksi gangguan jaringan: Pendaftaran antrean loket dan triase berjalan dalam mode lokal terproteksi (IndexedDB Offline Engine)." />
+        <SkeletonDisruptionNotice message="Terdeteksi gangguan jaringan: Pendaftaran antrean loket dan triase berjalan dalam mode lokal terproteksi." />
       )}
 
       {/* Header Staf Admisi & Triase */}
@@ -165,12 +201,13 @@ export default function StafAdmisiPage() {
             {session.name}
           </h1>
           <p className="text-xs text-slate-500 font-medium mt-0.5">
-            {session.faskesName || "RSUP Dr. Sardjito"} • Gerbang Validasi Kedatangan & Triase Awal
+            {session.faskesName || "RSUP Dr. Sardjito"} • Gerbang Validasi Kedatangan & Triase Awal (PostgreSQL)
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
           <button
+            type="button"
             onClick={() => setShowWalkInModal(true)}
             className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md transition cursor-pointer"
           >
@@ -186,8 +223,14 @@ export default function StafAdmisiPage() {
       </div>
 
       {notif && (
-        <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-bold">
+        <div role="status" className="p-4 rounded-2xl bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-bold">
           {notif}
+        </div>
+      )}
+
+      {errorMsg && (
+        <div role="alert" className="p-4 rounded-2xl bg-red-50 border border-red-300 text-red-900 text-xs font-bold">
+          {errorMsg}
         </div>
       )}
 
@@ -198,7 +241,7 @@ export default function StafAdmisiPage() {
             Booking Menunggu Check-in
           </p>
           <p className="text-2xl font-black text-slate-900 mt-1">{pendingCheckIn.length}</p>
-          <span className="text-[10px] text-slate-500">Pasien belum tiba di faskes</span>
+          <span className="text-[11px] text-slate-500">Pasien belum tiba di faskes</span>
         </div>
 
         <div className="bg-white p-5 rounded-2xl border border-amber-200 shadow-xs">
@@ -206,7 +249,7 @@ export default function StafAdmisiPage() {
             Menunggu Triase Keperawatan
           </p>
           <p className="text-2xl font-black text-amber-800 mt-1">{waitingTriage.length}</p>
-          <span className="text-[10px] text-amber-600 font-semibold">Siap diukur tensi & keluhan awal</span>
+          <span className="text-[11px] text-amber-700 font-semibold">Siap diukur tensi & keluhan awal</span>
         </div>
 
         <div className="bg-white p-5 rounded-2xl border border-emerald-200 shadow-xs">
@@ -214,7 +257,7 @@ export default function StafAdmisiPage() {
             Menunggu / Diperiksa Dokter
           </p>
           <p className="text-2xl font-black text-emerald-800 mt-1">{waitingDoctor.length}</p>
-          <span className="text-[10px] text-emerald-600">Di ruang poli dokter (DPJP)</span>
+          <span className="text-[11px] text-emerald-700">Di ruang poli dokter (DPJP)</span>
         </div>
       </div>
 
@@ -251,6 +294,7 @@ export default function StafAdmisiPage() {
               {appointments.map((a) => {
                 const isPendingArrival = a.status === "PENDING_ARRIVAL" || a.status === "WAITING";
                 const isTriaseReady = a.status === "WAITING_TRIAGE";
+                const isWaitingDpjp = a.status === "WAITING_DOCTOR";
 
                 return (
                   <tr key={a.id} className="hover:bg-slate-50/50 transition">
@@ -265,33 +309,44 @@ export default function StafAdmisiPage() {
                           isPendingArrival
                             ? "bg-slate-100 text-slate-700 border-slate-300"
                             : isTriaseReady
-                            ? "bg-amber-100 text-amber-800 border-amber-300 animate-pulse"
+                            ? "bg-amber-100 text-amber-800 border-amber-300"
+                            : isWaitingDpjp
+                            ? "bg-purple-100 text-purple-800 border-purple-200"
                             : a.status === "IN_EXAMINATION" || a.status === "IN_PROGRESS"
                             ? "bg-blue-100 text-blue-800 border-blue-200"
                             : "bg-emerald-100 text-emerald-800 border-emerald-200"
                         }`}
                       >
-                        {a.status.replace("_", " ")}
+                        {a.status.replace(/_/g, " ")}
                       </span>
                     </td>
                     <td className="p-4 text-right">
                       {isPendingArrival ? (
                         <button
+                          type="button"
+                          disabled={checkingInId === a.id}
                           onClick={() => handleCheckIn(a.id)}
-                          className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold uppercase transition cursor-pointer"
+                          className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 disabled:bg-slate-400 text-white rounded-lg text-xs font-bold uppercase transition cursor-pointer"
                         >
-                          Check-in Pasien
+                          {checkingInId === a.id ? "Memproses..." : "Check-in Pasien"}
                         </button>
                       ) : isTriaseReady ? (
                         <Link
-                          href="/staf/triase"
+                          href={`/staf/triase?aptId=${encodeURIComponent(a.id)}`}
                           className="inline-block px-3.5 py-1.5 bg-slate-900 hover:bg-black text-white rounded-lg text-xs font-bold uppercase transition"
                         >
                           Mulai Triase →
                         </Link>
+                      ) : isWaitingDpjp ? (
+                        <Link
+                          href={`/staf/assign-dpjp?aptId=${encodeURIComponent(a.id)}`}
+                          className="inline-block px-3.5 py-1.5 bg-purple-700 hover:bg-purple-800 text-white rounded-lg text-xs font-bold uppercase transition"
+                        >
+                          Assign DPJP →
+                        </Link>
                       ) : (
-                        <span className="text-[11px] text-slate-400 font-semibold italic">
-                          Sudah di Triase / Dokter
+                        <span className="text-[11px] text-slate-500 font-semibold italic">
+                          {a.status === "COMPLETED" ? "Selesai Diperiksa" : "Di Ruang Dokter"}
                         </span>
                       )}
                     </td>
@@ -311,21 +366,22 @@ export default function StafAdmisiPage() {
               Pendaftaran Pasien Datang Langsung (Walk-In)
             </h3>
             <p className="text-xs text-slate-500">
-              Daftarkan pasien yang datang langsung ke meja loket tanpa booking online terlebih dahulu.
+              Daftarkan pasien terdaftar (via NIK 16 digit) langsung ke antrean Loket Triase PostgreSQL.
             </p>
 
             {walkInError && (
-              <div className="p-3 rounded-xl bg-red-50 border border-red-300 text-red-900 text-xs font-bold">
+              <div role="alert" className="p-3 rounded-xl bg-red-50 border border-red-300 text-red-900 text-xs font-bold">
                 {walkInError}
               </div>
             )}
 
             <form onSubmit={handleRegisterWalkIn} className="space-y-4 pt-2">
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                <label htmlFor="walkin-nik" className="block text-xs font-bold text-slate-700 uppercase mb-1">
                   Nomor Induk Kependudukan (NIK) *
                 </label>
                 <input
+                  id="walkin-nik"
                   type="text"
                   required
                   maxLength={16}
@@ -337,10 +393,11 @@ export default function StafAdmisiPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                <label htmlFor="walkin-poli" className="block text-xs font-bold text-slate-700 uppercase mb-1">
                   Poli Pelayanan Dituju
                 </label>
                 <select
+                  id="walkin-poli"
                   value={walkInPoli}
                   onChange={(e) => setWalkInPoli(e.target.value)}
                   className="w-full px-4 py-2 rounded-xl border border-slate-300 text-sm bg-white font-semibold"
@@ -348,36 +405,39 @@ export default function StafAdmisiPage() {
                   <option value="Poli Penyakit Dalam">Poli Penyakit Dalam</option>
                   <option value="Poli Kardiologi (Jantung)">Poli Kardiologi (Jantung)</option>
                   <option value="Poli Anak">Poli Anak</option>
-                  <option value="IGD (Gawat Darurat)">IGD (Gawat Darurat)</option>
+                  <option value="Instalasi Gawat Darurat (IGD)">Instalasi Gawat Darurat (IGD)</option>
                 </select>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
-                  Keluhan Awal yang Dirasakan Pasien
+                <label htmlFor="walkin-keluhan" className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                  Keluhan Awal Pasien *
                 </label>
                 <textarea
+                  id="walkin-keluhan"
+                  required
                   rows={3}
                   value={walkInKeluhan}
                   onChange={(e) => setWalkInKeluhan(e.target.value)}
-                  placeholder="Contoh: Pasien datang dengan keluhan demam tinggi 3 hari dan mual..."
+                  placeholder="Ringkasan keluhan saat pasien melapor di loket..."
                   className="w-full px-4 py-2 rounded-xl border border-slate-300 text-sm"
                 />
               </div>
 
-              <div className="flex justify-end gap-2 pt-2 border-t">
+              <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
                   onClick={() => setShowWalkInModal(false)}
-                  className="px-4 py-2 bg-slate-100 text-slate-700 text-xs font-bold rounded-xl"
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold cursor-pointer"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl"
+                  disabled={isSubmittingWalkIn}
+                  className="px-5 py-2 bg-amber-600 hover:bg-amber-700 disabled:bg-slate-400 text-white rounded-xl text-xs font-black uppercase tracking-wider cursor-pointer"
                 >
-                  Daftarkan & Kirim ke Triase
+                  {isSubmittingWalkIn ? "Menyimpan..." : "Simpan & Kirim ke Triase"}
                 </button>
               </div>
             </form>

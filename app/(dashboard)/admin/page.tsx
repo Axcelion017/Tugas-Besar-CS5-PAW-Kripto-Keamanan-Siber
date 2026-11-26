@@ -3,56 +3,70 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { getUserSession, UserSession } from "@/lib/auth/auth";
-import {
-  MOCK_KYC_REQUESTS,
-  MOCK_KYD_REQUESTS,
-  MOCK_SECURITY_LOGS,
-  MOCK_TROUBLE_TICKETS,
-  MOCK_FASKES,
-  getStorageData,
-  KycSubmission,
-  KydSubmission,
-  SecurityAuditLog,
-  TroubleTicket,
-  Faskes,
-} from "@/lib/db/mockData";
+import { getAdminDashboardSummaryServerAction } from "@/lib/actions/admin";
+import { DashboardSkeleton } from "@/components/ui/Skeleton";
+
+interface AdminLogItem {
+  id: string;
+  timestamp: string;
+  actorName: string;
+  actorRole: string;
+  action: string;
+  targetResource: string;
+  ipAddress: string;
+  severity: string;
+  detail: string;
+}
+
+interface AdminTicketItem {
+  id: string;
+  pengirimNama: string;
+  pengirimRole: string;
+  kategori: string;
+  judul: string;
+  deskripsi: string;
+  status: string;
+  createdAt: string;
+}
 
 export default function AdminOverviewPage() {
   const [session, setSession] = useState<UserSession | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [kycPending, setKycPending] = useState(0);
   const [kydPending, setKydPending] = useState(0);
-  const [securityEvents, setSecurityEvents] = useState<SecurityAuditLog[]>([]);
-  const [troubles, setTroubles] = useState<TroubleTicket[]>([]);
-  const [faskesList, setFaskesList] = useState<Faskes[]>([]);
+  const [idorCount, setIdorCount] = useState(0);
+  const [quarantinedFaskesCount, setQuarantinedFaskesCount] = useState(0);
+  const [securityEvents, setSecurityEvents] = useState<AdminLogItem[]>([]);
+  const [troubles, setTroubles] = useState<AdminTicketItem[]>([]);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
+    async function loadAdminSummary() {
       const s = getUserSession();
-      if (s) {
-        setSession(s);
-        const kyc = getStorageData<KycSubmission[]>("resilio_kyc_list", MOCK_KYC_REQUESTS);
-        setKycPending(kyc.filter((k) => k.status === "PENDING").length);
+      if (s) setSession(s);
 
-        const kyd = getStorageData<KydSubmission[]>("resilio_kyd_list", MOCK_KYD_REQUESTS);
-        setKydPending(kyd.filter((k) => k.status === "PENDING").length);
-
-        const logs = getStorageData<SecurityAuditLog[]>("resilio_security_logs", MOCK_SECURITY_LOGS);
-        setSecurityEvents(logs);
-
-        const tcks = getStorageData<TroubleTicket[]>("resilio_trouble_tickets", MOCK_TROUBLE_TICKETS);
-        setTroubles(tcks.filter((t) => t.status !== "RESOLVED"));
-
-        const fas = getStorageData<Faskes[]>("resilio_faskes_list", MOCK_FASKES);
-        setFaskesList(fas);
+      try {
+        const res = await getAdminDashboardSummaryServerAction();
+        if (res.success && res.data) {
+          setKycPending(res.data.kycPendingCount);
+          setKydPending(res.data.kydPendingCount);
+          setIdorCount(res.data.idorCount);
+          setQuarantinedFaskesCount(res.data.quarantinedFaskesCount);
+          setSecurityEvents(res.data.recentLogs);
+          setTroubles(res.data.openTickets);
+        }
+      } catch (err) {
+        console.warn("Gagal memuat ringkasan Admin dari PostgreSQL:", err);
+      } finally {
+        setIsLoading(false);
       }
-    }, 0);
-    return () => clearTimeout(timer);
+    }
+
+    loadAdminSummary();
   }, []);
 
-  if (!session) return null;
-
-  const idorCount = securityEvents.filter((e) => e.action === "IDOR_BLOCKED").length;
-  const quarantinedFaskesCount = faskesList.filter((f) => f.status === "QUARANTINED").length;
+  if (isLoading || !session) {
+    return <DashboardSkeleton noticeText="Memuat data pengawasan regulasi & SIEM dari PostgreSQL..." />;
+  }
 
   return (
     <div className="space-y-8">

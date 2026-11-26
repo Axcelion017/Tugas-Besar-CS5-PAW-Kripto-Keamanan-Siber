@@ -79,7 +79,8 @@ export default function NakesDashboardPage() {
             pasienNama: a.patient?.name || "Pasien",
             pasienNik: a.patient?.nik || "-",
             faskesId: a.faskesId,
-            faskesNama: "RSUP Dr. Sardjito",
+            faskesNama:
+              (a as unknown as { faskes?: { nama?: string } }).faskes?.nama || "RSUP Dr. Sardjito",
             dokterId: a.doctorId,
             dokterNama: s.name,
             poli: a.poli,
@@ -127,8 +128,16 @@ export default function NakesDashboardPage() {
   }
 
   const totalPatients = appointments.length;
-  const inProgressCount = appointments.filter((a) => a.status === "IN_PROGRESS").length;
-  const waitingCount = appointments.filter((a) => a.status === "WAITING").length;
+  const inProgressCount = appointments.filter(
+    (a) => a.status === "IN_PROGRESS" || a.status === "IN_EXAMINATION"
+  ).length;
+  const waitingCount = appointments.filter(
+    (a) =>
+      a.status === "WAITING" ||
+      a.status === "PENDING_ARRIVAL" ||
+      a.status === "WAITING_TRIAGE" ||
+      a.status === "WAITING_DOCTOR"
+  ).length;
   const completedCount = appointments.filter((a) => a.status === "COMPLETED").length;
 
   const allPatients = getStorageData<Patient[]>("resilio_patients", MOCK_PATIENTS);

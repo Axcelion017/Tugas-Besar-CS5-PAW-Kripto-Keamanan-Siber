@@ -20,52 +20,34 @@ interface PatientNotification {
   isRead?: boolean;
 }
 
-const DEFAULT_NOTIFICATIONS: PatientNotification[] = [
-  {
-    id: "NOTIF-01",
-    senderName: "dr. Andi Pratama, Sp.PD",
-    senderRole: "Dokter DPJP",
-    senderFaskes: "RSUP Dr. Sardjito",
-    actionTitle: "Dokter Membuka & Memeriksa Rekam Medis Anda",
-    message: "Dokter telah membuka berkas rekam medis Anda untuk melakukan diagnosis rawat jalan Poli Penyakit Dalam dengan kunci pembungkus sesi aktif.",
-    targetDoc: "Rekam Medis Rawat Jalan (Format SOAP & ICD-10)",
-    timestamp: "Hari ini, 10:15 WIB",
-    severity: "INFO",
-  },
-  {
-    id: "NOTIF-02",
-    senderName: "Sistem Keamanan JagaMedis",
-    senderRole: "Zero-Trust Gateway",
-    senderFaskes: "Pusat Data Medis Kemenkes",
-    actionTitle: "Pemberian Izin Akses Digital (Consent Granted)",
-    message: "Anda telah memberikan izin akses digital kepada RSUP Dr. Sardjito. Rumah sakit ini berhak membaca riwayat diagnosa dan hasil pemeriksaan terdahulu Anda.",
-    targetDoc: "Portabilitas RME Lintas Faskes",
-    timestamp: "Kemarin, 14:30 WIB",
-    severity: "INFO",
-  },
-  {
-    id: "NOTIF-03",
-    senderName: "Ners Maya Kartika, S.Kep",
-    senderRole: "Perawat Triase Loket",
-    senderFaskes: "RSUP Dr. Sardjito",
-    actionTitle: "Pengkajian Triase Tanda Vital Selesai",
-    message: "Perawat telah menginput data fisik tekanan darah, nadi, dan suhu tubuh Anda di loket admisi. Status antrean Anda dialihkan ke dokter pemeriksa.",
-    targetDoc: "Pengkajian Triase Awal Loket",
-    timestamp: "23 Okt 2026, 09:20 WIB",
-    severity: "INFO",
-  },
-  {
-    id: "NOTIF-04",
-    senderName: "Sistem Keamanan JagaMedis",
-    senderRole: "Zero-Trust BOLA Guard",
-    senderFaskes: "Gateway Kemenkes",
-    actionTitle: "Percobaan Akses Ilegal Berhasil Diblokir",
-    message: "Sistem mendeteksi dan menggagalkan percobaan membaca data medis Anda oleh entitas tanpa tiket izin persetujuan sah (Pencegahan IDOR/BOLA 403 Forbidden).",
-    targetDoc: "Proteksi Enkripsi AES-256-GCM",
-    timestamp: "21 Okt 2026, 16:45 WIB",
-    severity: "WARN",
-  },
-];
+function mapAuditActionTitle(action: string): string {
+  switch (action) {
+    case "VIEW_RME":
+      return "Dokter Membuka & Memeriksa Rekam Medis Anda";
+    case "WRITE_RME":
+      return "Rekam Medis Klinis Baru Ditandatangani Dokter";
+    case "REVOKE_CONSENT":
+      return "Pencabutan Izin Akses Medis (1-Click Revoke)";
+    case "BREAK_GLASS_ACCESS":
+      return "Akses Darurat IGD (Break-Glass Protocol)";
+    case "IDOR_BLOCKED":
+      return "Percobaan Akses Tidak Sah Berhasil Diblokir (BOLA Guard)";
+    case "HMAC_MISMATCH":
+      return "Peringatan Integritas Kriptografi (HMAC Mismatch)";
+    case "HMAC_VERIFIED":
+      return "Integritas Berkas Rekam Medis Terverifikasi";
+    case "CHECK_IN_TRIAGE":
+      return "Check-In Loket & Pengkajian Triase Tanda Vital";
+    case "ASSIGN_DPJP":
+      return "Penunjukan Dokter DPJP Terverifikasi PIN";
+    case "QUARANTINE_FASKES":
+      return "Status Keamanan Faskes Diperbarui Regulator";
+    case "LOGIN":
+      return "Sesi Masuk Akun Anda Berhasil";
+    default:
+      return "Aktivitas Akses Berkas Medis";
+  }
+}
 
 export default function PasienAuditLogPage() {
   const [session, setSession] = useState<UserSession | null>(null);
@@ -95,42 +77,35 @@ export default function PasienAuditLogPage() {
             targetResource: string;
             timestamp: Date | string;
             severity: string;
-          }>).map((log) => {
-            let actionTitle = "Aktivitas Akses Berkas Medis";
-            if (log.action === "READ_RME") actionTitle = "Dokter Membuka & Memeriksa Rekam Medis Anda";
-            else if (log.action === "GRANT_ACCESS") actionTitle = "Pemberian Izin Akses Medis (Consent Granted)";
-            else if (log.action === "REVOKE_CONSENT") actionTitle = "Pencabutan Izin Akses Medis (1-Click Revoke)";
-            else if (log.action === "BREAK_GLASS_ACCESS") actionTitle = "Akses Darurat IGD (Break-Glass Protocol)";
-            else if (log.action === "LOGIN_SUCCESS") actionTitle = "Sesi Masuk Akun Anda Berhasil";
-
-            return {
-              id: log.id,
-              senderName: log.actorName,
-              senderRole: log.actorRole.toUpperCase(),
-              senderFaskes: "RSUP Dr. Sardjito",
-              actionTitle,
-              message: log.detail,
-              targetDoc: log.targetResource,
-              timestamp: new Date(log.timestamp).toLocaleString("id-ID", {
-                day: "numeric",
-                month: "short",
-                year: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-              }),
-              severity: (log.severity === "CRITICAL" || log.severity === "WARN" ? "WARN" : "INFO") as "INFO" | "WARN",
-            };
-          });
+          }>).map((log) => ({
+            id: log.id,
+            senderName: log.actorName,
+            senderRole: log.actorRole.toUpperCase(),
+            senderFaskes: "JagaMedis Audit Trail",
+            actionTitle: mapAuditActionTitle(log.action),
+            message: log.detail,
+            targetDoc: log.targetResource,
+            timestamp: new Date(log.timestamp).toLocaleString("id-ID", {
+              day: "numeric",
+              month: "short",
+              year: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
+            severity: (log.severity === "CRITICAL" || log.severity === "WARN" ? "WARN" : "INFO") as
+              | "INFO"
+              | "WARN",
+          }));
 
           setNotifications(mapped);
-          setSelectedNotif(mapped[0]);
+          setSelectedNotif(mapped[0] || null);
         } else {
-          setNotifications(DEFAULT_NOTIFICATIONS);
-          setSelectedNotif(DEFAULT_NOTIFICATIONS[0]);
+          setNotifications([]);
+          setSelectedNotif(null);
         }
       } catch {
-        setNotifications(DEFAULT_NOTIFICATIONS);
-        setSelectedNotif(DEFAULT_NOTIFICATIONS[0]);
+        setNotifications([]);
+        setSelectedNotif(null);
       } finally {
         setIsLoading(false);
       }

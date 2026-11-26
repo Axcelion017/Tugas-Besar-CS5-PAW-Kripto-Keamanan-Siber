@@ -21,112 +21,73 @@ interface WeeklyAppointment {
   faskesName?: string;
 }
 
+function buildDynamicWeekDays(weekOffset: number) {
+  const now = new Date();
+  const todayIso = now.toISOString().split("T")[0];
+  const dayOfWeek = now.getDay(); // 0=Min, 1=Sen, ...
+  const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+  const monday = new Date(now);
+  monday.setDate(now.getDate() + diffToMonday + weekOffset * 7);
+
+  const dayNames = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"];
+  return dayNames.map((dayName, idx) => {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + idx);
+    const dateStr = d.toISOString().split("T")[0];
+    const isToday = dateStr === todayIso;
+    const shortLabel = d.toLocaleDateString("id-ID", { day: "numeric", month: "short" });
+    return {
+      dayName,
+      dateStr,
+      label: isToday ? `${shortLabel} (Hari Ini)` : shortLabel,
+      isToday,
+    };
+  });
+}
+
 export default function NakesJadwalMingguanPage() {
   const router = useRouter();
   const [session, setSession] = useState<UserSession | null>(null);
   const [appointments, setAppointments] = useState<WeeklyAppointment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedFaskes, setSelectedFaskes] = useState("ALL");
+  const [weekOffset, setWeekOffset] = useState(0);
 
   useEffect(() => {
     async function loadSchedule() {
       setIsLoading(true);
       const s = getUserSession();
-      if (!s) return;
+      if (!s) {
+        setIsLoading(false);
+        return;
+      }
       setSession(s);
 
       try {
         const res = await getDoctorCalendarScheduleServerAction(s.id);
-        if (res.success && res.appointments.length > 0) {
-          const mapped: WeeklyAppointment[] = res.appointments.map((a, idx) => ({
-            ...a,
-            faskesName: idx === 1 ? "RS Harapan Sehat" : "RSUP Dr. Sardjito",
-          }));
-          setAppointments(mapped);
-          setIsLoading(false);
-          return;
+        if (res.success && Array.isArray(res.appointments)) {
+          setAppointments(res.appointments);
+        } else {
+          setAppointments([]);
         }
       } catch (err) {
         console.warn("Failed fetching calendar:", err);
+        setAppointments([]);
+      } finally {
+        setIsLoading(false);
       }
-
-      // Fallback data terstruktur jika koneksi offline
-      setAppointments([
-        {
-          id: "APT-2026-001",
-          patientId: "P-101",
-          patientName: "Budi Santoso",
-          patientMrn: "MRN-2026-0081",
-          tanggal: "2026-10-15",
-          jam: "08:30 - 09:15 WIB",
-          poli: "Poli Penyakit Dalam",
-          keluhanAwal: "Kontrol tensi rutin, pusing dan tengkuk berat",
-          status: "IN_EXAMINATION",
-          triaseLevel: "KUNING",
-          faskesName: "RSUP Dr. Sardjito",
-        },
-        {
-          id: "APT-2026-002",
-          patientId: "P-103",
-          patientName: "Ahmad Dahlan",
-          patientMrn: "MRN-2026-0083",
-          tanggal: "2026-10-15",
-          jam: "09:30 - 10:15 WIB",
-          poli: "Poli Penyakit Dalam",
-          keluhanAwal: "Gula darah puasa tinggi dan lemas",
-          status: "WAITING_DOCTOR",
-          triaseLevel: "HIJAU",
-          faskesName: "RSUP Dr. Sardjito",
-        },
-        {
-          id: "APT-2026-003",
-          patientId: "P-102",
-          patientName: "Siti Rahmawati",
-          patientMrn: "MRN-2026-0082",
-          tanggal: "2026-10-15",
-          jam: "10:30 - 11:30 WIB",
-          poli: "Poli Kardiologi (IGD)",
-          keluhanAwal: "Nyeri dada hebat menjalar ke lengan kiri dan sesak akut",
-          status: "IN_PROGRESS",
-          triaseLevel: "MERAH",
-          faskesName: "RS Harapan Sehat",
-        },
-        {
-          id: "APT-2026-004",
-          patientId: "P-104",
-          patientName: "Dewi Lestari",
-          patientMrn: "MRN-2026-0084",
-          tanggal: "2026-10-15",
-          jam: "13:30 - 14:15 WIB",
-          poli: "Poli Penyakit Dalam",
-          keluhanAwal: "Mual muntah berulang dan nyeri ulu hati akut",
-          status: "WAITING_TRIAGE",
-          triaseLevel: "KUNING",
-          faskesName: "RSUP Dr. Sardjito",
-        },
-      ]);
-      setIsLoading(false);
     }
 
     loadSchedule();
   }, []);
 
-  // Filter faskes
   const filteredAppointments = appointments.filter((apt) => {
     if (selectedFaskes === "ALL") return true;
     return apt.faskesName === selectedFaskes;
   });
 
-  // Hari-hari dalam seminggu
-  const weekDays = [
-    { dayName: "Senin", dateStr: "2026-10-12", label: "12 Okt" },
-    { dayName: "Selasa", dateStr: "2026-10-13", label: "13 Okt" },
-    { dayName: "Rabu", dateStr: "2026-10-14", label: "14 Okt" },
-    { dayName: "Kamis", dateStr: "2026-10-15", label: "15 Okt (Hari Ini)", isToday: true },
-    { dayName: "Jumat", dateStr: "2026-10-16", label: "16 Okt" },
-    { dayName: "Sabtu", dateStr: "2026-10-17", label: "17 Okt" },
-    { dayName: "Minggu", dateStr: "2026-10-18", label: "18 Okt" },
-  ];
+  // Hari-hari dinamis dalam minggu aktif (Senin s.d. Minggu) tanpa hardcode tanggal
+  const weekDays = buildDynamicWeekDays(weekOffset);
 
   return (
     <div className="space-y-6">
@@ -148,8 +109,31 @@ export default function NakesJadwalMingguanPage() {
           </p>
         </div>
 
-        {/* Filter Rumah Sakit / Faskes Praktik */}
-        <div className="flex items-center gap-2">
+        {/* Filter Rumah Sakit & Navigasi Minggu Dinamis */}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center bg-slate-100 rounded-xl p-1 text-xs">
+            <button
+              type="button"
+              onClick={() => setWeekOffset((w) => w - 1)}
+              className="px-2.5 py-1.5 rounded-lg font-bold text-slate-700 hover:bg-white cursor-pointer"
+            >
+              ← Minggu Lalu
+            </button>
+            <button
+              type="button"
+              onClick={() => setWeekOffset(0)}
+              className="px-2.5 py-1.5 rounded-lg font-bold text-emerald-800 hover:bg-white cursor-pointer"
+            >
+              Minggu Ini
+            </button>
+            <button
+              type="button"
+              onClick={() => setWeekOffset((w) => w + 1)}
+              className="px-2.5 py-1.5 rounded-lg font-bold text-slate-700 hover:bg-white cursor-pointer"
+            >
+              Berikutnya →
+            </button>
+          </div>
           <span className="text-xs font-bold text-slate-600">Rumah Sakit:</span>
           <select
             value={selectedFaskes}

@@ -4,6 +4,22 @@ Semua perubahan besar pada proyek JagaMedis (sebelumnya Resilio-Health) didokume
 
 ---
 
+## [v0.3.1-fase2] - 2026-11-26 — Fase 2 End-to-End PostgreSQL: Eliminasi *Split-Brain* 4 Peran & Penegakan Kill-Switch
+> Rincian file & stempel waktu lengkap: [docs/perubahan/fase-2-end-to-end-db-2026-11-26.md](docs/perubahan/fase-2-end-to-end-db-2026-11-26.md)
+
+### Alur Pasien & Staf 100% PostgreSQL (`F2.1` & `F2.2`)
+- **Booking & Auto-Consent Atomik**: `createAppointmentServerAction` kini membuat `Appointment` dan `AccessGrant` dalam satu `prisma.$transaction` serta mengembalikan `id` & `consentPin` asli DB ke UI tanpa timpaan `localStorage`.
+- **Direktori Faskes, Consent, Tiket & Audit Log Murni DB**: Memigrasikan `/pasien/faskes`, `/pasien/faskes/[faskesId]`, `/pasien/consent`, `/pasien/tiket-kendala`, dan `/pasien/audit-log` ke PostgreSQL, menghapus grafik vital palsu & notifikasi fiktif di `/pasien`, serta menuntut berkas KTP/swafoto pada pengajuan e-KYC tanpa menimpa `patient.nik` sebelum disetujui Admin.
+- **Admisi, Triase Atomik & CDS Vital Kritis**: Menambahkan `checkInAppointmentServerAction` & `createWalkInAppointmentServerAction`, membungkus `triageAssessment.upsert` + transisi `WAITING_DOCTOR` secara atomik, memasang *one-click handoff* (`?aptId=`), menambahkan auto-highlight peringatan tanda vital kritis di `/staf/triase`, menampilkan hasil triase asli di `/staf/assign-dpjp`, dan memisahkan tab rujukan masuk vs keluar di `/staf/rujukan`.
+
+### Alur Dokter DPJP, Konsol Admin & Kill-Switch (`F2.3` & `F2.4`)
+- **Ruang Periksa DB & Sticky Patient Banner (NISTIR 7804)**: Menambahkan `getAppointmentForExamServerAction` 100% PostgreSQL, memasang **Sticky Patient Banner** (Nama, MRN, Alergi, Level Triase) di seluruh 5 tab `/nakes/periksa/[bookingId]`, menyertakan payload Tab 2–5 ke enkripsi AEAD, menonaktifkan cetak resume sebelum dekripsi lolos, dan menjadikan kalender dokter dinamis (menghapus tanggal hardcode Oktober 2026).
+- **Konsol Admin 100% PostgreSQL (`lib/actions/admin.ts`)**: Menambahkan 8 Server Actions ber-guard `requireSession(["admin"])` untuk ringkasan Admin, SIEM Monitor, e-KYD, Master Faskes, dan Incident Center; memastikan penolakan e-KYC/e-KYD menyimpan `AccountStatus.REJECTED` secara persisten.
+- **Penegakan Kill-Switch Siber Server-Side**: Menolak tegas booking pasien maupun seluruh 5 aksi penulisan klinis (`submitPemeriksaanKlinis`, `saveEncryptedImage`, `addPrescription`, `addLabResult`, `addProcedure`) ketika faskes berstatus `QUARANTINED`.
+- **Pengujian Otomatis**: Menambahkan 4 skenario uji integrasi end-to-end Fase 2 (`tests/phase2-end-to-end.test.ts`), total **44/44 tes Vitest lulus (100%)**.
+
+---
+
 ## [v0.3.0-fase1] - 2026-11-26 — Fase 1 Hardening: Keamanan Server-Side, Sesi Persisten & Kriptografi AEAD Nyata
 > Rincian file & stempel waktu lengkap: [docs/perubahan/fase-1-security-crypto-2026-11-26.md](docs/perubahan/fase-1-security-crypto-2026-11-26.md)
 

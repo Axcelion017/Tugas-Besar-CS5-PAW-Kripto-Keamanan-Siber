@@ -30,17 +30,35 @@ interface DoctorCalendarScheduleProps {
   doctorId?: string;
 }
 
+function formatIsoDate(d: Date): string {
+  return d.toISOString().split("T")[0];
+}
+
+function formatShortIndo(isoDate: string): string {
+  const d = new Date(`${isoDate}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return isoDate;
+  return d.toLocaleDateString("id-ID", { day: "numeric", month: "short" });
+}
+
 export function DoctorCalendarSchedule({
   appointments,
 }: DoctorCalendarScheduleProps) {
   const router = useRouter();
-  const [selectedDate, setSelectedDate] = useState("2026-10-15");
+  const todayIso = formatIsoDate(new Date());
+  const tomorrowDate = new Date();
+  tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+  const tomorrowIso = formatIsoDate(tomorrowDate);
+
+  const [selectedDate, setSelectedDate] = useState<string>("ALL");
   const [viewMode, setViewMode] = useState<"TIMELINE" | "GRID">("TIMELINE");
 
-  // Filter jadwal berdasarkan tanggal yang dipilih
-  const dayAppointments = appointments.filter((apt) => {
-    return apt.tanggal === selectedDate || apt.tanggal.startsWith(selectedDate);
-  });
+  // Filter jadwal berdasarkan tanggal yang dipilih (atau tampilkan semua tanggal aktif)
+  const dayAppointments =
+    selectedDate === "ALL"
+      ? appointments
+      : appointments.filter((apt) => {
+          return apt.tanggal === selectedDate || apt.tanggal.startsWith(selectedDate);
+        });
 
   // Urutan slot jam untuk visual timeline
   const timeSlots = [
@@ -81,26 +99,44 @@ export function DoctorCalendarSchedule({
           <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl p-1 text-xs">
             <button
               type="button"
-              onClick={() => setSelectedDate("2026-10-15")}
+              onClick={() => setSelectedDate("ALL")}
               className={`px-3 py-1.5 rounded-lg font-bold transition cursor-pointer ${
-                selectedDate === "2026-10-15"
+                selectedDate === "ALL"
                   ? "bg-white text-slate-900 shadow-xs"
                   : "text-slate-500 hover:text-slate-900"
               }`}
             >
-              15 Okt (Hari Ini)
+              Semua Jadwal
             </button>
             <button
               type="button"
-              onClick={() => setSelectedDate("2026-10-16")}
+              onClick={() => setSelectedDate(todayIso)}
               className={`px-3 py-1.5 rounded-lg font-bold transition cursor-pointer ${
-                selectedDate === "2026-10-16"
+                selectedDate === todayIso
                   ? "bg-white text-slate-900 shadow-xs"
                   : "text-slate-500 hover:text-slate-900"
               }`}
             >
-              16 Okt (Besok)
+              {formatShortIndo(todayIso)} (Hari Ini)
             </button>
+            <button
+              type="button"
+              onClick={() => setSelectedDate(tomorrowIso)}
+              className={`px-3 py-1.5 rounded-lg font-bold transition cursor-pointer ${
+                selectedDate === tomorrowIso
+                  ? "bg-white text-slate-900 shadow-xs"
+                  : "text-slate-500 hover:text-slate-900"
+              }`}
+            >
+              {formatShortIndo(tomorrowIso)} (Besok)
+            </button>
+            <input
+              type="date"
+              aria-label="Pilih tanggal jadwal dokter"
+              value={selectedDate === "ALL" ? "" : selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value || "ALL")}
+              className="ml-1 px-2 py-1 rounded-lg border border-slate-200 bg-white text-slate-700 font-semibold text-xs"
+            />
           </div>
 
           <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl p-1 text-xs">

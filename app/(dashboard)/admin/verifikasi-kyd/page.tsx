@@ -1,13 +1,13 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { KydSubmission } from "@/lib/db/mockData";
 import {
-  MOCK_KYD_REQUESTS,
-  getStorageData,
-  setStorageData,
-  KydSubmission,
-} from "@/lib/db/mockData";
+  getKydSubmissionsServerAction,
+  approveKydServerAction,
+  rejectKydServerAction,
+} from "@/lib/actions/admin";
 
 export default function VerifikasiKydPage() {
   const [kydList, setKydList] = useState<KydSubmission[]>([]);
@@ -15,41 +15,49 @@ export default function VerifikasiKydPage() {
   const [rejectReason, setRejectReason] = useState("");
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [notif, setNotif] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const loadKydFromDb = useCallback(async () => {
+    try {
+      const res = await getKydSubmissionsServerAction();
+      if (res.success && Array.isArray(res.data)) {
+        setKydList(res.data as unknown as KydSubmission[]);
+      }
+    } catch (err) {
+      console.warn("Load DB KYD error:", err);
+    }
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      const list = getStorageData<KydSubmission[]>("resilio_kyd_list", MOCK_KYD_REQUESTS);
-      setKydList(list);
+      void loadKydFromDb();
     }, 0);
     return () => clearTimeout(timer);
-  }, []);
+  }, [loadKydFromDb]);
 
-  const handleApprove = (item: KydSubmission) => {
-    const all = getStorageData<KydSubmission[]>("resilio_kyd_list", MOCK_KYD_REQUESTS);
-    const updated = all.map((k) =>
-      k.id === item.id ? { ...k, status: "VERIFIED" as const } : k
-    );
-    setStorageData("resilio_kyd_list", updated);
-    setKydList(updated);
-
-    setNotif(`Kredensial ${item.namaLengkap} (${item.spesialisasi}) berhasil diverifikasi Kemenkes.`);
-    setTimeout(() => setNotif(null), 4000);
+  const handleApprove = async (item: KydSubmission) => {
+    setErrorMsg(null);
+    const res = await approveKydServerAction(item.id);
+    if (!res.success) {
+      setErrorMsg(res.message || "Gagal menyetujui kredensial dokter.");
+      return;
+    }
+    setNotif(res.message);
+    await loadKydFromDb();
   };
 
-  const handleReject = () => {
+  const handleReject = async () => {
     if (!selectedKyd) return;
-    const all = getStorageData<KydSubmission[]>("resilio_kyd_list", MOCK_KYD_REQUESTS);
-    const updated = all.map((k) =>
-      k.id === selectedKyd.id
-        ? { ...k, status: "REJECTED" as const, alasanPenolakan: rejectReason || "Nomor STR tidak ditemukan di KKI" }
-        : k
-    );
-    setStorageData("resilio_kyd_list", updated);
-    setKydList(updated);
+    setErrorMsg(null);
+    const res = await rejectKydServerAction(selectedKyd.id, rejectReason);
+    if (!res.success) {
+      setErrorMsg(res.message || "Gagal menolak kredensial dokter.");
+      return;
+    }
     setShowRejectModal(false);
     setRejectReason("");
-    setNotif(`Pengajuan kredensial ${selectedKyd.namaLengkap} ditolak.`);
-    setTimeout(() => setNotif(null), 4000);
+    setNotif(res.message);
+    await loadKydFromDb();
   };
 
   return (
@@ -72,8 +80,14 @@ export default function VerifikasiKydPage() {
       </div>
 
       {notif && (
-        <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-bold">
+        <div role="status" className="p-4 rounded-2xl bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-bold">
           {notif}
+        </div>
+      )}
+
+      {errorMsg && (
+        <div role="alert" className="p-4 rounded-2xl bg-red-50 border border-red-300 text-red-900 text-xs font-bold">
+          {errorMsg}
         </div>
       )}
 

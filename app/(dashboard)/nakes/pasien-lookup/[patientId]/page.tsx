@@ -661,7 +661,14 @@ export default function DoctorPatientDetailPage({
                     <div className="flex flex-wrap items-center gap-2">
                       <button
                         type="button"
-                        onClick={() =>
+                        disabled={!isDecrypted}
+                        title={
+                          isDecrypted
+                            ? "Cetak lembar resume medis resmi rumah sakit"
+                            : "Dekripsi dan verifikasi HMAC berkas terlebih dahulu sebelum mencetak resume medis."
+                        }
+                        onClick={() => {
+                          if (!isDecrypted || !soap) return;
                           setPrintRecordData({
                             recordId: rec.id,
                             faskesNama: rec.faskesNama,
@@ -669,28 +676,28 @@ export default function DoctorPatientDetailPage({
                             patientNik: patient.nik,
                             patientMrn: patient.mrn,
                             tanggalPeriksa: rec.createdAt,
-                            poli: "Poli Penyakit Dalam",
+                            poli: appointments[0]?.poli || "Poli Penyakit Dalam",
                             dokterNama: rec.dokterNama,
                             dokterSpecialty: rec.dokterSpecialty,
                             dokterStr: rec.dokterStr,
                             dokterSip: rec.dokterSip,
                             perawatNama: "Ns. Maya Indah, S.Kep",
                             perawatNip: "198804122015022001",
-                            triaseLevel: "HIJAU (Non-Urgent)",
+                            triaseLevel,
                             triageVitals: {
-                              systolic: soap?.vitalSigns?.systolic ?? 120,
-                              diastolic: soap?.vitalSigns?.diastolic ?? 80,
-                              heartRate: soap?.vitalSigns?.heartRate ?? 75,
-                              temperature: soap?.vitalSigns?.temperature ?? 36.5,
-                              spo2: soap?.vitalSigns?.spo2 ?? 98,
+                              systolic: soap.vitalSigns?.systolic ?? 0,
+                              diastolic: soap.vitalSigns?.diastolic ?? 0,
+                              heartRate: soap.vitalSigns?.heartRate ?? 0,
+                              temperature: soap.vitalSigns?.temperature ?? 0,
+                              spo2: soap.vitalSigns?.spo2 ?? 0,
                             },
-                            subjective: soap?.subjective || "Pemeriksaan medis rawat jalan poliklinik spesialis.",
+                            subjective: soap.subjective || "-",
                             diagnosisIcd10: rec.primaryIcd10,
                             diagnosisShort: rec.diagnosisShort,
                             prosedurIcd9: "89.52",
-                            tindakanMedis: "Pemeriksaan EKG 12-Lead dan Konsultasi DPJP",
-                            prescriptions: soap?.plan?.resep || ["Amlodipine 10mg tab 1x1"],
-                            edukasiDokter: soap?.plan?.tindakan || "Kontrol tensi rutin dan patuhi anjuran pola makan.",
+                            tindakanMedis: soap.plan?.tindakan || "-",
+                            prescriptions: soap.plan?.resep || [],
+                            edukasiDokter: soap.plan?.tindakan || "-",
                             billing: {
                               biayaKonsultasi: 100000,
                               biayaTindakan: 50000,
@@ -700,11 +707,15 @@ export default function DoctorPatientDetailPage({
                             },
                             version: rec.version,
                             addendumReason: rec.addendumReason || undefined,
-                          })
-                        }
-                        className="px-4 py-2 bg-slate-900 hover:bg-black text-white rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer"
+                          });
+                        }}
+                        className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition ${
+                          isDecrypted
+                            ? "bg-slate-900 hover:bg-black text-white cursor-pointer"
+                            : "bg-slate-200 text-slate-500 cursor-not-allowed"
+                        }`}
                       >
-                        Cetak Resume Medis
+                        {isDecrypted ? "Cetak Resume Medis" : "Dekripsi Dulu untuk Cetak"}
                       </button>
 
                       {!isDecrypted && (

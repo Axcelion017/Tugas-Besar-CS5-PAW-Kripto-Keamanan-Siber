@@ -4,7 +4,13 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { PemeriksaanKlinisSchema } from "@/lib/validations/clinical";
 import { prisma } from "@/lib/db/prisma";
-import { AuditAction, AuditSeverity, AppointmentStatus, Prisma } from "@prisma/client";
+import {
+  AuditAction,
+  AuditSeverity,
+  AppointmentStatus,
+  FaskesStatus,
+  Prisma,
+} from "@prisma/client";
 import { requireSession, recordSecurityAuditBestEffort } from "@/features/auth/guard";
 import {
   CanonicalSoapPayload,
@@ -151,6 +157,19 @@ export async function submitPemeriksaanKlinisAction(
 
   const doctorId = auth.session.id;
   const faskesId = auth.session.faskesId || "FAS-01";
+
+  // Penegakan Kill-Switch Siber: tolak penulisan RME jika faskes berstatus QUARANTINED
+  const activeFaskes = await prisma.faskes.findUnique({
+    where: { id: faskesId },
+    select: { id: true, nama: true, status: true },
+  });
+  if (activeFaskes && activeFaskes.status === FaskesStatus.QUARANTINED) {
+    return {
+      success: false,
+      message: `403 Forbidden (Kill-Switch Siber): ${activeFaskes.nama} sedang berstatus KARANTINA oleh Admin Regulator. Penulisan RME ditangguhkan.`,
+    };
+  }
+
   const canAccess =
     hasValidGrantForDoctor(patient.accessGrants, doctorId, faskesId) ||
     hasActiveEncounterForDoctor(patient.appointments, doctorId);
@@ -314,9 +333,13 @@ export async function submitPemeriksaanKlinisAction(
   });
 
   // 5. Revalidate
-  revalidatePath(`/nakes/periksa/${bookingId || "APT-2026-001"}`);
-  revalidatePath("/nakes");
-  revalidatePath("/pasien/rekam-medis");
+  try {
+    revalidatePath(`/nakes/periksa/${bookingId || "APT-2026-001"}`);
+    revalidatePath("/nakes");
+    revalidatePath("/pasien/rekam-medis");
+  } catch {
+    // Diabaikan jika dieksekusi di luar request context Next.js (misal integration test)
+  }
 
   // 6. Redirect (di luar try/catch sesuai aturan Next.js App Router)
   if (formData.get("skipRedirect") === "true") {
@@ -629,6 +652,18 @@ export async function saveEncryptedImageServerAction(params: {
     return {
       success: false,
       message: "Ditolak: Citra medis wajib dienkripsi AES-256-GCM dengan IV acak 96-bit dan HMAC valid.",
+    };
+  }
+
+  const faskesId = auth.session.faskesId || "FAS-01";
+  const activeFaskes = await prisma.faskes.findUnique({
+    where: { id: faskesId },
+    select: { nama: true, status: true },
+  });
+  if (activeFaskes?.status === FaskesStatus.QUARANTINED) {
+    return {
+      success: false,
+      message: `403 Forbidden (Kill-Switch Siber): ${activeFaskes.nama} sedang dikarantina. Unggah citra medis ditangguhkan.`,
     };
   }
 
@@ -1205,6 +1240,18 @@ export async function addPrescriptionToMedicalRecordServerAction(params: {
       return { success: false, message: "Data pasien tidak ditemukan." };
     }
 
+    const faskesId = auth.session.faskesId || "FAS-01";
+    const activeFaskes = await prisma.faskes.findUnique({
+      where: { id: faskesId },
+      select: { nama: true, status: true },
+    });
+    if (activeFaskes?.status === FaskesStatus.QUARANTINED) {
+      return {
+        success: false,
+        message: `403 Forbidden (Kill-Switch Siber): ${activeFaskes.nama} sedang dikarantina. Peresepan obat ditangguhkan.`,
+      };
+    }
+
     const allowed =
       hasValidGrantForDoctor(patient.accessGrants, docId, auth.session.faskesId) ||
       hasActiveEncounterForDoctor(patient.appointments, docId);
@@ -1329,6 +1376,18 @@ export async function addLabResultToMedicalRecordServerAction(params: {
 
     if (!patient) {
       return { success: false, message: "Data pasien tidak ditemukan." };
+    }
+
+    const labFaskesId = auth.session.faskesId || "FAS-01";
+    const labFaskes = await prisma.faskes.findUnique({
+      where: { id: labFaskesId },
+      select: { nama: true, status: true },
+    });
+    if (labFaskes?.status === FaskesStatus.QUARANTINED) {
+      return {
+        success: false,
+        message: `403 Forbidden (Kill-Switch Siber): ${labFaskes.nama} sedang dikarantina. Input hasil lab ditangguhkan.`,
+      };
     }
 
     if (auth.role === "nakes") {
@@ -1456,6 +1515,18 @@ export async function addProcedureToMedicalRecordServerAction(params: {
 
     if (!patient) {
       return { success: false, message: "Data pasien tidak ditemukan." };
+    }
+
+    const procFaskesId = auth.session.faskesId || "FAS-01";
+    const procFaskes = await prisma.faskes.findUnique({
+      where: { id: procFaskesId },
+      select: { nama: true, status: true },
+    });
+    if (procFaskes?.status === FaskesStatus.QUARANTINED) {
+      return {
+        success: false,
+        message: `403 Forbidden (Kill-Switch Siber): ${procFaskes.nama} sedang dikarantina. Pencatatan tindakan medis ditangguhkan.`,
+      };
     }
 
     if (auth.role === "nakes") {
@@ -1600,6 +1671,7 @@ export async function getDoctorCalendarScheduleServerAction(_doctorIdUnused?: st
         patientName: apt.patient.name,
         patientMrn: apt.patient.mrn,
         patientBloodType: apt.patient.bloodType,
+        faskesName: apt.faskes?.nama || "RSUP Dr. Sardjito",
         tanggal: new Date(apt.tanggal).toISOString().split("T")[0],
         jam: apt.jam,
         poli: apt.poli,
@@ -1620,5 +1692,129 @@ export async function getDoctorCalendarScheduleServerAction(_doctorIdUnused?: st
   } catch (err: unknown) {
     console.warn("Get Doctor Calendar Schedule Error:", err);
     return { success: false, appointments: [] };
+  }
+}
+
+/**
+ * Server Action: Mengambil Detail Antrean & Profil Pasien dari PostgreSQL untuk Ruang Periksa Dokter
+ * Menggantikan pembacaan `localStorage` di `/nakes/periksa/[bookingId]` agar booking DB tidak terkena 404.
+ */
+export async function getAppointmentForExamServerAction(bookingId: string) {
+  const auth = await requireSession(["nakes", "admin"], `getAppointmentForExam:${bookingId}`);
+  if (!auth.ok) {
+    return { success: false, message: auth.message, data: null };
+  }
+
+  try {
+    const apt = await prisma.appointment.findUnique({
+      where: { id: bookingId },
+      include: {
+        patient: true,
+        faskes: true,
+        doctor: true,
+        dpjp: true,
+        triageAssessment: true,
+      },
+    });
+
+    if (!apt) {
+      return { success: false, message: "Jadwal pemeriksaan tidak ditemukan di basis data.", data: null };
+    }
+
+    if (auth.role === "nakes") {
+      const doctorId = auth.session.id;
+      const grants = await prisma.accessGrant.findMany({
+        where: { patientId: apt.patientId },
+      });
+      const authorized =
+        apt.doctorId === doctorId ||
+        apt.dpjpId === doctorId ||
+        hasValidGrantForDoctor(grants, doctorId, auth.session.faskesId);
+
+      if (!authorized) {
+        await recordSecurityAuditBestEffort({
+          actorId: doctorId,
+          actorName: auth.session.name,
+          actorRole: auth.role,
+          action: AuditAction.IDOR_BLOCKED,
+          targetResource: `/nakes/periksa/${bookingId}`,
+          severity: AuditSeverity.CRITICAL,
+          detail: `BOLA Guard: Dokter ${doctorId} mencoba membuka ruang periksa antrean ${bookingId} yang bukan wewenangnya.`,
+        });
+        return {
+          success: false,
+          message: "403 Forbidden: Anda bukan dokter DPJP yang ditugaskan untuk antrean ini.",
+          data: null,
+        };
+      }
+    }
+
+    const birthYear = apt.patient.birthDate
+      ? new Date(apt.patient.birthDate).getFullYear()
+      : new Date().getFullYear() - 30;
+    const computedAge = Math.max(0, new Date().getFullYear() - birthYear);
+
+    return {
+      success: true,
+      data: {
+        appointment: {
+          id: apt.id,
+          pasienId: apt.patientId,
+          pasienNama: apt.patient.name,
+          pasienNik: apt.patient.nik,
+          faskesId: apt.faskesId,
+          faskesNama: apt.faskes.nama,
+          faskesStatus: apt.faskes.status,
+          dokterId: apt.dpjpId || apt.doctorId,
+          dokterNama: apt.dpjp?.name || apt.doctor.name,
+          poli: apt.poli,
+          tanggal: apt.tanggal.toISOString().split("T")[0],
+          jam: apt.jam,
+          keluhanAwal: apt.keluhanAwal,
+          status: apt.status,
+          consentActive: apt.consentActive,
+          triaseLevel: apt.triageAssessment?.triaseLevel || undefined,
+          triaseVitals: apt.triageAssessment
+            ? {
+                systolic: apt.triageAssessment.systolic,
+                diastolic: apt.triageAssessment.diastolic,
+                heartRate: apt.triageAssessment.heartRate,
+                temperature: Number(apt.triageAssessment.temperature),
+                respiratoryRate: apt.triageAssessment.respiratoryRate,
+                spo2: apt.triageAssessment.spo2,
+                beratBadan: apt.triageAssessment.beratBadan
+                  ? Number(apt.triageAssessment.beratBadan)
+                  : undefined,
+                tinggiBadan: apt.triageAssessment.tinggiBadan
+                  ? Number(apt.triageAssessment.tinggiBadan)
+                  : undefined,
+              }
+            : undefined,
+        },
+        patient: {
+          id: apt.patient.id,
+          nik: apt.patient.nik,
+          name: apt.patient.name,
+          age: computedAge,
+          gender: apt.patient.gender,
+          mrn: apt.patient.mrn,
+          bloodType: apt.patient.bloodType,
+          birthDate: apt.patient.birthDate ? apt.patient.birthDate.toISOString().split("T")[0] : undefined,
+          allergies: apt.patient.allergies || [],
+          emergencyContact: {
+            name: apt.patient.emergencyContactName,
+            relation: apt.patient.emergencyContactRelation,
+            phone: apt.patient.emergencyContactPhone,
+          },
+          lastVisit: "-",
+          hasAccess: true,
+          encryptionKeyHex: apt.patient.encryptionKeyHex,
+          statusKyc: "VERIFIED" as const,
+        },
+      },
+    };
+  } catch (err: unknown) {
+    console.warn("Get Appointment For Exam Error:", err);
+    return { success: false, message: "Gagal memuat data pemeriksaan dari basis data.", data: null };
   }
 }

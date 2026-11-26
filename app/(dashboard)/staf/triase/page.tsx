@@ -1,24 +1,21 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import {
-  MOCK_APPOINTMENTS,
-  getStorageData,
-  setStorageData,
-  Appointment,
-  TriaseLevel,
-} from "@/lib/db/mockData";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Appointment, TriaseLevel } from "@/lib/db/mockData";
 import { TriaseSchema } from "@/lib/validations/triage";
 import { submitTriageServerAction } from "@/lib/actions/triage";
 import { getAppointmentsServerAction } from "@/lib/actions/appointment";
 import { PrintableMedicalResume } from "@/components/clinical/PrintableMedicalResume";
 
-export default function TriasePemeriksaanAwalPage() {
+function TriaseContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const preselectedAptId = searchParams.get("aptId") || "";
+
   const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [selectedAptId, setSelectedAptId] = useState<string>("");
+  const [selectedAptId, setSelectedAptId] = useState<string>(preselectedAptId);
 
   // Vitals State
   const [systolic, setSystolic] = useState("120");
@@ -31,6 +28,7 @@ export default function TriasePemeriksaanAwalPage() {
   const [tinggiBadan, setTinggiBadan] = useState("168");
   const [triaseLevel, setTriaseLevel] = useState<TriaseLevel>("HIJAU");
   const [catatanPerawat, setCatatanPerawat] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [notif, setNotif] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isPrintOpen, setIsPrintOpen] = useState(false);
@@ -39,31 +37,34 @@ export default function TriasePemeriksaanAwalPage() {
     async function loadData() {
       try {
         const aptsRes = await getAppointmentsServerAction();
-        if (aptsRes.success && aptsRes.data && aptsRes.data.length > 0) {
-          const mappedApts: Appointment[] = (aptsRes.data as unknown as Array<{
-            id: string;
-            patientId: string;
-            patient?: { name?: string; nik?: string };
-            faskesId: string;
-            doctorId: string;
-            doctor?: { name?: string };
-            poli: string;
-            tanggal: Date | string;
-            jam: string;
-            keluhanAwal: string;
-            status: string;
-            consentActive?: boolean;
-            consentPin?: string | null;
-            triageAssessment?: {
-              triaseLevel: string;
-            } | null;
-          }>).map((a) => ({
+        if (aptsRes.success && Array.isArray(aptsRes.data)) {
+          const mappedApts: Appointment[] = (
+            aptsRes.data as unknown as Array<{
+              id: string;
+              patientId: string;
+              patient?: { name?: string; nik?: string };
+              faskesId: string;
+              faskes?: { nama?: string };
+              doctorId: string;
+              doctor?: { name?: string };
+              poli: string;
+              tanggal: Date | string;
+              jam: string;
+              keluhanAwal: string;
+              status: string;
+              consentActive?: boolean;
+              checkInTime?: string | null;
+              triageAssessment?: {
+                triaseLevel: string;
+              } | null;
+            }>
+          ).map((a) => ({
             id: a.id,
             pasienId: a.patientId,
             pasienNama: a.patient?.name || "Pasien",
             pasienNik: a.patient?.nik || "-",
             faskesId: a.faskesId,
-            faskesNama: "RSUP Dr. Sardjito",
+            faskesNama: a.faskes?.nama || "RSUP Dr. Sardjito",
             dokterId: a.doctorId,
             dokterNama: a.doctor?.name || "Dokter DPJP",
             poli: a.poli,
@@ -72,52 +73,79 @@ export default function TriasePemeriksaanAwalPage() {
             keluhanAwal: a.keluhanAwal,
             status: (a.status as Appointment["status"]) || "WAITING_TRIAGE",
             consentActive: !!a.consentActive,
-            consentPin: a.consentPin || undefined,
-            triaseLevel: (a.triageAssessment?.triaseLevel as "HIJAU" | "KUNING" | "MERAH") || undefined,
+            checkInTime: a.checkInTime
+              ? new Date(a.checkInTime).toLocaleTimeString("id-ID", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                }) + " WIB"
+              : undefined,
+            triaseLevel:
+              (a.triageAssessment?.triaseLevel as "HIJAU" | "KUNING" | "MERAH") || undefined,
           }));
-          setAppointments(mappedApts);
-          const triageQueue = mappedApts.filter(
-            (a) => a.status === "WAITING_TRIAGE" || a.status === "PENDING_ARRIVAL"
-          );
-          if (triageQueue.length > 0) {
-            setSelectedAptId(triageQueue[0].id);
-          }
-          return;
-        }
-      } catch {
-        // fallback
-      }
 
-      const allApts = getStorageData<Appointment[]>("resilio_appointments", MOCK_APPOINTMENTS);
-      setAppointments(allApts);
-      const triageQueue = allApts.filter((a) => a.status === "WAITING_TRIAGE");
-      if (triageQueue.length > 0) {
-        setSelectedAptId(triageQueue[0].id);
+          setAppointments(mappedApts);
+
+          if (preselectedAptId && mappedApts.some((a) => a.id === preselectedAptId)) {
+            setSelectedAptId(preselectedAptId);
+          } else {
+            const triageQueue = mappedApts.filter(
+              (a) => a.status === "WAITING_TRIAGE" || a.status === "PENDING_ARRIVAL"
+            );
+            if (triageQueue.length > 0) {
+              setSelectedAptId(triageQueue[0].id);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("Gagal memuat antrean triase dari PostgreSQL:", err);
       }
     }
 
     loadData();
-  }, []);
+  }, [preselectedAptId]);
 
   const selectedApt = appointments.find((a) => a.id === selectedAptId) || null;
+
+  // Clinical Decision Support (CDS) ringan: deteksi otomatis nilai tanda vital kritis/abnormal
+  const numSys = Number(systolic);
+  const numDia = Number(diastolic);
+  const numHr = Number(heartRate);
+  const numTemp = Number(temperature);
+  const numRr = Number(respiratoryRate);
+  const numSpo2 = Number(spo2);
+
+  const abnormalAlerts: string[] = [];
+  const isSpo2Critical = !Number.isNaN(numSpo2) && numSpo2 > 0 && numSpo2 < 92;
+  const isBpCritical =
+    (!Number.isNaN(numSys) && (numSys >= 180 || (numSys > 0 && numSys < 90))) ||
+    (!Number.isNaN(numDia) && numDia >= 110);
+  const isTempAbnormal = !Number.isNaN(numTemp) && (numTemp >= 38.5 || (numTemp > 0 && numTemp < 35.5));
+  const isHrAbnormal = !Number.isNaN(numHr) && (numHr > 120 || (numHr > 0 && numHr < 50));
+  const isRrAbnormal = !Number.isNaN(numRr) && (numRr > 24 || (numRr > 0 && numRr < 12));
+
+  if (isSpo2Critical) abnormalAlerts.push(`SpO2 Kritis (${numSpo2}% < 92%) — Indikasi Hipoksia / P1 MERAH`);
+  if (isBpCritical) abnormalAlerts.push(`Tekanan Darah Kritis (${numSys}/${numDia} mmHg) — Krisis Hipertensi/Hipotensi`);
+  if (isTempAbnormal) abnormalAlerts.push(`Suhu Tubuh Abnormal (${numTemp} °C)`);
+  if (isHrAbnormal) abnormalAlerts.push(`Detak Jantung Abnormal (${numHr} bpm)`);
+  if (isRrAbnormal) abnormalAlerts.push(`Frekuensi Napas Abnormal (${numRr} x/mnt)`);
 
   const handleSubmitTriase = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
+    setNotif(null);
 
     if (!selectedApt) {
       setErrorMsg("Pilih antrean pasien triase yang valid terlebih dahulu.");
       return;
     }
 
-    // Validasi data tanda vital menggunakan Skema Zod
     const validation = TriaseSchema.safeParse({
-      systolic: Number(systolic),
-      diastolic: Number(diastolic),
-      heartRate: Number(heartRate),
-      temperature: Number(temperature),
-      respiratoryRate: Number(respiratoryRate),
-      spo2: Number(spo2),
+      systolic: numSys,
+      diastolic: numDia,
+      heartRate: numHr,
+      temperature: numTemp,
+      respiratoryRate: numRr,
+      spo2: numSpo2,
       beratBadan: Number(beratBadan),
       tinggiBadan: Number(tinggiBadan),
       triaseLevel,
@@ -129,54 +157,50 @@ export default function TriasePemeriksaanAwalPage() {
       return;
     }
 
-    // 1. Eksekusi Server Action untuk menyimpan langsung ke basis data PostgreSQL
-    await submitTriageServerAction(selectedApt.id, {
-      systolic: Number(systolic),
-      diastolic: Number(diastolic),
-      heartRate: Number(heartRate),
-      temperature: Number(temperature),
-      respiratoryRate: Number(respiratoryRate),
-      spo2: Number(spo2),
-      beratBadan: Number(beratBadan),
-      tinggiBadan: Number(tinggiBadan),
-      triaseLevel,
-      catatanPerawat,
-    });
+    setIsSubmitting(true);
+    try {
+      const res = await submitTriageServerAction(selectedApt.id, {
+        systolic: numSys,
+        diastolic: numDia,
+        heartRate: numHr,
+        temperature: numTemp,
+        respiratoryRate: numRr,
+        spo2: numSpo2,
+        beratBadan: Number(beratBadan),
+        tinggiBadan: Number(tinggiBadan),
+        triaseLevel,
+        catatanPerawat,
+      });
 
-    const allApts = getStorageData<Appointment[]>("resilio_appointments", MOCK_APPOINTMENTS);
-    const updated = allApts.map((a) =>
-      a.id === selectedApt.id
-        ? {
-            ...a,
-            triaseLevel,
-            triaseVitals: {
-              systolic: Number(systolic),
-              diastolic: Number(diastolic),
-              heartRate: Number(heartRate),
-              temperature: Number(temperature),
-              respiratoryRate: Number(respiratoryRate),
-              spo2: Number(spo2),
-              beratBadan: Number(beratBadan),
-              tinggiBadan: Number(tinggiBadan),
-            },
-            status: "WAITING_DOCTOR" as const,
-            keluhanAwal: catatanPerawat ? `${a.keluhanAwal} | Triase: ${catatanPerawat}` : a.keluhanAwal,
-          }
-        : a
-    );
+      if (!res.success) {
+        setErrorMsg(res.message || "Gagal menyimpan pengkajian triase ke PostgreSQL.");
+        return;
+      }
 
-    setStorageData("resilio_appointments", updated);
-    setAppointments(updated);
+      setAppointments((prev) =>
+        prev.map((a) =>
+          a.id === selectedApt.id
+            ? { ...a, triaseLevel, status: "WAITING_DOCTOR" as const }
+            : a
+        )
+      );
 
-    setNotif(
-      `Pemeriksaan triase ${selectedApt.pasienNama} selesai dengan kategori ${triaseLevel}. Pasien siap diarahkan ke DPJP.`
-    );
-    setTimeout(() => {
-      router.push(`/staf/assign-dpjp?aptId=${selectedApt.id}`);
-    }, 1500);
+      setNotif(
+        `Pemeriksaan triase ${selectedApt.pasienNama} tersimpan di PostgreSQL dengan kategori ${triaseLevel}. Status antrean beralih ke WAITING_DOCTOR.`
+      );
+      setTimeout(() => {
+        router.push(`/staf/assign-dpjp?aptId=${encodeURIComponent(selectedApt.id)}`);
+      }, 1200);
+    } catch {
+      setErrorMsg("Terjadi kendala jaringan saat menyimpan triase.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const queueTriase = appointments.filter((a) => a.status === "WAITING_TRIAGE");
+  const queueTriase = appointments.filter(
+    (a) => a.status === "WAITING_TRIAGE" || a.status === "PENDING_ARRIVAL"
+  );
 
   return (
     <div className="space-y-6">
@@ -194,7 +218,7 @@ export default function TriasePemeriksaanAwalPage() {
             Input Tanda-Tanda Vital Awal & Penentuan Tingkat Triase
           </h1>
           <p className="text-xs text-slate-500 font-medium">
-            Perawat mengukur tensi, suhu, dan memilah kegawatan pasien (Hijau/Kuning/Merah) sebelum masuk ke ruang konsultasi dokter.
+            Data tanda vital & peralihan status ke <code className="font-mono">WAITING_DOCTOR</code> disimpan atomik di PostgreSQL.
           </p>
         </div>
 
@@ -210,13 +234,13 @@ export default function TriasePemeriksaanAwalPage() {
       </div>
 
       {notif && (
-        <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-bold">
+        <div role="status" className="p-4 rounded-2xl bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-bold">
           {notif}
         </div>
       )}
 
       {errorMsg && (
-        <div className="p-4 rounded-2xl bg-red-50 border border-red-300 text-red-900 text-xs font-bold">
+        <div role="alert" className="p-4 rounded-2xl bg-red-50 border border-red-300 text-red-900 text-xs font-bold">
           {errorMsg}
         </div>
       )}
@@ -229,7 +253,7 @@ export default function TriasePemeriksaanAwalPage() {
           </h2>
 
           {queueTriase.length === 0 ? (
-            <p className="text-xs text-slate-400 py-6 text-center">
+            <p className="text-xs text-slate-500 py-6 text-center">
               Tidak ada pasien yang mengantre di ruang triase saat ini.
             </p>
           ) : (
@@ -246,11 +270,9 @@ export default function TriasePemeriksaanAwalPage() {
                   }`}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="font-mono text-[10px] font-bold text-slate-500">
-                      {a.id}
-                    </span>
+                    <span className="font-mono text-[10px] font-bold text-slate-500">{a.id}</span>
                     <span className="text-[10px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full">
-                      {a.checkInTime || "Baru Tiba"}
+                      {a.checkInTime || a.status.replace(/_/g, " ")}
                     </span>
                   </div>
                   <h4 className="text-xs font-bold text-slate-900 mt-1">{a.pasienNama}</h4>
@@ -273,16 +295,44 @@ export default function TriasePemeriksaanAwalPage() {
               {selectedApt ? selectedApt.pasienNama : "Pilih Pasien"}
             </h2>
             <p className="text-xs text-slate-500">
-              NIK: <span className="font-mono font-bold">{selectedApt?.pasienNik}</span> • Keluhan: &quot;{selectedApt?.keluhanAwal}&quot;
+              NIK: <span className="font-mono font-bold">{selectedApt?.pasienNik || "-"}</span> • Keluhan: &quot;{selectedApt?.keluhanAwal || "-"}&quot;
             </p>
           </div>
+
+          {/* Clinical Decision Support: Peringatan Tanda Vital Abnormal */}
+          {abnormalAlerts.length > 0 && (
+            <div
+              role="alert"
+              className="p-4 rounded-2xl bg-red-50 border-2 border-red-400 text-red-900 text-xs space-y-1.5"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-black uppercase tracking-wider text-red-700">
+                  PERINGATAN TANDA VITAL ABNORMAL (CLINICAL DECISION SUPPORT)
+                </span>
+                {triaseLevel === "HIJAU" && (
+                  <button
+                    type="button"
+                    onClick={() => setTriaseLevel(isSpo2Critical || isBpCritical ? "MERAH" : "KUNING")}
+                    className="px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white rounded-lg text-[10px] font-black uppercase cursor-pointer"
+                  >
+                    Set Triase {isSpo2Critical || isBpCritical ? "MERAH" : "KUNING"}
+                  </button>
+                )}
+              </div>
+              <ul className="list-disc pl-4 space-y-0.5 font-semibold">
+                {abnormalAlerts.map((alertText) => (
+                  <li key={alertText}>{alertText}</li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           <form onSubmit={handleSubmitTriase} className="space-y-6">
             {/* Pemilihan Tingkat Kegawatan Triase */}
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase mb-2">
+              <span className="block text-xs font-bold text-slate-700 uppercase mb-2">
                 Klasifikasi Tingkat Kegawatan Triase Faskes *
-              </label>
+              </span>
               <div className="grid grid-cols-3 gap-3">
                 <button
                   type="button"
@@ -327,152 +377,201 @@ export default function TriasePemeriksaanAwalPage() {
 
             {/* Input Tanda Vital */}
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase mb-2">
+              <span className="block text-xs font-bold text-slate-700 uppercase mb-2">
                 Pengukuran Tanda-Tanda Vital Awal
-              </label>
+              </span>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div>
-                  <span className="text-[10px] font-bold text-slate-500 uppercase">Tensi Sistolik (mmHg)</span>
+                  <label htmlFor="triage-sys" className="text-[10px] font-bold text-slate-600 uppercase">
+                    Tensi Sistolik (mmHg)
+                  </label>
                   <input
+                    id="triage-sys"
                     type="number"
                     required
                     value={systolic}
                     onChange={(e) => setSystolic(e.target.value)}
-                    className="w-full mt-1 px-3 py-2 border rounded-xl font-bold text-sm"
+                    className={`w-full mt-1 px-3 py-2 border rounded-xl font-bold text-sm ${
+                      isBpCritical ? "border-red-500 bg-red-50 text-red-900" : "border-slate-300"
+                    }`}
                   />
                 </div>
                 <div>
-                  <span className="text-[10px] font-bold text-slate-500 uppercase">Tensi Diastolik (mmHg)</span>
+                  <label htmlFor="triage-dia" className="text-[10px] font-bold text-slate-600 uppercase">
+                    Tensi Diastolik (mmHg)
+                  </label>
                   <input
+                    id="triage-dia"
                     type="number"
                     required
                     value={diastolic}
                     onChange={(e) => setDiastolic(e.target.value)}
-                    className="w-full mt-1 px-3 py-2 border rounded-xl font-bold text-sm"
+                    className={`w-full mt-1 px-3 py-2 border rounded-xl font-bold text-sm ${
+                      isBpCritical ? "border-red-500 bg-red-50 text-red-900" : "border-slate-300"
+                    }`}
                   />
                 </div>
                 <div>
-                  <span className="text-[10px] font-bold text-slate-500 uppercase">Detak Nadi (bpm)</span>
+                  <label htmlFor="triage-hr" className="text-[10px] font-bold text-slate-600 uppercase">
+                    Detak Jantung (bpm)
+                  </label>
                   <input
+                    id="triage-hr"
                     type="number"
                     required
                     value={heartRate}
                     onChange={(e) => setHeartRate(e.target.value)}
-                    className="w-full mt-1 px-3 py-2 border rounded-xl font-bold text-sm"
+                    className={`w-full mt-1 px-3 py-2 border rounded-xl font-bold text-sm ${
+                      isHrAbnormal ? "border-amber-500 bg-amber-50 text-amber-900" : "border-slate-300"
+                    }`}
                   />
                 </div>
                 <div>
-                  <span className="text-[10px] font-bold text-slate-500 uppercase">Suhu (°C)</span>
+                  <label htmlFor="triage-temp" className="text-[10px] font-bold text-slate-600 uppercase">
+                    Suhu Tubuh (°C)
+                  </label>
                   <input
+                    id="triage-temp"
                     type="number"
                     step="0.1"
                     required
                     value={temperature}
                     onChange={(e) => setTemperature(e.target.value)}
-                    className="w-full mt-1 px-3 py-2 border rounded-xl font-bold text-sm"
+                    className={`w-full mt-1 px-3 py-2 border rounded-xl font-bold text-sm ${
+                      isTempAbnormal ? "border-amber-500 bg-amber-50 text-amber-900" : "border-slate-300"
+                    }`}
                   />
                 </div>
                 <div>
-                  <span className="text-[10px] font-bold text-slate-500 uppercase">Laju Napas (x/mnt)</span>
+                  <label htmlFor="triage-rr" className="text-[10px] font-bold text-slate-600 uppercase">
+                    Pernapasan (x/mnt)
+                  </label>
                   <input
+                    id="triage-rr"
                     type="number"
                     required
                     value={respiratoryRate}
                     onChange={(e) => setRespiratoryRate(e.target.value)}
-                    className="w-full mt-1 px-3 py-2 border rounded-xl font-bold text-sm"
+                    className={`w-full mt-1 px-3 py-2 border rounded-xl font-bold text-sm ${
+                      isRrAbnormal ? "border-amber-500 bg-amber-50 text-amber-900" : "border-slate-300"
+                    }`}
                   />
                 </div>
                 <div>
-                  <span className="text-[10px] font-bold text-slate-500 uppercase">SPO2 (%)</span>
+                  <label htmlFor="triage-spo2" className="text-[10px] font-bold text-slate-600 uppercase">
+                    Saturasi SpO2 (%)
+                  </label>
                   <input
+                    id="triage-spo2"
                     type="number"
                     required
                     value={spo2}
                     onChange={(e) => setSpo2(e.target.value)}
-                    className="w-full mt-1 px-3 py-2 border rounded-xl font-bold text-sm"
+                    className={`w-full mt-1 px-3 py-2 border rounded-xl font-bold text-sm ${
+                      isSpo2Critical ? "border-red-500 bg-red-50 text-red-900" : "border-slate-300"
+                    }`}
                   />
                 </div>
                 <div>
-                  <span className="text-[10px] font-bold text-slate-500 uppercase">Berat Badan (kg)</span>
+                  <label htmlFor="triage-bb" className="text-[10px] font-bold text-slate-600 uppercase">
+                    Berat Badan (kg)
+                  </label>
                   <input
+                    id="triage-bb"
                     type="number"
+                    step="0.1"
+                    required
                     value={beratBadan}
                     onChange={(e) => setBeratBadan(e.target.value)}
-                    className="w-full mt-1 px-3 py-2 border rounded-xl font-bold text-sm"
+                    className="w-full mt-1 px-3 py-2 border border-slate-300 rounded-xl font-bold text-sm"
                   />
                 </div>
                 <div>
-                  <span className="text-[10px] font-bold text-slate-500 uppercase">Tinggi Badan (cm)</span>
+                  <label htmlFor="triage-tb" className="text-[10px] font-bold text-slate-600 uppercase">
+                    Tinggi Badan (cm)
+                  </label>
                   <input
+                    id="triage-tb"
                     type="number"
+                    step="0.1"
+                    required
                     value={tinggiBadan}
                     onChange={(e) => setTinggiBadan(e.target.value)}
-                    className="w-full mt-1 px-3 py-2 border rounded-xl font-bold text-sm"
+                    className="w-full mt-1 px-3 py-2 border border-slate-300 rounded-xl font-bold text-sm"
                   />
                 </div>
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
-                Catatan Pengamatan Awal Perawat Triase
+              <label htmlFor="triage-notes" className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                Catatan Pengkajian Perawat Triase
               </label>
               <textarea
-                rows={2}
+                id="triage-notes"
+                rows={3}
                 value={catatanPerawat}
                 onChange={(e) => setCatatanPerawat(e.target.value)}
-                placeholder="Contoh: Pasien tampak meringis memegang leher belakang, jalan dipapah keluarga..."
-                className="w-full px-4 py-2 border rounded-xl text-sm"
+                placeholder="Catatan keluhan spesifik, risiko jatuh, atau observasi perawat..."
+                className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm"
               />
             </div>
 
-            <div className="pt-4 border-t flex items-center justify-end gap-3">
+            <div className="flex justify-end">
               <button
                 type="submit"
-                className="px-6 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md transition cursor-pointer"
+                disabled={isSubmitting || !selectedApt}
+                className="px-6 py-3 bg-amber-600 hover:bg-amber-700 disabled:bg-slate-400 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md transition cursor-pointer"
               >
-                Simpan Hasil Triase & Arahkan ke DPJP →
+                {isSubmitting ? "Menyimpan ke PostgreSQL..." : "Simpan & Klasifikasikan Triase →"}
               </button>
             </div>
           </form>
         </div>
       </div>
 
-      {/* Modal Cetak Lembar Triase & Kunjungan Pasien oleh Staf Nakes */}
       {isPrintOpen && selectedApt && (
         <PrintableMedicalResume
+          onClose={() => setIsPrintOpen(false)}
           data={{
-            recordId: `TRIAGE-${selectedApt.id}`,
+            recordId: `TRIASE-${selectedApt.id}`,
             faskesNama: selectedApt.faskesNama || "RSUP Dr. Sardjito",
             patientNama: selectedApt.pasienNama,
-            patientNik: selectedApt.pasienNik,
-            patientMrn: "MRN-2026-00101",
+            patientNik: selectedApt.pasienNik || "-",
+            patientMrn: selectedApt.pasienId,
             tanggalPeriksa: selectedApt.tanggal,
             poli: selectedApt.poli,
-            dokterNama: selectedApt.dokterNama,
-            dokterSpecialty: "Spesialis Penyakit Dalam",
-            perawatNama: "Ns. Maya Indah, S.Kep",
-            perawatNip: "198804122015022001",
-            perawatPosisi: "Perawat Pelaksana Triase & Admisi",
-            triaseLevel: `${triaseLevel} (${triaseLevel === "MERAH" ? "Gawat Darurat" : triaseLevel === "KUNING" ? "Mendesak / Urgent" : "Non-Urgent"})`,
+            dokterNama: selectedApt.dokterNama || "Menunggu Penunjukan DPJP",
+            dokterSpecialty: selectedApt.poli,
+            dokterStr: "-",
+            dokterSip: "-",
+            perawatNama: "Perawat Triase Loket",
+            perawatNip: "-",
+            triaseLevel,
             triageVitals: {
-              systolic: Number(systolic),
-              diastolic: Number(diastolic),
-              heartRate: Number(heartRate),
-              temperature: Number(temperature),
-              spo2: Number(spo2),
-              respiratoryRate: Number(respiratoryRate),
+              systolic: numSys,
+              diastolic: numDia,
+              heartRate: numHr,
+              temperature: numTemp,
+              spo2: numSpo2,
             },
-            tindakanStaf: catatanPerawat || "Pengkajian fisik awal, pengukuran tanda-tanda vital, dan klasifikasi prioritas triase",
             subjective: selectedApt.keluhanAwal,
-            diagnosisShort: "Pemeriksaan Awal Rawat Jalan (Triase)",
-            prescriptions: ["Menunggu telaah resep DPJP"],
-            edukasiDokter: "Pasien diarahkan ke ruang tunggu periksa dokter DPJP.",
+            diagnosisIcd10: "PENDING",
+            diagnosisShort: "Pengkajian Awal Triase Keperawatan",
+            prescriptions: [],
+            edukasiDokter: catatanPerawat || "Menunggu konsultasi DPJP",
             version: 1,
           }}
-          onClose={() => setIsPrintOpen(false)}
         />
       )}
     </div>
+  );
+}
+
+export default function TriasePemeriksaanAwalPage() {
+  return (
+    <Suspense fallback={<div className="text-slate-500 text-sm p-6">Memuat halaman triase...</div>}>
+      <TriaseContent />
+    </Suspense>
   );
 }

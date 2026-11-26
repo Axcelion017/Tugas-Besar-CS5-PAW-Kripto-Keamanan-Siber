@@ -76,7 +76,7 @@ Pengujian dijalankan pada berkas `tests/validations.test.ts` memvalidasi skema d
 
 ## 4. Kesimpulan Kelaikan Sistem
 
-JagaMedis (sebelumnya Resilio-Health) v0.2 telah memenuhi seluruh kriteria evaluasi integrasi tiga mata kuliah (PAW, Kriptografi, KKS) dan kini telah ditingkatkan melalui **Fase 1 Hardening (`v0.3.0-fase1`, 26 November 2026)**.
+JagaMedis (sebelumnya Resilio-Health) v0.2 telah memenuhi seluruh kriteria evaluasi integrasi tiga mata kuliah (PAW, Kriptografi, KKS) dan kini telah ditingkatkan melalui **Fase 1 Hardening (`v0.3.0-fase1`)** serta **Fase 2 End-to-End PostgreSQL (`v0.3.1-fase2`, 26 November 2026)**.
 
 ---
 
@@ -93,3 +93,16 @@ Pengujian otomatis tambahan dijalankan pada 26 November 2026 di branch `refactor
 | **F1-05** | `F1.3` | *Fail-Closed* murni pada tamper 1-byte, AAD pasien berbeda, serta penolakan payload static IV / empty HMAC | ISO 27799 & NIST SP 800-38D | Seluruhnya mengembalikan `ok: false` (`HMAC_MISMATCH`/`INVALID_FORMAT`), 0 data palsu tampil | **LULUS (PASS)** |
 | **F1-06** | `F1.3` | Verifikasi HMAC *constant-time* (`crypto.subtle.verify`) & pemisahan sub-kunci HKDF citra biner | CWE-208 (NIST SP 800-107) & SP 800-57 | Hex tak valid ditolak aman (`false`); verifikasi biner gagal pada AAD berbeda | **LULUS (PASS)** |
 | **F1-07** | `F1.4` | Kelengkapan HTTP Security Headers pada `next.config.ts` | OWASP Secure Headers | `CSP`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy`, `Permissions-Policy` aktif | **LULUS (PASS)** |
+
+---
+
+## 6. Matriks Verifikasi Quality Gates Fase 2 (`tests/phase2-end-to-end.test.ts`)
+
+Pengujian integrasi end-to-end lintas 4 peran dijalankan terhadap PostgreSQL 17 pada 26 November 2026 di branch `refactor/fase-2-end-to-end-db` (total **6 berkas tes, 44/44 lulus 100%**):
+
+| ID Uji | Sub-Fase | Skenario Uji | Standar Acuan | Hasil Riil | Status |
+| :--- | :---: | :--- | :--- | :--- | :---: |
+| **F2-01** | `F2.2`–`F2.4` | Penolakan tanpa sesi (`401`) pada seluruh Server Actions baru Fase 2 (`admin.ts`, `checkIn`, `walkIn`, `getAppointmentForExam`) | OWASP ASVS V4.1.1 & API1:2023 | 100% ditolak (`401 Unauthorized`) sebelum menyentuh basis data | **LULUS (PASS)** |
+| **F2-02** | `F2.1`–`F2.4` | Alur End-to-End 4 Peran 100% PostgreSQL: Booking + Auto-Consent $\rightarrow$ Check-In $\rightarrow$ Triase Atomik `MERAH` $\rightarrow$ Assign DPJP ber-PIN $\rightarrow$ Periksa SOAP AEAD $\rightarrow$ Audit SIEM | ISO/IEC 25010 & NISTIR 7804 | Seluruh transisi status (`PENDING_ARRIVAL` $\rightarrow$ `WAITING_TRIAGE` $\rightarrow$ `WAITING_DOCTOR` $\rightarrow$ `IN_EXAMINATION` $\rightarrow$ `COMPLETED`), data triase `MERAH` (SpO2 89%), RME terenkripsi, & log SIEM `WRITE_RME` sinkron 100% di PostgreSQL | **LULUS (PASS)** |
+| **F2-03** | `F2.1`/`F2.3`/`F2.4` | Penegakan Kill-Switch Siber (`FaskesStatus.QUARANTINED`) oleh Admin terhadap booking pasien & penulisan RME dokter | ISO 27799 / UR-A03 | Booking pasien dan `submitPemeriksaanKlinisAction` di faskes terkarantina ditolak tegas di server | **LULUS (PASS)** |
+| **F2-04** | `F2.1`/`F2.4` | Siklus status e-KYC: pengajuan tidak menimpa `patient.nik` sebelum disetujui & penolakan Admin tersimpan permanen sebagai `REJECTED` | Permenkes / Administrasi | `patient.nik` tetap utuh saat pengajuan `PENDING`; pasca penolakan status `kyc_submissions` & `users` bernilai `REJECTED` beserta `alasanPenolakan` | **LULUS (PASS)** |

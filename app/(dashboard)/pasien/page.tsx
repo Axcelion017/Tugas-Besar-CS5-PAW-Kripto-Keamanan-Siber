@@ -155,7 +155,9 @@ export default function PasienDashboardPage() {
             pasienNama: a.patient?.name || safePatient!.name,
             pasienNik: a.patient?.nik || safePatient!.nik,
             faskesId: a.faskesId,
-            faskesNama: a.faskesId === "FAS-01" ? "RSUP Dr. Sardjito" : "Faskes Terdaftar",
+            faskesNama:
+              (a as unknown as { faskes?: { nama?: string } }).faskes?.nama ||
+              (a.faskesId === "FAS-01" ? "RSUP Dr. Sardjito" : "Faskes Terdaftar"),
             dokterId: a.doctorId,
             dokterNama: a.doctor?.name || "Dokter DPJP",
             poli: a.poli,
@@ -219,9 +221,9 @@ export default function PasienDashboardPage() {
         setGrants([]);
       }
 
-      // 4. Ambil data tren tanda vital dari PostgreSQL (Permenkes 24/2022)
+      // 5. Ambil data tren tanda vital riil dari PostgreSQL (tanpa menyuntikkan data palsu)
       try {
-        const recordsRes = await getMedicalRecordsServerAction({ patientId: s.id });
+        const recordsRes = await getMedicalRecordsServerAction({ patientId: safePatient.id });
         const metrics: VitalSignMetric[] = [];
         if (recordsRes.success && recordsRes.data) {
           for (const rec of recordsRes.data) {
@@ -230,7 +232,10 @@ export default function PasienDashboardPage() {
               const trend = rawRec.vitalSignsTrend;
               if (trend.systolic && trend.diastolic) {
                 metrics.unshift({
-                  date: new Date(rec.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "short" }),
+                  date: new Date(rec.createdAt).toLocaleDateString("id-ID", {
+                    day: "numeric",
+                    month: "short",
+                  }),
                   systolic: Number(trend.systolic),
                   diastolic: Number(trend.diastolic),
                   heartRate: Number(trend.heartRate || 75),
@@ -240,20 +245,9 @@ export default function PasienDashboardPage() {
             }
           }
         }
-        if (metrics.length === 0) {
-          metrics.push(
-            { date: "10 Okt", systolic: 125, diastolic: 82, heartRate: 76, temperature: 36.6 },
-            { date: "16 Okt", systolic: 120, diastolic: 80, heartRate: 72, temperature: 36.5 },
-            { date: "24 Okt", systolic: 118, diastolic: 78, heartRate: 70, temperature: 36.4 }
-          );
-        }
         setVitalMetrics(metrics);
       } catch {
-        setVitalMetrics([
-          { date: "10 Okt", systolic: 125, diastolic: 82, heartRate: 76, temperature: 36.6 },
-          { date: "16 Okt", systolic: 120, diastolic: 80, heartRate: 72, temperature: 36.5 },
-          { date: "24 Okt", systolic: 118, diastolic: 78, heartRate: 70, temperature: 36.4 }
-        ]);
+        setVitalMetrics([]);
       }
 
       setIsLoading(false);
@@ -525,8 +519,19 @@ export default function PasienDashboardPage() {
         </div>
       </div>
 
-      {/* Grafik Tren Tanda Vital (Permenkes 24/2022) */}
-      <VitalSignsTrendChart data={vitalMetrics} />
+      {/* Grafik Tren Tanda Vital (Permenkes 24/2022) — Empty State Jujur bila belum ada pemeriksaan */}
+      {vitalMetrics.length > 0 ? (
+        <VitalSignsTrendChart data={vitalMetrics} />
+      ) : (
+        <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm text-center space-y-2">
+          <h3 className="text-sm font-black text-slate-900">
+            Grafik Tren Tanda Vital Belum Tersedia
+          </h3>
+          <p className="text-xs text-slate-500 max-w-md mx-auto">
+            Belum ada riwayat pemeriksaan klinis yang ditandatangani dokter pada akun Anda. Grafik tekanan darah dan detak jantung akan tampil otomatis setelah pemeriksaan pertama selesai.
+          </p>
+        </div>
+      )}
 
       {/* Jadwal Booking Mendatang & Aksi Cepat */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

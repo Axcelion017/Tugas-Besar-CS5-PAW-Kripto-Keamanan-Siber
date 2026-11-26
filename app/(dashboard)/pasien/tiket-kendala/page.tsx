@@ -1,14 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { getUserSession, UserSession } from "@/lib/auth/auth";
-import {
-  MOCK_TROUBLE_TICKETS,
-  getStorageData,
-  setStorageData,
-  TroubleTicket,
-} from "@/lib/db/mockData";
 import { TroubleTicketSchema } from "@/lib/validations/patient";
 import {
   createTroubleTicketServerAction,
@@ -16,69 +10,92 @@ import {
 } from "@/lib/actions/ticket";
 
 type TicketCategory = "BUG" | "SYNC_FAIL" | "DATA_MISMATCH" | "OTHER";
+type TicketStatus = "OPEN" | "INVESTIGATING" | "RESOLVED";
 
-function generateTicketId(prefix: string) {
-  return `${prefix}-${Date.now().toString().slice(-4)}`;
+interface TicketRow {
+  id: string;
+  pengirimId: string;
+  pengirimNama: string;
+  kategori: TicketCategory;
+  judul: string;
+  deskripsi: string;
+  status: TicketStatus;
+  createdAt: string;
 }
 
 export default function PasienTiketKendalaPage() {
   const [session, setSession] = useState<UserSession | null>(null);
-  const [tickets, setTickets] = useState<TroubleTicket[]>([]);
+  const [tickets, setTickets] = useState<TicketRow[]>([]);
   const [kategori, setKategori] = useState<TicketCategory>("DATA_MISMATCH");
   const [judul, setJudul] = useState("");
   const [deskripsi, setDeskripsi] = useState("");
   const [notif, setNotif] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const loadTicketsFromDb = useCallback(async (user: UserSession) => {
+    const ticketRes = await getTroubleTicketsServerAction();
+    if (ticketRes.success && Array.isArray(ticketRes.data)) {
+      const myTickets: TicketRow[] = (
+        ticketRes.data as unknown as Array<{
+          id: string;
+          reporterId: string | null;
+          reporterName: string;
+          kategori: string;
+          judul: string;
+          deskripsi: string;
+          status: string;
+          createdAt: Date | string;
+        }>
+      )
+        .filter((t) => !t.reporterId || t.reporterId === user.id)
+        .map((t) => ({
+          id: t.id,
+          pengirimId: t.reporterId || user.id,
+          pengirimNama: t.reporterName,
+          kategori: (t.kategori as TicketCategory) || "OTHER",
+          judul: t.judul,
+          deskripsi: t.deskripsi,
+          status:
+            t.status === "RESOLVED"
+              ? "RESOLVED"
+              : t.status === "INVESTIGATING"
+              ? "INVESTIGATING"
+              : "OPEN",
+          createdAt: new Date(t.createdAt).toLocaleString("id-ID"),
+        }));
+      setTickets(myTickets);
+    } else {
+      setTickets([]);
+    }
+  }, []);
 
   useEffect(() => {
+    let active = true;
     async function loadData() {
-      const s = getUserSession();
-      if (!s) return;
-      setSession(s);
-
+      setIsLoading(true);
       try {
-        const ticketRes = await getTroubleTicketsServerAction();
-        if (ticketRes.success && ticketRes.data && ticketRes.data.length > 0) {
-          const myTickets: TroubleTicket[] = (ticketRes.data as unknown as Array<{
-            id: string;
-            reporterId: string | null;
-            reporterName: string;
-            kategori: string;
-            judul: string;
-            deskripsi: string;
-            status: string;
-            createdAt: Date | string;
-          }>)
-            .filter((t) => t.reporterId === s.id)
-            .map((t) => ({
-              id: t.id,
-              pengirimId: t.reporterId || s.id,
-              pengirimNama: t.reporterName,
-              pengirimRole: "PASIEN",
-              kategori: (t.kategori as "BUG" | "SYNC_FAIL" | "DATA_MISMATCH" | "OTHER") || "OTHER",
-              judul: t.judul,
-              deskripsi: t.deskripsi,
-              status: (t.status === "RESOLVED" ? "RESOLVED" : "OPEN") as "OPEN" | "INVESTIGATING" | "RESOLVED",
-              createdAt: new Date(t.createdAt).toLocaleDateString("id-ID"),
-            }));
-          setTickets(myTickets);
-        } else {
-          setTickets([]);
-        }
-      } catch {
-        setTickets([]);
+        const s = getUserSession();
+        if (!s || !active) return;
+        setSession(s);
+        await loadTicketsFromDb(s);
+      } finally {
+        if (active) setIsLoading(false);
       }
     }
 
-    loadData();
-  }, []);
+    void loadData();
+    return () => {
+      active = false;
+    };
+  }, [loadTicketsFromDb]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
-    if (!session) return;
+    if (!session || isSubmitting) return;
 
-    // Validasi input tiket kendala menggunakan Skema Zod
     const validation = TroubleTicketSchema.safeParse({
       kategori,
       judul,
@@ -90,40 +107,29 @@ export default function PasienTiketKendalaPage() {
       return;
     }
 
-    // 1. Eksekusi Server Action untuk menyimpan tiket kendala di PostgreSQL
+    setIsSubmitting(true);
     try {
-      await createTroubleTicketServerAction({
+      const res = await createTroubleTicketServerAction({
         kategori,
         judul,
         deskripsi,
         reporterId: session.id,
         reporterName: session.name,
       });
-    } catch (err: unknown) {
-      console.warn("DB trouble ticket action fallback:", err);
+
+      if (!res.success) {
+        setErrorMsg(res.message || "Gagal mengirimkan tiket kendala ke basis data.");
+        return;
+      }
+
+      await loadTicketsFromDb(session);
+      setNotif("Laporan kendala berhasil disimpan di PostgreSQL dan dikirim ke Pusat Insiden Admin Regulator.");
+      setJudul("");
+      setDeskripsi("");
+      setTimeout(() => setNotif(null), 4500);
+    } finally {
+      setIsSubmitting(false);
     }
-
-    const newTicket: TroubleTicket = {
-      id: generateTicketId("TCK"),
-      pengirimId: session.id,
-      pengirimNama: session.name,
-      pengirimRole: "PASIEN",
-      kategori,
-      judul,
-      deskripsi,
-      status: "OPEN",
-      createdAt: new Date().toLocaleString("id-ID"),
-    };
-
-    const all = getStorageData<TroubleTicket[]>("resilio_trouble_tickets", MOCK_TROUBLE_TICKETS);
-    const updated = [newTicket, ...all];
-    setStorageData("resilio_trouble_tickets", updated);
-    setTickets(updated.filter((t) => t.pengirimId === session.id));
-
-    setNotif("Laporan kendala berhasil dikirimkan ke Pusat Insiden Admin Regulator.");
-    setJudul("");
-    setDeskripsi("");
-    setTimeout(() => setNotif(null), 4000);
   };
 
   return (
@@ -146,13 +152,19 @@ export default function PasienTiketKendalaPage() {
       </div>
 
       {notif && (
-        <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-bold">
+        <div
+          role="status"
+          className="p-4 rounded-2xl bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-bold"
+        >
           {notif}
         </div>
       )}
 
       {errorMsg && (
-        <div className="p-4 rounded-2xl bg-red-50 border border-red-300 text-red-900 text-xs font-bold">
+        <div
+          role="alert"
+          className="p-4 rounded-2xl bg-red-50 border border-red-300 text-red-900 text-xs font-bold"
+        >
           {errorMsg}
         </div>
       )}
@@ -166,13 +178,18 @@ export default function PasienTiketKendalaPage() {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-xs font-bold text-slate-600 uppercase mb-1">
+              <label
+                htmlFor="ticket-kategori"
+                className="block text-xs font-bold text-slate-600 uppercase mb-1"
+              >
                 Kategori Kendala
               </label>
               <select
+                id="ticket-kategori"
                 value={kategori}
                 onChange={(e) => setKategori(e.target.value as TicketCategory)}
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-300 font-semibold text-sm bg-white"
+                disabled={isSubmitting}
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-300 font-semibold text-sm bg-white disabled:opacity-60"
               >
                 <option value="DATA_MISMATCH">Ketidaksesuaian Biodata / Rekam Medis</option>
                 <option value="SYNC_FAIL">Kegagalan Sinkronisasi atau Dekripsi</option>
@@ -182,38 +199,49 @@ export default function PasienTiketKendalaPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-600 uppercase mb-1">
+              <label
+                htmlFor="ticket-judul"
+                className="block text-xs font-bold text-slate-600 uppercase mb-1"
+              >
                 Judul Laporan *
               </label>
               <input
+                id="ticket-judul"
                 type="text"
                 required
+                disabled={isSubmitting}
                 value={judul}
                 onChange={(e) => setJudul(e.target.value)}
                 placeholder="Contoh: Kesalahan ejaan nama pada kartu emergency..."
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-300 font-semibold text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-300 font-semibold text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:opacity-60"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-600 uppercase mb-1">
+              <label
+                htmlFor="ticket-deskripsi"
+                className="block text-xs font-bold text-slate-600 uppercase mb-1"
+              >
                 Deskripsi Lengkap Masalah *
               </label>
               <textarea
+                id="ticket-deskripsi"
                 required
                 rows={4}
+                disabled={isSubmitting}
                 value={deskripsi}
                 onChange={(e) => setDeskripsi(e.target.value)}
                 placeholder="Jelaskan secara kronologis kendala yang dialami, perangkat yang digunakan, dan faskes terkait..."
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-300 font-semibold text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-300 font-semibold text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:opacity-60"
               />
             </div>
 
             <button
               type="submit"
-              className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md transition cursor-pointer"
+              disabled={isSubmitting}
+              className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md transition cursor-pointer"
             >
-              Kirim Tiket Laporan ke Admin
+              {isSubmitting ? "Mengirim ke PostgreSQL..." : "Kirim Tiket Laporan ke Admin"}
             </button>
           </form>
         </div>
@@ -224,8 +252,12 @@ export default function PasienTiketKendalaPage() {
             Riwayat Tiket Laporan Anda
           </h3>
 
-          {tickets.length === 0 ? (
-            <p className="text-xs text-slate-400 text-center py-8">
+          {isLoading ? (
+            <p className="text-xs text-slate-500 text-center py-8">
+              Memuat tiket laporan dari PostgreSQL...
+            </p>
+          ) : tickets.length === 0 ? (
+            <p className="text-xs text-slate-500 text-center py-8">
               Belum ada tiket laporan kendala yang dibuat.
             </p>
           ) : (
@@ -236,7 +268,7 @@ export default function PasienTiketKendalaPage() {
                   className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-1.5"
                 >
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-mono font-bold text-slate-500">
+                    <span className="text-[10px] font-mono font-bold text-slate-600">
                       {t.id}
                     </span>
                     <span
@@ -244,20 +276,19 @@ export default function PasienTiketKendalaPage() {
                         t.status === "OPEN"
                           ? "bg-amber-100 text-amber-800 border-amber-300"
                           : t.status === "INVESTIGATING"
-                          ? "bg-blue-100 text-blue-800 border-blue-200 animate-pulse"
+                          ? "bg-blue-100 text-blue-800 border-blue-200"
                           : "bg-emerald-100 text-emerald-800 border-emerald-200"
                       }`}
                     >
                       {t.status}
                     </span>
                   </div>
-                  <h4 className="text-xs font-bold text-slate-800">{t.judul}</h4>
-                  <p className="text-[11px] text-slate-500 leading-relaxed">
-                    {t.deskripsi}
-                  </p>
-                  <p className="text-[10px] text-slate-400 font-mono pt-1">
-                    {t.createdAt}
-                  </p>
+                  <p className="text-xs font-black text-slate-900">{t.judul}</p>
+                  <p className="text-[11px] text-slate-600 leading-relaxed">{t.deskripsi}</p>
+                  <div className="flex items-center justify-between pt-1 text-[10px] text-slate-500 font-medium">
+                    <span>{t.kategori}</span>
+                    <span>{t.createdAt}</span>
+                  </div>
                 </div>
               ))}
             </div>
