@@ -3,7 +3,7 @@
 import React, { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { saveSession } from "@/lib/auth/auth";
+import { saveSession, loginUser } from "@/lib/auth/auth";
 import { LoginSchema } from "@/lib/validations/auth";
 import { loginServerAction } from "@/lib/actions/auth";
 
@@ -62,11 +62,21 @@ function LoginForm() {
       if (result.success && result.session) {
         saveSession(result.session);
         router.replace("/beranda");
+        return;
       }
     } catch {
-      setErrorMsg("Gagal melakukan demo login otomatis.");
-      setIsLoading(false);
+      // Fallback lokal client jika ada kendala server
     }
+
+    const localSession = loginUser(user, pass);
+    if (localSession) {
+      saveSession(localSession);
+      router.replace("/beranda");
+      return;
+    }
+
+    setErrorMsg("Gagal melakukan demo login otomatis.");
+    setIsLoading(false);
   };
 
   return (
