@@ -4,6 +4,7 @@ import React, { use, useState, useEffect } from "react";
 import Link from "next/link";
 import { getFaskesDetailServerAction } from "@/lib/actions/faskes";
 import { DashboardSkeleton } from "@/components/ui/Skeleton";
+import { Breadcrumb } from "@/components/ui/Breadcrumb";
 
 interface DbDoctor {
   id: string;
@@ -75,17 +76,13 @@ export default function FaskesDetailPage({
   if (!faskes) {
     return (
       <div className="space-y-6">
-        <div className="flex items-center gap-2 text-xs font-bold text-blue-600 uppercase tracking-wider">
-          <Link href="/pasien" className="hover:underline">
-            Portal Pasien
-          </Link>
-          <span>/</span>
-          <Link href="/pasien/faskes" className="hover:underline">
-            Pencarian Faskes
-          </Link>
-          <span>/</span>
-          <span>Faskes Tidak Ditemukan</span>
-        </div>
+        <Breadcrumb
+          items={[
+            { label: "Portal Pasien", href: "/pasien" },
+            { label: "Pencarian Faskes", href: "/pasien/faskes" },
+            { label: "Faskes Tidak Ditemukan" },
+          ]}
+        />
 
         <div className="p-8 md:p-12 rounded-3xl bg-white border border-red-200 shadow-xl max-w-2xl mx-auto my-8 text-center space-y-5">
           <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600 font-black text-2xl shadow-inner">
@@ -131,17 +128,13 @@ export default function FaskesDetailPage({
   return (
     <div className="space-y-6">
       {/* Breadcrumb */}
-      <div className="flex items-center gap-2 text-xs font-bold text-blue-600 uppercase tracking-wider">
-        <Link href="/pasien" className="hover:underline">
-          Portal Pasien
-        </Link>
-        <span>/</span>
-        <Link href="/pasien/faskes" className="hover:underline">
-          Pencarian Faskes
-        </Link>
-        <span>/</span>
-        <span>{faskes.nama}</span>
-      </div>
+      <Breadcrumb
+        items={[
+          { label: "Portal Pasien", href: "/pasien" },
+          { label: "Pencarian Faskes", href: "/pasien/faskes" },
+          { label: faskes.nama },
+        ]}
+      />
 
       {isQuarantined && (
         <div

@@ -7,6 +7,7 @@ import { saveSession, normalizeRole } from "@/lib/auth/auth";
 import { isDemoLoginEnabled } from "@/lib/auth/demoConfig";
 import { LoginSchema } from "@/lib/validations/auth";
 import { loginServerAction } from "@/lib/actions/auth";
+import { BrandLogo } from "@/components/shared/BrandLogo";
 
 function LoginForm() {
   const router = useRouter();
@@ -92,17 +93,12 @@ function LoginForm() {
         </div>
 
         {/* Brand Header */}
-        <div className="text-center">
-          <div className="w-14 h-14 bg-red-600 rounded-2xl mx-auto flex items-center justify-center text-white font-black text-2xl shadow-lg shadow-red-200 mb-3">
-            J
-          </div>
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight">
-            JAGA<span className="text-red-600">MEDIS</span>
-          </h1>
-          <p className="text-xs text-slate-600 font-bold uppercase tracking-wider mt-1">
-            Sistem Informasi Rekam Medis & Zero-Trust Gateway
-          </p>
-        </div>
+        <BrandLogo
+          variant="stacked"
+          size="lg"
+          asHeading
+          subtitle="Hospital Information System & Zero-Trust Gateway"
+        />
 
         {successMsg && (
           <div

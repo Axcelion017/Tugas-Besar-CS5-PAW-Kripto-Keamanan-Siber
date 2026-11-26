@@ -1,5 +1,7 @@
 "use client";
 
+import { Breadcrumb } from "@/components/ui/Breadcrumb";
+
 import React from "react";
 import Link from "next/link";
 import { PrintableMedicalResume } from "@/components/clinical/PrintableMedicalResume";
@@ -65,13 +67,12 @@ export function ExamWorkspace({ bookingId }: { bookingId: string }) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-2 text-xs font-bold text-emerald-700 uppercase tracking-wider">
-        <Link href="/nakes" className="hover:underline">
-          Stasiun Nakes
-        </Link>
-        <span>/</span>
-        <span>Pemeriksaan Klinis SOAP ({appointment.id})</span>
-      </div>
+      <Breadcrumb
+        items={[
+          { label: "Stasiun Nakes", href: "/nakes" },
+          { label: `Pemeriksaan Klinis SOAP (${appointment.id})` },
+        ]}
+      />
 
       <StickyPatientBanner
         appointment={appointment}

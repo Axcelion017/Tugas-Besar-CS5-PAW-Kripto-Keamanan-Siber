@@ -1,6 +1,6 @@
-# Model Ancaman & Analisis Risiko: Resilio-Health
+# Model Ancaman & Analisis Risiko: JagaMedis (`v0.3.4`)
 
-Dokumen ringkasan eksekutif pemodelan ancaman STRIDE dan analisis risiko sistem informasi rekam medis Resilio-Health 4-Role.
+Dokumen ringkasan eksekutif pemodelan ancaman STRIDE dan analisis risiko sistem informasi rekam medis **JagaMedis** (sebelumnya Resilio-Health) 4-Role.
 
 ---
 
@@ -32,4 +32,6 @@ Dokumen ringkasan eksekutif pemodelan ancaman STRIDE dan analisis risiko sistem 
 10. **Bypass Validasi Klien & Manipulasi Input (RSK-10)**: Manipulasi form via DevTools/cURL dengan tensi negatif atau kode ICD-10 fiktif.
    - *Mitigasi*: Validasi skema Zod v4 di sisi server pada Server Action (`lib/actions/clinical.ts`) sebelum data diproses.
 11. **Pembajakan Akun Sesi Nakes / XSS Theft (RSK-11)**: Pencurian token autentikasi di peramban untuk mengambil alih sesi dokter.
-   - *Mitigasi*: Stateful Session Store + Cookie HTTP-Only `resilio_session_token` dengan konfigurasi *HttpOnly*, *Secure*, *SameSite=Lax*, dan *Max-Age=14400*.
+   - *Mitigasi*: Sesi Persisten PostgreSQL (`sessions`) + Cookie HTTP-Only `resilio_session_token` (*HttpOnly*, *Secure* produksi, *SameSite=Lax*, *Max-Age=14400*) + `proxy.ts` + 6 OWASP Security Headers (`next.config.ts`).
+12. **Enumerasi Akun & Serangan *Brute Force* Login (RSK-12)**: Penyerang memindai NIK/STR/email terdaftar atau menebak kata sandi secara otomatis via endpoint autentikasi.
+   - *Mitigasi*: *Sliding-Window Rate Limiter* (`lib/auth/rateLimit.ts`, 10 percobaan/menit $\rightarrow$ `HTTP 429` + `Retry-After`), pesan error login 100% seragam + dummy `bcrypt.compare` (CWE-204 / OWASP ASVS V2.2.2), serta *feature flag* `NEXT_PUBLIC_ENABLE_DEMO_LOGIN` untuk menonaktifkan tombol demo pada produksi.

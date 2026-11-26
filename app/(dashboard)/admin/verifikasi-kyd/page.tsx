@@ -1,7 +1,8 @@
 "use client";
 
+import { Breadcrumb } from "@/components/ui/Breadcrumb";
+
 import React, { useState, useEffect, useCallback } from "react";
-import Link from "next/link";
 import { KydSubmission } from "@/lib/db/mockData";
 import {
   getKydSubmissionsServerAction,
@@ -64,13 +65,12 @@ export default function VerifikasiKydPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <div className="flex items-center gap-2 text-xs font-bold text-purple-700 uppercase tracking-wider">
-          <Link href="/admin" className="hover:underline">
-            Konsol Admin
-          </Link>
-          <span>/</span>
-          <span>Verifikasi Lisensi Tenaga Medis (UR-A02)</span>
-        </div>
+        <Breadcrumb
+          items={[
+            { label: "Konsol Admin", href: "/admin" },
+            { label: "Verifikasi Lisensi e-KYD" },
+          ]}
+        />
         <h1 className="text-2xl font-black text-slate-900 tracking-tight mt-1">
           Antrean Verifikasi Kredensial Dokter & Perawat (KYD - STR & SIP)
         </h1>
@@ -143,12 +143,14 @@ export default function VerifikasiKydPage() {
                     {item.status === "PENDING" ? (
                       <div className="flex items-center justify-end gap-2">
                         <button
+                          type="button"
                           onClick={() => handleApprove(item)}
                           className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold uppercase transition cursor-pointer"
                         >
                           Validasi STR
                         </button>
                         <button
+                          type="button"
                           onClick={() => {
                             setSelectedKyd(item);
                             setShowRejectModal(true);
@@ -190,12 +192,14 @@ export default function VerifikasiKydPage() {
             />
             <div className="flex justify-end gap-2">
               <button
+                type="button"
                 onClick={() => setShowRejectModal(false)}
                 className="px-4 py-2 bg-slate-100 text-slate-700 text-xs font-bold rounded-xl"
               >
                 Batal
               </button>
               <button
+                type="button"
                 onClick={handleReject}
                 className="px-4 py-2 bg-red-600 text-white text-xs font-bold rounded-xl"
               >

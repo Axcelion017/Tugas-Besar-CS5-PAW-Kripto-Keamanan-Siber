@@ -151,6 +151,7 @@ export default function DashboardLayout({
                 <p>• Status: 403 Forbidden (Log dicatat ke SIEM)</p>
               </div>
               <button
+                type="button"
                 onClick={() => router.replace(`/${role}`)}
                 className="px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md transition"
               >

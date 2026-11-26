@@ -80,6 +80,10 @@ export async function approveKydServerAction(submissionId: string) {
         where: { id: kyd.userId },
         data: { status: AccountStatus.VERIFIED },
       });
+      await tx.doctor.updateMany({
+        where: { userId: kyd.userId },
+        data: { isActive: true },
+      });
     });
 
     safeRevalidate(["/admin/verifikasi-kyd", "/admin"]);

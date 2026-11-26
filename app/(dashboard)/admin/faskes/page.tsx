@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import Link from "next/link";
 import { Faskes } from "@/lib/db/mockData";
 import {
   getFaskesListServerAction,
@@ -10,6 +9,7 @@ import {
 import { createFaskesServerAction } from "@/lib/actions/admin";
 import { ConfirmModal } from "@/components/ui/Modal";
 import { ToastBanner } from "@/components/ui/ToastBanner";
+import { Breadcrumb } from "@/components/ui/Breadcrumb";
 
 function formatFaskesType(tipe: string): Faskes["tipe"] {
   if (tipe === "KLINIK_PRATAMA" || tipe === "Klinik Pratama") return "Klinik Pratama";
@@ -125,13 +125,12 @@ export default function MasterFaskesAdminPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <div className="flex items-center gap-2 text-xs font-bold text-purple-700 uppercase tracking-wider">
-          <Link href="/admin" className="hover:underline">
-            Konsol Admin
-          </Link>
-          <span>/</span>
-          <span>Master Faskes & Ransomware Isolation (UR-A03)</span>
-        </div>
+        <Breadcrumb
+          items={[
+            { label: "Konsol Admin", href: "/admin" },
+            { label: "Master Faskes & Kill-Switch" },
+          ]}
+        />
         <h1 className="text-2xl font-black text-slate-900 tracking-tight mt-1">
           Master Fasilitas Kesehatan & Ransomware Kill-Switch
         </h1>
@@ -288,6 +287,7 @@ export default function MasterFaskesAdminPage() {
                     </td>
                     <td className="p-4 text-right">
                       <button
+                        type="button"
                         onClick={() => handleToggleQuarantine(f)}
                         className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition cursor-pointer shadow-xs ${
                           isQuarantined

@@ -1,10 +1,10 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import Link from "next/link";
 import { TroubleTicket } from "@/lib/db/mockData";
 import { getTroubleTicketsServerAction } from "@/lib/actions/ticket";
 import { updateTroubleTicketStatusServerAction } from "@/lib/actions/admin";
+import { Breadcrumb } from "@/components/ui/Breadcrumb";
 
 export default function IncidentCenterPage() {
   const [tickets, setTickets] = useState<TroubleTicket[]>([]);
@@ -77,13 +77,12 @@ export default function IncidentCenterPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <div className="flex items-center gap-2 text-xs font-bold text-purple-700 uppercase tracking-wider">
-          <Link href="/admin" className="hover:underline">
-            Konsol Admin
-          </Link>
-          <span>/</span>
-          <span>Observabilitas & Pusat Kendala (UR-A05)</span>
-        </div>
+        <Breadcrumb
+          items={[
+            { label: "Konsol Admin", href: "/admin" },
+            { label: "Pusat Kendala & Sinkronisasi" },
+          ]}
+        />
         <h1 className="text-2xl font-black text-slate-900 tracking-tight mt-1">
           Pusat Penanganan Trouble Sinkronisasi & Tiket Masalah Pengguna
         </h1>
@@ -146,6 +145,7 @@ export default function IncidentCenterPage() {
             </span>
             {["ALL", "SYNC_FAIL", "DATA_MISMATCH", "BUG"].map((kat) => (
               <button
+                type="button"
                 key={kat}
                 onClick={() => setFilterKategori(kat)}
                 className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
@@ -200,7 +200,7 @@ export default function IncidentCenterPage() {
 
                 <div className="flex items-center gap-2">
                   <span
-                    className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-full border ${
+                    className={`text-[11px] font-black uppercase px-2.5 py-1 rounded-full border ${
                       t.status === "OPEN"
                         ? "bg-amber-100 text-amber-800 border-amber-300"
                         : t.status === "INVESTIGATING"
@@ -227,6 +227,7 @@ export default function IncidentCenterPage() {
               <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
                 {t.status !== "INVESTIGATING" && t.status !== "RESOLVED" && (
                   <button
+                    type="button"
                     onClick={() => handleUpdateStatus(t.id, "INVESTIGATING")}
                     className="px-3 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-800 rounded-lg text-xs font-bold uppercase transition cursor-pointer"
                   >
@@ -235,6 +236,7 @@ export default function IncidentCenterPage() {
                 )}
                 {t.status !== "RESOLVED" && (
                   <button
+                    type="button"
                     onClick={() => handleUpdateStatus(t.id, "RESOLVED")}
                     className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold uppercase transition cursor-pointer"
                   >

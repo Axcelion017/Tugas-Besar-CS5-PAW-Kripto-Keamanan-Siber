@@ -11,6 +11,7 @@ import {
 } from "@/lib/db/mockData";
 import { getFaskesListServerAction } from "@/lib/actions/faskes";
 import { createWalkInAppointmentServerAction } from "@/lib/actions/appointment";
+import { Breadcrumb } from "@/components/ui/Breadcrumb";
 
 export default function StafRujukanAdminPage() {
   const [grants, setGrants] = useState<AccessGrant[]>([]);
@@ -113,13 +114,12 @@ export default function StafRujukanAdminPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <div className="flex items-center gap-2 text-xs font-bold text-amber-700 uppercase tracking-wider">
-          <Link href="/staf" className="hover:underline">
-            Meja Staf Nakes
-          </Link>
-          <span>/</span>
-          <span>Administrasi Rujukan Antar Faskes (UR-S04)</span>
-        </div>
+        <Breadcrumb
+          items={[
+            { label: "Meja Staf Nakes", href: "/staf" },
+            { label: "Administrasi Rujukan" },
+          ]}
+        />
         <h1 className="text-2xl font-black text-slate-900 tracking-tight mt-1">
           Pengelolaan Surat Rujukan Berjenjang (Masuk & Keluar)
         </h1>
@@ -144,6 +144,7 @@ export default function StafRujukanAdminPage() {
       <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-2">
           <button
+            type="button"
             onClick={() => setActiveTab("keluar")}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
               activeTab === "keluar"
@@ -154,6 +155,7 @@ export default function StafRujukanAdminPage() {
             Rujukan Keluar (Pasien Dirujuk ke RS Lain)
           </button>
           <button
+            type="button"
             onClick={() => setActiveTab("masuk")}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
               activeTab === "masuk"
@@ -166,6 +168,7 @@ export default function StafRujukanAdminPage() {
         </div>
 
         <button
+          type="button"
           onClick={() => setShowInModal(true)}
           className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-black uppercase rounded-xl shadow-sm transition cursor-pointer"
         >

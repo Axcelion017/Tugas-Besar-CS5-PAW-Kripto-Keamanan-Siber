@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import Link from "next/link";
 import {
   OfflineOutboxItem,
   clearOutbox,
@@ -13,6 +12,7 @@ import {
 import { encryptMedicalRecordPayload } from "@/features/medical-records/crypto-service";
 import { getPatientDetailForDoctorServerAction } from "@/lib/actions/clinical";
 import { getUserSession } from "@/lib/auth/auth";
+import { Breadcrumb } from "@/components/ui/Breadcrumb";
 
 export default function OfflineSyncPage() {
   const [queue, setQueue] = useState<OfflineOutboxItem[]>([]);
@@ -206,13 +206,12 @@ export default function OfflineSyncPage() {
   return (
     <div className="space-y-6">
       <div>
-        <div className="flex items-center gap-2 text-xs font-bold text-emerald-700 uppercase tracking-wider">
-          <Link href="/nakes" className="hover:underline">
-            Stasiun Nakes
-          </Link>
-          <span>/</span>
-          <span>Ketahanan Offline PWA (UR-T05 & UR-T06)</span>
-        </div>
+        <Breadcrumb
+          items={[
+            { label: "Stasiun Nakes", href: "/nakes" },
+            { label: "Sinkronisasi Offline PWA" },
+          ]}
+        />
         <h1 className="text-2xl font-black text-slate-900 tracking-tight mt-1">
           Pengelolaan Antrean Sinkronisasi Offline (IndexedDB & REST Sync)
         </h1>

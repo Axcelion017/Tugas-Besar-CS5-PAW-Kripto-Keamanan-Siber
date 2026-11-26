@@ -1,5 +1,7 @@
 "use client";
 
+import { Breadcrumb } from "@/components/ui/Breadcrumb";
+
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -258,13 +260,12 @@ export default function PasienListPage() {
       {/* Header Halaman */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 text-xs font-bold text-emerald-700 uppercase tracking-wider">
-            <Link href="/nakes" className="hover:underline">
-              Stasiun Nakes
-            </Link>
-            <span>/</span>
-            <span>Daftar Pasien & Rekam Medis (UR-T03 & UR-T08)</span>
-          </div>
+          <Breadcrumb
+            items={[
+              { label: "Stasiun Nakes", href: "/nakes" },
+              { label: "Daftar Pasien & Rekam Medis" },
+            ]}
+          />
           <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight mt-1">
             Daftar Pasien & Status Rekam Medis
           </h1>
@@ -376,6 +377,7 @@ export default function PasienListPage() {
               </p>
             </div>
             <button
+              type="button"
               onClick={() => setShowManualNikSearch(false)}
               className="text-xs text-slate-400 hover:text-slate-600 font-bold"
             >

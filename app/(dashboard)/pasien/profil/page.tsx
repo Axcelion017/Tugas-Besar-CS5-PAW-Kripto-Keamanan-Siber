@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect, Suspense } from "react";
-import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { getUserSession, UserSession } from "@/lib/auth/auth";
 import {
@@ -14,6 +13,7 @@ import { DashboardSkeleton } from "@/components/ui/Skeleton";
 import { ToastBanner } from "@/components/ui/ToastBanner";
 import { FamilyMemberManager } from "@/features/auth/FamilyMemberManager";
 import { IconUsers, IconShield, IconFileText } from "@/components/ui/Icons";
+import { Breadcrumb } from "@/components/ui/Breadcrumb";
 
 type ProfileTab = "MANDIRI" | "KELUARGA" | "KYC";
 
@@ -224,13 +224,12 @@ function PasienProfilContent() {
   return (
     <div className="space-y-6">
       {/* Breadcrumb */}
-      <div className="flex items-center gap-2 text-xs font-bold text-blue-700 uppercase tracking-wider">
-        <Link href="/pasien" className="hover:underline">
-          Portal Pasien
-        </Link>
-        <span>/</span>
-        <span>Profil, Anggota Keluarga & e-KYC</span>
-      </div>
+      <Breadcrumb
+        items={[
+          { label: "Portal Pasien", href: "/pasien" },
+          { label: "Profil, Anggota Keluarga & e-KYC" },
+        ]}
+      />
 
       {/* Header Identitas Pemilik Akun */}
       <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">

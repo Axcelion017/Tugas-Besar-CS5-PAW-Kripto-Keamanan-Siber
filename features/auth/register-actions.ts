@@ -1,10 +1,15 @@
 "use server";
 
-import { RegisterPasienSchema, RegisterPasienCepatSchema } from "@/lib/validations/auth";
+import {
+  RegisterPasienSchema,
+  RegisterPasienCepatSchema,
+  RegisterNakesDbSchema,
+} from "@/lib/validations/auth";
 import { prisma } from "@/lib/db/prisma";
-import { AccountStatus, Gender } from "@prisma/client";
+import { AccountStatus, Gender, Prisma, UserRole } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { randomInt } from "node:crypto";
+import { safeRevalidate } from "@/lib/utils/revalidate";
 
 export async function registerPasienServerAction(
   data: Record<string, unknown>
@@ -186,5 +191,151 @@ export async function registerPasienCepatServerAction(
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : "Kesalahan server";
     return { success: false, message: `Gagal membuat akun: ${msg}` };
+  }
+}
+
+/**
+ * Server Action: Pendaftaran Kredensial Tenaga Medis (e-KYD) 100% PostgreSQL.
+ * Membuat User (role: nakes, status: PENDING), profil Doctor (isActive: false),
+ * serta antrean verifikasi KydSubmission secara atomik dalam satu prisma.$transaction.
+ */
+export async function registerNakesServerAction(
+  rawData: Record<string, unknown>
+): Promise<{ success: boolean; message: string; kydId?: string; userId?: string }> {
+  const validation = RegisterNakesDbSchema.safeParse(rawData);
+  if (!validation.success) {
+    return {
+      success: false,
+      message:
+        validation.error.issues[0]?.message || "Format formulir pendaftaran nakes tidak valid.",
+    };
+  }
+
+  const {
+    username,
+    email,
+    password,
+    nik,
+    namaLengkap,
+    strNumber,
+    sipNumber,
+    spesialisasi,
+    faskesId,
+    dokumenStrFileName,
+  } = validation.data;
+
+  const cleanUsername = username.trim().toLowerCase();
+  const cleanEmail = email.trim().toLowerCase();
+  const cleanStr = strNumber.trim();
+  const cleanSip = sipNumber.trim();
+
+  try {
+    const [existingUser, existingDoctor, targetFaskes] = await Promise.all([
+      prisma.user.findFirst({
+        where: { OR: [{ username: cleanUsername }, { email: cleanEmail }] },
+        select: { id: true },
+      }),
+      prisma.doctor.findFirst({
+        where: { OR: [{ strNumber: cleanStr }, { sipNumber: cleanSip }] },
+        select: { id: true },
+      }),
+      prisma.faskes.findUnique({
+        where: { id: faskesId },
+        select: { id: true, nama: true },
+      }),
+    ]);
+
+    if (existingUser) {
+      return {
+        success: false,
+        message: "Username atau alamat email sudah terdaftar di sistem JagaMedis.",
+      };
+    }
+
+    if (existingDoctor) {
+      return {
+        success: false,
+        message: "Nomor STR atau nomor SIP sudah terdaftar pada akun tenaga medis lain.",
+      };
+    }
+
+    if (!targetFaskes) {
+      return {
+        success: false,
+        message: "Fasilitas kesehatan tempat bertugas tidak ditemukan di direktori nasional.",
+      };
+    }
+
+    const suffix = `${Date.now().toString().slice(-5)}${randomInt(10, 99)}`;
+    const userId = `DOC-${suffix}`;
+    const kydId = `KYD-${suffix}`;
+    const passwordHash = await bcrypt.hash(password, 10);
+    const safeFileName = dokumenStrFileName.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 120);
+    const watermarkText = `DOKUMEN KREDENSIAL JAGAMEDIS - ${new Date()
+      .toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })
+      .toUpperCase()}`;
+
+    await prisma.$transaction(async (tx) => {
+      await tx.user.create({
+        data: {
+          id: userId,
+          username: cleanUsername,
+          email: cleanEmail,
+          passwordHash,
+          role: UserRole.nakes,
+          status: AccountStatus.PENDING,
+        },
+      });
+
+      await tx.doctor.create({
+        data: {
+          id: userId,
+          userId,
+          faskesId: targetFaskes.id,
+          name: namaLengkap,
+          strNumber: cleanStr,
+          sipNumber: cleanSip,
+          specialty: spesialisasi,
+          kuotaHarian: 30,
+          isActive: false,
+        },
+      });
+
+      await tx.kydSubmission.create({
+        data: {
+          id: kydId,
+          userId,
+          nik,
+          namaLengkap,
+          strNumber: cleanStr,
+          sipNumber: cleanSip,
+          spesialisasi,
+          dokumenStrUrl: `/uploads/kyd/${userId}-${safeFileName}`,
+          suratTugasUrl: `/uploads/kyd/${userId}-sk-faskes.pdf`,
+          watermarkText,
+          status: AccountStatus.PENDING,
+        },
+      });
+    });
+
+    safeRevalidate(["/admin", "/admin/verifikasi-kyd"]);
+
+    return {
+      success: true,
+      message:
+        "Pengajuan kredensial tenaga medis (e-KYD) berhasil disimpan ke PostgreSQL dan masuk antrean verifikasi Admin Regulator.",
+      kydId,
+      userId,
+    };
+  } catch (error: unknown) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      return {
+        success: false,
+        message: "Data akun, STR, atau SIP sudah terdaftar sebelumnya di basis data.",
+      };
+    }
+    const msg = error instanceof Error ? error.message : "Kesalahan basis data";
+    console.error("Register Nakes Error:", error);
+    return { success: false, message: `Gagal menyimpan pengajuan e-KYD: ${msg}` };
   }
 }

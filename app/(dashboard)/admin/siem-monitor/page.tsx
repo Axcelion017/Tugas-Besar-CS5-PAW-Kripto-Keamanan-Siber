@@ -1,7 +1,8 @@
 "use client";
 
+import { Breadcrumb } from "@/components/ui/Breadcrumb";
+
 import React, { useState, useEffect, useCallback } from "react";
-import Link from "next/link";
 import { SecurityAuditLog } from "@/lib/db/mockData";
 import {
   getSiemAuditLogsServerAction,
@@ -52,13 +53,12 @@ export default function SiemMonitorPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <div className="flex items-center gap-2 text-xs font-bold text-purple-700 uppercase tracking-wider">
-          <Link href="/admin" className="hover:underline">
-            Konsol Admin
-          </Link>
-          <span>/</span>
-          <span>Security Information & Event Management (UR-A04)</span>
-        </div>
+        <Breadcrumb
+          items={[
+            { label: "Konsol Admin", href: "/admin" },
+            { label: "SIEM Security Monitor" },
+          ]}
+        />
         <h1 className="text-2xl font-black text-slate-900 tracking-tight mt-1">
           SIEM Live Security Feed & Deteksi Serangan Siber
         </h1>
@@ -76,6 +76,7 @@ export default function SiemMonitorPage() {
             </span>
             {(["ALL", "CRITICAL", "WARN", "INFO"] as const).map((sev) => (
               <button
+                type="button"
                 key={sev}
                 onClick={() => setSeverityFilter(sev)}
                 className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
@@ -186,7 +187,7 @@ export default function SiemMonitorPage() {
                     </td>
                     <td className="p-4">
                       <span
-                        className={`px-2 py-0.5 rounded text-[9px] font-black uppercase ${
+                        className={`px-2 py-0.5 rounded text-[11px] font-black uppercase ${
                           isCrit
                             ? "bg-red-600 text-white"
                             : isWarn

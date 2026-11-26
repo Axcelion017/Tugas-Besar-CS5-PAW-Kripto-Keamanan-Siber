@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import Link from "next/link";
 import { getUserSession, UserSession } from "@/lib/auth/auth";
 import { TroubleTicketSchema } from "@/lib/validations/patient";
 import {
@@ -10,6 +9,7 @@ import {
 } from "@/lib/actions/ticket";
 import { ToastBanner } from "@/components/ui/ToastBanner";
 import { IconMessageSquare, IconShield, IconRefreshCw, IconTool, IconFileText } from "@/components/ui/Icons";
+import { Breadcrumb } from "@/components/ui/Breadcrumb";
 
 type TicketCategory = "BUG" | "SYNC_FAIL" | "DATA_MISMATCH" | "OTHER";
 type TicketStatus = "OPEN" | "INVESTIGATING" | "RESOLVED";
@@ -213,13 +213,12 @@ export default function PasienTiketKendalaPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <div className="flex items-center gap-2 text-xs font-bold text-blue-600 uppercase tracking-wider">
-          <Link href="/pasien" className="hover:underline">
-            Portal Pasien
-          </Link>
-          <span>/</span>
-          <span>Laporan Kendala & Bantuan (UR-P08)</span>
-        </div>
+        <Breadcrumb
+          items={[
+            { label: "Portal Pasien", href: "/pasien" },
+            { label: "Laporan Kendala" },
+          ]}
+        />
         <h1 className="text-2xl font-black text-slate-900 tracking-tight mt-1">
           Layanan Pelaporan Kendala Teknis & Ketidaksesuaian Data
         </h1>
