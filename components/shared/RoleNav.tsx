@@ -145,10 +145,10 @@ export function RoleNav({ session }: RoleNavProps) {
             )}
           </button>
           <div className="w-8 h-8 bg-red-600 rounded-lg flex items-center justify-center text-white font-black text-sm">
-            R
+            J
           </div>
           <span className="font-black text-slate-900 tracking-tight text-sm">
-            RESILIO-HEALTH
+            JAGA<span className="text-red-600">MEDIS</span>
           </span>
         </div>
 

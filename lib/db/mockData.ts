@@ -263,7 +263,7 @@ export interface TroubleTicket {
 }
 
 // -------------------------------------------------------------
-// DATA AWAL SISTEM RESILIO-HEALTH
+// DATA AWAL SISTEM JAGAMEDIS
 // -------------------------------------------------------------
 
 export const MOCK_FASKES: Faskes[] = [
@@ -856,7 +856,7 @@ export const MOCK_KYC_REQUESTS: KycSubmission[] = [
     alamat: "Jl. Mawar Bodas No. 12, Bandung",
     ktpUrl: "/ktp-mock-dewi.jpg",
     selfieUrl: "/selfie-mock-dewi.jpg",
-    watermarkText: "HANYA UNTUK VERIFIKASI RESILIO-HEALTH - 14 OKT 2026",
+    watermarkText: "HANYA UNTUK VERIFIKASI JAGAMEDIS - 14 OKT 2026",
     submittedAt: "14 Oktober 2026, 16:20 WIB",
     status: "PENDING",
   },
@@ -869,7 +869,7 @@ export const MOCK_KYC_REQUESTS: KycSubmission[] = [
     alamat: "Jl. Kaliurang KM 5, Sleman",
     ktpUrl: "/ktp-mock-bambang.jpg",
     selfieUrl: "/selfie-mock-bambang.jpg",
-    watermarkText: "HANYA UNTUK VERIFIKASI RESILIO-HEALTH - 15 OKT 2026",
+    watermarkText: "HANYA UNTUK VERIFIKASI JAGAMEDIS - 15 OKT 2026",
     submittedAt: "15 Oktober 2026, 07:15 WIB",
     status: "PENDING",
   },
@@ -888,7 +888,7 @@ export const MOCK_KYD_REQUESTS: KydSubmission[] = [
     dokumenStrUrl: "/str-mock-hendro.pdf",
     fotoProfilUrl: "/doctors/dr-hendro.jpg",
     suratTugasUrl: "/sk-tugas-hendro.pdf",
-    watermarkText: "DOKUMEN KREDENSIAL RESILIO-HEALTH KEMENKES - 14 OKT 2026",
+    watermarkText: "DOKUMEN KREDENSIAL JAGAMEDIS KEMENKES - 14 OKT 2026",
     submittedAt: "14 Oktober 2026, 10:00 WIB",
     status: "PENDING",
   },

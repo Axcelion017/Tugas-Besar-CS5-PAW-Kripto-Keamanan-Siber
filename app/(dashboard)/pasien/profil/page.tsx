@@ -41,7 +41,7 @@ export default function PasienProfilPage() {
   const [notifSuccess, setNotifSuccess] = useState<string | null>(null);
   const [notifError, setNotifError] = useState<string | null>(null);
 
-  const watermarkString = `HANYA UNTUK VERIFIKASI RESILIO-HEALTH - ${new Date().toLocaleDateString("id-ID")}`;
+  const watermarkString = `HANYA UNTUK VERIFIKASI JAGAMEDIS - ${new Date().toLocaleDateString("id-ID")}`;
 
   useEffect(() => {
     async function loadProfile() {

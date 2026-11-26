@@ -2,7 +2,7 @@
 
 Nama/NIM   : Michael Alexander Newton (105224017)
 Repositori : https://github.com/Axcelion017/Tugas-Besar-CS5-PAW-Kripto-Keamanan-Siber
-Pull request: https://github.com/Axcelion017/Tugas-Besar-CS5-PAW-Kripto-Keamanan-Siber/pull/1
+Pull request: https://github.com/Axcelion017/Tugas-Besar-CS5-PAW-Kripto-Keamanan-Siber/pull/12
 
 ---
 
@@ -667,55 +667,42 @@ Setelah perbaikan diterapkan:
 
 ## 5. Telaah Kode (*Code Review*)
 
-> [!IMPORTANT]
-> ### 📘 PANDUAN PELAKSANAAN PEER CODE REVIEW (HAPUS BLOK PANDUAN INI SETELAH SELESAI DENGAN REKAN)
-> 
-> Bagian ini dirancang untuk memandu Anda dan rekan kelompok/mahasiswa penelaah (*peer reviewer*) dalam melaksanakan telaah kode (*Code Review*) berbasis GitHub Pull Request sesuai ketentuan Modul 7.
-> 
-> #### Langkah-Langkah Pelaksanaan Praktis:
-> 1. **Penerbitan Pull Request (PR)**:
->    - Pastikan branch pengerjaan Modul 7 Anda (misal `Week-7` atau `praktikum/modul-07`) telah di-push ke repositori GitHub.
->    - Buka repositori GitHub, klik tombol **New Pull Request** dengan target `base: main` $\leftarrow$ `compare: Week-7`.
->    - Salin tautan URL PR yang terbentuk dan perbarui pada bagian **Tautan Pull Request** di bawah serta pada header dokumen laporan.
-> 
-> 2. **Sebagai Penelaah / Reviewer (Mengisi Subbagian 5.1 — Komentar yang Diberikan)**:
->    - Rekan penelaah membuka tab **Files changed** pada halaman Pull Request Anda di GitHub.
->    - Pilih minimal **3 baris kode yang berbeda** yang memiliki potensi perbaikan (aspek Keamanan/Auth, Performa/RSC, Logika Bisnis/Validasi, atau Aksesibilitas UI).
->    - Klik ikon biru `+` di nomor baris yang ingin dikomentari, lalu tulis komentar telaah yang jelas, sopan, dan solutif.
->    - Klik tombol hijau **Review changes** $\rightarrow$ pilih opsi **Comment** atau **Request changes** $\rightarrow$ klik **Submit review**.
->    - Masukkan ringkasan ketiga komentar tersebut ke dalam **Tabel Subbagian 5.1** di bawah (kolom: Baris, Kategori, Masalah, Perbaikan yang Disarankan).
-> 
-> 3. **Sebagai Penulis / Author (Mengisi Subbagian 5.2 — Komentar yang Diterima)**:
->    - Buka halaman PR Anda dan baca komentar-komentar yang diberikan oleh rekan reviewer.
->    - Diskusikan bersama rekan dan putuskan untuk setiap komentar: apakah **DITERAPKAN** (*Accepted*) atau **DITOLAK** (*Rejected*).
->    - Cantumkan **alasan teknis/medikolegal yang rasional dan berbobot**:
->      - Jika **Diterapkan**: Jelaskan mengapa perbaikan tersebut meningkatkan kualitas kode, lalu buat commit perbaikan di branch Anda.
->      - Jika **Ditolak**: Jelaskan mengapa kode saat ini sengaja dipertahankan (misal demi stabilitas performa server, mencegah DoS, atau memenuhi regulasi Permenkes).
->    - Sesuaikan isi daftar respon pada **Subbagian 5.2** dengan hasil diskusi nyata Anda.
-> 
-> 4. **Pembersihan Dokumen**:
->    - Setelah seluruh tabel dan tanggapan telaah terisi lengkap sesuai interaksi nyata di GitHub PR, **hapus seluruh kotak panduan alert ini** sebelum dokumen dikumpulkan.
-
 ### 5.1. Tautan Pull Request dan Komentar yang Diberikan
-- **Tautan Pull Request**: `https://github.com/Axcelion017/Tugas-Besar-CS5-PAW-Kripto-Keamanan-Siber/pull/1`
 
-| Baris | Kategori | Masalah | Perbaikan yang Disarankan |
-|:------|:---------|:--------|:--------------------------|
-| `lib/actions/auth.ts:42` | **Keamanan / Auth** | Sesi token dihasilkan dari pengacakan pseudo-random `Math.random().toString()` yang rentan ditebak oleh penyerang (*weak entropy*). | Gunakan `crypto.randomUUID()` CSPRNG standar W3C Web Crypto atau simpan sesi stateful di basis data dengan UUID v4. |
-| `app/(dashboard)/nakes/periksa/[bookingId]/page.tsx:88` | **Performa / RSC** | Komponen melakukan kueri Prisma langsung di dalam Client Component (`"use client"`), menyebabkan kebocoran (*leakage*) koneksi database ke bundle browser. | Pindahkan pemanggilan data ke Server Component wrapper atau eksekusi melalui Server Action di `lib/actions/clinical.ts`. |
-| `components/clinical/PrintableMedicalResume.tsx:115` | **Aksesibilitas & UI** | Modal cetak resume medis tidak memiliki tombol tutup keyboard (`Escape`) dan tidak memiliki tombol penutup visual yang mudah dijangkau saat pratinjau di layar kecil. | Tambahkan tombol eksplisit `✕ Tutup Dokumen` di sudut kanan atas modal dan pasang event listener `keydown` untuk tombol Escape. |
+- **Tautan Pull Request Teman**: `https://github.com/rafly1764/Tubes_Kostibu_105224040/pull/5`
+- **Penulis Kode (*Author PR*)**: Muhammad Rafly
+- **Penelaah (*Reviewer*)**: Michael Alexander Newton (105224017)
+
+Review No 1: ![alt text](image-26.png)
+Review No 2: ![alt text](image-27.png)
+Review No 3: ![alt text](image-25.png)
+| No | Berkas & Lokasi | Kategori | Masalah yang Ditemukan | Saran Perbaikan (*Actionable Feedback*) |
+|:---|:----------------|:---------|:-----------------------|:----------------------------------------|
+| 1 | `app/kos/actions.ts` — Fungsi `hapusKos` (bagian `catch (error)`) | **Penanganan Galat / Type Safety & Prisma** | Pengecekan kode galat di `hapusKos` masih memakai *type assertion* `error as { code?: string }` yang kurang aman jika `error` bukan objek, dan belum menangani kode `P2025` (data kos tidak ditemukan/sudah dihapus di tab lain). | Gunakan *type guard* `typeof error === "object" && error !== null && "code" in error` serta tambahkan cabang penanganan untuk `P2025` agar pesan galatnya lebih spesifik sebelum melempar ulang galat tak terduga. |
+| 2 | `app/kos/error.tsx` — Komponen `KosError` (bagian `error.message`) | **Observabilitas / Error Boundary** | `KosError` langsung menampilkan `error.message` tanpa mencatat objek `error` ke konsol/logger dan belum menampilkan `error.digest`. Di build produksi Next.js, `error.message` dari Server Action akan disensor otomatis sehingga sulit dilacak jika `digest` tidak dicatat. | Tambahkan `useEffect` untuk `console.error(error)` dan tampilkan `error.digest` secara kondisional (jika ada) sebagai kode referensi saat galat terjadi. |
+| 3 | `lib/skema.ts` — Field `tersedia: z.stringbool()` | **Validasi Formulir / Zod** | `z.stringbool()` mewajibkan input string eksplisit (`"true"` / `"false"`). Jika suatu saat elemen input `tersedia` diganti dari `<select>` menjadi `<input type="checkbox">` (yang mengirim `undefined` saat tidak dicentang), validasi akan gagal. | Pertahankan elemen `<select>` atau tambahkan pesan galat kustom berbahasa Indonesia di `z.stringbool()` supaya pengguna mendapat umpan balik yang jelas jika nilai input tidak valid. |
 
 ### 5.2. Komentar yang Diterima: Diterapkan atau Ditolak
 
-1. **Komentar Rekan 1**: *"Sebaiknya password Bcrypt di-hash dengan cost factor 14 agar lebih aman dari serangan brute-force GPU modern."*
-   - **Status**: **DITOLAK**.
-   - **Alasan**: *Cost factor* 14 membutuhkan waktu komputasi ~800–1.200 ms per verifikasi pada mesin server reguler. Untuk kebutuhan aplikasi web interaktif rumah sakit dengan beban kerja tinggi pada loket admisi rawat jalan, *cost factor* 10 (standar OWASP dengan latensi komputasi ~120–150 ms) sudah memadai dan mencegah serangan *Denial of Service* (DoS) akibat kehabisan sumber daya CPU server saat jam sibuk antrean.
-2. **Komentar Rekan 2**: *"Ganti format alert popup bawaan browser `alert(...)` pada halaman pencarian pasien dengan komponen notifikasi terintegrasi atau banner inline."*
+- **Tautan Pull Request Sendiri**: `https://github.com/Axcelion017/Tugas-Besar-CS5-PAW-Kripto-Keamanan-Siber/pull/12` (`Week-7` $\rightarrow$ `main`)
+- **Rekan Penelaah (*Peer Reviewer*)**: `@rafly1764` (Collaborator)
+
+Berikut adalah respon keputusan teknis terhadap komentar telaah kode yang diberikan oleh rekan penelaah pada Pull Request #12:
+
+1. **Komentar 1 — Keamanan Generasi Token Sesi (`lib/actions/auth.ts`)**:  
+   ![Komentar Review rafly1764 pada lib/actions/auth.ts](image-22.png)
+   - **Status**: **DITERAPKAN / DIKONFIRMASI SUDAH SESUAI**.
+   - **Alasan & Tindakan**: Masukan keamanan ini sangat tepat untuk mencegah celah *CWE-338 (Use of Cryptographically Weak PRNG)* akibat penggunaan `Math.random().toString()`. Setelah diperiksa ulang pada `lib/actions/auth.ts`, baris yang disorot pada diff PR (`registerPasienServerAction:254`) merupakan pembaruan string pesan merek aplikasi (*Resilio-Health* $\rightarrow$ *JagaMedis*), sedangkan mekanisme pembangkitan token sesi pada `loginServerAction` (`lib/actions/auth.ts:175-179`) dipastikan telah menerapkan CSPRNG `crypto.randomUUID()` yang dicatat ke *stateful session store* (`registerSession(sessionToken, userSession, maxAge)`) serta dikawal cookie `httpOnly` dan `sameSite: "lax"`.
+
+2. **Komentar 2 — Evaluasi Izin Akses Dokter DPJP (`lib/actions/clinical.ts`)**:  
+   ![Komentar Review rafly1764 pada lib/actions/clinical.ts](image-23.png)
    - **Status**: **DITERAPKAN**.
-   - **Alasan**: Pemanggilan fungsi `alert()` memblokir thread eksekusi JavaScript peramban (*synchronous blocking*), tidak ramah aksesibilitas pembaca layar (*screen reader*), dan merusak estetika desain antarmuka enterprise JagaMedis. Diganti dengan state banner inline berbasis Tailwind CSS.
-3. **Komentar Rekan 3**: *"Sediakan mekanisme fallback data lokal pada halaman detail pasien dokter jika server backend sedang mengalami sinkronisasi migrasi."*
+   - **Alasan & Tindakan**: Sepakat sepenuhnya bahwa evaluasi izin akses dokter DPJP tidak boleh hanya bergantung pada tabel `access_grants` agar tidak terjadi penolakan keliru (*false-negative authorization*) pada pasien dengan antrean konsultasi aktif. Perbaikan telah diterapkan pada `lib/actions/clinical.ts:725` dengan menghapus bypass sementara `|| true` sebelumnya dan menegakkan ekspresi *Encounter-Based Access Control* terpadu (`const isAccessAllowed = !!activeGrant || !!activeAppointment;`), menjaga protokol Zero-Trust sekaligus kelancaran pelayanan medis.
+
+3. **Komentar 3 — Sanitasi Serialisasi `Prisma.Decimal` (`lib/actions/triage.ts`)**:  
+   ![Komentar Review rafly1764 pada lib/actions/triage.ts](image-24.png)
    - **Status**: **DITERAPKAN**.
-   - **Alasan**: Menjamin ketahanan *Offline-First* dan keandalan demonstrasi klinis sehingga tenaga medis tidak pernah dihadapkan pada layar putih kosong (*zero white-screen of death*).
+   - **Alasan & Tindakan**: Sangat setuju karena serializer React Server Component (RSC Flight) di Next.js App Router menolak objek non-plain seperti instance class `Prisma.Decimal` yang memiliki prototype method. Pada `lib/actions/triage.ts` (`submitTriageServerAction`), penyebaran langsung `...saved` telah dihapus dan seluruh properti numerik desimal dikonversi secara eksplisit menjadi tipe primitif JavaScript menggunakan `Number(saved.temperature)`, `Number(saved.beratBadan)`, dan `Number(saved.tinggiBadan)` sebelum ditransmisikan ke klien.
 
 ---
 

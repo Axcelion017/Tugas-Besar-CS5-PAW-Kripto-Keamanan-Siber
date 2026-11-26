@@ -8,6 +8,7 @@ import { registerSession, revokeSession, getSessionFromStore } from "@/lib/auth/
 import { prisma } from "@/lib/db/prisma";
 import { AccountStatus, Gender } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { randomInt } from "node:crypto";
 
 function safeRevalidate(path: string) {
   try {
@@ -257,7 +258,7 @@ export async function registerPasienServerAction(
 
     const userId = `P-${Date.now().toString().slice(-4)}`;
     const kycId = `KYC-${Date.now().toString().slice(-4)}`;
-    const mrn = `MRN-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+    const mrn = `MRN-2026-${randomInt(1000, 10000)}`;
     const passwordHash = await bcrypt.hash(password, 10);
     const encryptionKeyHex = Array.from(crypto.getRandomValues(new Uint8Array(32)))
       .map((b) => b.toString(16).padStart(2, "0"))
@@ -271,7 +272,7 @@ export async function registerPasienServerAction(
           .filter(Boolean)
       : [];
 
-    const watermarkText = `HANYA UNTUK VERIFIKASI RESILIO-HEALTH - ${new Date()
+    const watermarkText = `HANYA UNTUK VERIFIKASI JAGAMEDIS - ${new Date()
       .toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })
       .toUpperCase()}`;
 
@@ -518,7 +519,7 @@ export async function registerPasienCepatServerAction(
 
     const userId = `P-${Date.now().toString().slice(-4)}`;
     const passwordHash = await bcrypt.hash(password, 10);
-    const mrn = `MRN-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+    const mrn = `MRN-2026-${randomInt(1000, 10000)}`;
     const tempNik = `TEMP-${Date.now().toString().slice(-8)}`;
 
     await prisma.$transaction(async (tx) => {
@@ -670,7 +671,7 @@ export async function submitKycVerificationServerAction(params: {
     alamat,
     ktpUrl = `/uploads/ktp-${nik}.jpg`,
     selfieUrl = `/uploads/selfie-${nik}.jpg`,
-    watermarkText = `HANYA UNTUK VERIFIKASI RESILIO-HEALTH - ${new Date().toLocaleDateString("id-ID")}`,
+    watermarkText = `HANYA UNTUK VERIFIKASI JAGAMEDIS - ${new Date().toLocaleDateString("id-ID")}`,
   } = params;
 
   if (!/^\d{16}$/.test(nik)) {

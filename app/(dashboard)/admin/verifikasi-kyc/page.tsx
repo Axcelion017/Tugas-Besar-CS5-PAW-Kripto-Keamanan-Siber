@@ -294,7 +294,7 @@ export default function VerifikasiKycPage() {
                   {/* Digital Watermark Overlay */}
                   <div className="absolute inset-0 bg-slate-900/20 backdrop-blur-[1px] flex items-center justify-center pointer-events-none p-2 text-center transform -rotate-12">
                     <span className="text-[10px] font-mono font-black text-red-600 bg-white/90 px-2 py-1 rounded shadow-xs uppercase">
-                      {previewKyc.watermarkText || "HANYA UNTUK VERIFIKASI RESILIO-HEALTH"}
+                      {previewKyc.watermarkText || "HANYA UNTUK VERIFIKASI JAGAMEDIS"}
                     </span>
                   </div>
                 </div>

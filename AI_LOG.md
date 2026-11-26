@@ -1,6 +1,36 @@
-# AI_LOG.md — Resilio-Health
+# AI_LOG.md — JagaMedis (sebelumnya Resilio-Health)
 
 Dokumen pencatatan penggunaan asisten kecerdasan buatan (AI) sesuai kebijakan integritas akademik.
+
+---
+
+## 2026-11-22 — Penyelesaian Konflik PR #12, Tindak Lanjut Code Review, Penyelarasan Merek JagaMedis, & Audit Arsitektur Menyeluruh
+
+- **Tool**: Google Antigravity (Gemini Models)
+- **Tujuan**:
+  1. Menyelesaikan konflik *merge* pada branch `Week-7` terhadap `origin/main` untuk berkas beranda, layout dashboard, dan sesi autentikasi.
+  2. Menyempurnakan Bagian 4–7 `docs/praktikum/modul07.md`, termasuk pemisahan Subbagian 5.1 (templat + panduan review PR rekan) dan Subbagian 5.2 (respon 3 komentar `@rafly1764` pada PR #12).
+  3. Menerapkan tindak lanjut *code review* aksesibilitas pada modal cetak resume medis (`PrintableMedicalResume.tsx`) dan mengganti sisa `Math.random()` di Server Actions dengan CSPRNG `node:crypto` `randomInt`.
+  4. Menyelaraskan tampilan merek `Resilio-Health` / `R` yang tersisa di antarmuka, *watermark* dokumen, dan *user-agent* log menjadi **JagaMedis** / `J` tanpa merusak pengenal teknis internal.
+  5. Menyusun dokumen audit menyeluruh (*read-only*) dan Master Plan perombakan bertahap (`docs/audit_menyeluruh_jagamedis.md`) mengacu pada standar internasional (OWASP ASVS/Top 10, NIST SP 800-38D/57/63B/107, NISTIR 7804, RFC 5869, ISO/IEC 25010, ISO 27799, WCAG 2.1 AA, Core Web Vitals) dan regulasi nasional (Permenkes 24/2022, UU PDP 27/2022).
+- **Ringkasan Prompt**:
+  1. *"Cek modul07.md bagian 4 ke bawah agar menyesuaikan, beri panduan manual untuk nomor 5 code review, lalu revisi 5.1 (review PR teman) dan 5.2 (respon komentar review teman)."*
+  2. *"Perbaiki konflik di app/(dashboard)/beranda/page.tsx dan app/(dashboard)/layout.tsx tanpa melakukan merge ke main terlebih dahulu."*
+  3. *"Buat rencana lalu terapkan masukan code review pada PrintableMedicalResume.tsx serta opsional penggantian Math.random()."*
+  4. *"Perbaiki sisa tampilan nama Resilio-Health agar seragam menjadi JagaMedis."*
+  5. *"Lakukan audit menyeluruh (read-only) mencakup kode, 16 tabel database, arsitektur file/endpoint, titik pembeda produk, blind spot UI/UX, dan indikator pengujian tiap fase, lalu simpan ke docs/audit_menyeluruh_jagamedis.md."*
+- **Bagian yang Dihasilkan / Dimodifikasi**:
+  - `app/(dashboard)/beranda/page.tsx`, `app/(dashboard)/layout.tsx`, `lib/auth/auth.ts`: Penyelesaian konflik terhadap `origin/main` (commit `54513ea`) serta penyelarasan judul bilah atas `"Beranda Terpadu JagaMedis"`.
+  - `components/clinical/PrintableMedicalResume.tsx`: Penambahan `role="dialog"`, `aria-modal="true"`, `aria-labelledby`, listener keyboard `Escape` + pemulihan fokus, *light-dismiss* backdrop, *sticky responsive action bar* atas dengan tombol `✕ Tutup Dokumen`, `overscroll-contain`, dan pembaruan logo `R` $\rightarrow$ `J`.
+  - `lib/actions/auth.ts` & `lib/actions/appointment.ts`: Penggantian `Math.random()` pada pembuatan `mrn` dan `consentPin` 6-digit menjadi `randomInt` (`node:crypto`), serta pembaruan teks *watermark* menjadi `JAGAMEDIS`.
+  - `components/shared/RoleNav.tsx`, `app/(auth)/register/nakes/page.tsx`, `app/(dashboard)/admin/verifikasi-kyc/page.tsx`, `app/(dashboard)/pasien/profil/page.tsx`, `lib/actions/audit.ts`, `lib/actions/clinical.ts`, `lib/db/mockData.ts`: Penyelarasan tampilan merek mobile header, *watermark* dokumen, dan *user-agent* log menjadi `JagaMedis` / `JAGAMEDIS`.
+  - `docs/praktikum/modul07.md`: Penyempurnaan Bagian 4–7, pembaruan tautan PR #12, pemisahan Subbagian 5.1 (review PR teman) dan 5.2 (tanggapan 3 komentar `@rafly1764` dengan `image-22.png`–`image-24.png`).
+  - `docs/audit_menyeluruh_jagamedis.md`: Dokumen audit arsitektur & keamanan menyeluruh (*read-only*) lengkap dengan glosarium, UVP & perbandingan produk, 2 diagram alur Mermaid, audit 7 domain (`3.A`–`3.G`), serta Master Plan 5 fase (`F0.1`–`F4.3`) beserta tabel *Quality Gates*.
+- **Cara Verifikasi**:
+  - `npx tsc --noEmit`: 0 kesalahan tipe statis.
+  - `npx vitest run`: 4 berkas tes, 33/33 tes lulus (100%).
+  - `npm run lint`: 0 error, 0 warning.
+  - `npm run build`: Kompilasi produksi 33/33 rute Next.js App Router sukses.
 
 ---
 

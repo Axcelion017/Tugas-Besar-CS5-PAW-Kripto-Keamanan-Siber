@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useId, useRef } from "react";
 
 export interface PrintableRecordData {
   recordId: string;
@@ -82,6 +82,28 @@ interface PrintableMedicalResumeProps {
 }
 
 export function PrintableMedicalResume({ data, onClose }: PrintableMedicalResumeProps) {
+  const headingId = useId();
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!onClose) return;
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    closeButtonRef.current?.focus();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      previouslyFocused?.focus?.();
+    };
+  }, [onClose]);
+
   const handlePrint = () => {
     if (typeof window !== "undefined") {
       window.print();
@@ -95,34 +117,52 @@ export function PrintableMedicalResume({ data, onClose }: PrintableMedicalResume
   }).format(data.billing?.totalBiaya || 235000);
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/80 backdrop-blur-xs flex items-center justify-center p-2 sm:p-6 print:p-0 print:bg-white print:static">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full border border-slate-300 overflow-hidden flex flex-col my-4 print:my-0 print:border-none print:shadow-none print:rounded-none">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={headingId}
+      onClick={(event) => {
+        if (event.target === event.currentTarget && onClose) {
+          onClose();
+        }
+      }}
+      className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-xs flex items-center justify-center p-2 sm:p-6 overscroll-contain print:p-0 print:bg-white print:static print:block"
+    >
+      <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[92vh] border border-slate-300 overflow-hidden flex flex-col print:max-h-none print:overflow-visible print:border-none print:shadow-none print:rounded-none">
         
-        {/* ACTION BAR ATAS (Hanya Muncul di Layar, Tersembunyi saat Cetak) */}
-        <div className="p-4 bg-slate-900 text-white flex items-center justify-between print:hidden border-b border-slate-800">
-          <div className="flex items-center gap-2 text-xs font-bold">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span>Dokumen Administratif Resume Medis Elektronik (Standar Permenkes RI No. 24/2022)</span>
+        {/* ACTION BAR ATAS (Sticky agar tombol tutup pojok kanan atas selalu terjangkau di layar kecil & saat scroll, tersembunyi saat Cetak) */}
+        <div className="sticky top-0 z-10 shrink-0 px-3 py-3 sm:px-4 sm:py-3.5 bg-slate-900 text-white flex flex-wrap items-center justify-between gap-2 print:hidden border-b border-slate-800">
+          <div className="flex items-center gap-2 text-[11px] sm:text-xs font-bold min-w-0 flex-1">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+            <span id={headingId} className="truncate">
+              Dokumen Administratif Resume Medis Elektronik (Permenkes RI No. 24/2022)
+            </span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0 ml-auto">
             <button
               type="button"
               onClick={handlePrint}
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer shadow-sm"
+              className="px-3 py-2 sm:px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[11px] sm:text-xs font-black uppercase tracking-wider transition cursor-pointer shadow-sm whitespace-nowrap"
             >
-              Cetak / Simpan PDF
+              Cetak / PDF
             </button>
             {onClose && (
               <button
+                ref={closeButtonRef}
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 bg-slate-800 hover:bg-red-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition cursor-pointer border border-slate-700"
+                aria-label="Tutup dokumen resume medis (Tekan Escape)"
+                title="Tutup Dokumen (Esc)"
+                className="px-3 py-2 sm:px-4 bg-slate-800 hover:bg-red-700 text-white rounded-xl text-[11px] sm:text-xs font-bold uppercase tracking-wider transition cursor-pointer border border-slate-600 whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-white"
               >
                 ✕ Tutup Dokumen
               </button>
             )}
           </div>
         </div>
+
+        {/* AREA SCROLL KONTEN DOKUMEN */}
+        <div className="overflow-y-auto flex-1 overscroll-contain print:overflow-visible">
 
         {/* DOKUMEN ADMINISTRATIF KONTINU (Format Standar Rumah Sakit Tanpa Kotak-Kotak Terpisah) */}
         <div className="p-8 md:p-12 space-y-6 text-slate-900 text-xs font-sans print:p-6 print:text-[10px] leading-relaxed">
@@ -131,7 +171,7 @@ export function PrintableMedicalResume({ data, onClose }: PrintableMedicalResume
           <div className="border-b-2 border-slate-900 pb-3 flex items-start justify-between gap-4">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 bg-red-700 text-white rounded-xl flex items-center justify-center font-black text-xl shrink-0 print:border print:border-slate-800">
-                R
+                J
               </div>
               <div>
                 <h1 className="text-base font-black text-slate-900 tracking-tight uppercase">
@@ -414,6 +454,7 @@ export function PrintableMedicalResume({ data, onClose }: PrintableMedicalResume
               </button>
             )}
           </div>
+        </div>
         </div>
 
       </div>
