@@ -383,18 +383,18 @@ Aplikasi klinis memiliki standar usability lebih ketat dari aplikasi umum karena
 
 ---
 
-### Fase 3 (`P2 — Sedang`) — Modularisasi `features/`, Server Components, Endpoint REST & PWA Nyata
-- [ ] **F3.1 — Pecah *God Files* ke Struktur `features/`**:
-  - *Target*: `lib/actions/{clinical,auth}.ts`, `app/(dashboard)/nakes/{periksa/[bookingId],pasien-lookup/[patientId]}/page.tsx`, `app/(dashboard)/beranda/page.tsx`.
-  - *Aksi*: Pindahkan aksi, query, skema, dan sub-komponen ke `features/{auth,appointments,medical-records,consent,admin}/` sehingga tidak ada file >300–350 baris; satukan `safeRevalidate`, `smartDecryptPayload`, dan `parsePrescriptionDetail` menjadi masing-masing 1 modul tunggal.
-- [ ] **F3.2 — Migrasi Read Awal ke Server Components**:
-  - *Target*: Halaman-halaman utama `app/(dashboard)/**/page.tsx`.
+### Fase 3 (`P2 — Sedang`) — Modularisasi `features/`, Server Components, Endpoint REST & PWA Nyata *(SELESAI & TERVERIFIKASI — 26 Nov 2026, 09:36 WIB; catatan lengkap: [fase-3-architecture-pwa-2026-11-26.md](../perubahan/fase-3-architecture-pwa-2026-11-26.md))*
+- [x] **F3.1 — Pecah *God Files* ke Struktur `features/`**:
+  - *Target*: `lib/actions/{clinical,auth,appointment,admin}.ts`, `app/(dashboard)/nakes/{periksa/[bookingId],pasien-lookup/[patientId]}/page.tsx`, `app/(dashboard)/{beranda,nakes,pasien}/page.tsx`.
+  - *Aksi*: Pindahkan aksi, query, dan sub-komponen ke `features/{auth,appointments,medical-records,dashboard,admin}/`; satukan `safeRevalidate` (`lib/utils/revalidate.ts`) dan `parsePrescriptionDetail` (`features/medical-records/prescription-parser.ts`) menjadi masing-masing 1 modul tunggal.
+- [x] **F3.2 — Migrasi Read Awal ke Server Components**:
+  - *Target*: `app/(dashboard)/{beranda,nakes,pasien}/page.tsx`.
   - *Aksi*: Ubah pembacaan data awal dari `useEffect` + Server Action (`POST`) menjadi Server Components yang memanggil `features/*/queries.ts` dibungkus `<Suspense>` (dan pastikan `/beranda` hanya memuat statistik sesuai peran user aktif).
-- [ ] **F3.3 — 4 Endpoint REST Strategis (`app/api/`)**:
+- [x] **F3.3 — 4 Endpoint REST Strategis (`app/api/`)**:
   - *Target*: `app/api/{health,auth/session,sync/outbox,attachments}/route.ts`.
-  - *Aksi*: Sediakan healthcheck DB, autentikasi sesi REST, sinkronisasi outbox offline, dan upload/download biner terenkripsi (menggantikan path dummy `/uploads/...`).
-- [ ] **F3.4 — Aktivasi PWA & IndexedDB Nyata**:
-  - *Target*: `public/manifest.json` (baru), `public/sw.js`, `lib/storage/indexedDb.ts`, `components/shared/NetworkStatusBanner.tsx`, `app/(dashboard)/nakes/offline-sync/page.tsx`.
+  - *Aksi*: Sediakan healthcheck DB, autentikasi sesi REST, sinkronisasi outbox offline terverifikasi AEAD+HMAC, dan upload/download biner terenkripsi Anti-BOLA.
+- [x] **F3.4 — Aktivasi PWA & IndexedDB Nyata**:
+  - *Target*: `public/manifest.json` (baru), `public/icon.svg` (baru), `public/sw.js`, `components/shared/PwaRegistrar.tsx` (baru), `app/layout.tsx`, `lib/storage/indexedDb.ts`, `components/shared/NetworkStatusBanner.tsx`, `app/(dashboard)/nakes/offline-sync/page.tsx`, `features/medical-records/exam/ExamWorkspace.tsx`.
   - *Aksi*: Buat `public/manifest.json`, registrasikan `sw.js`, dengarkan event `online`/`offline` browser, hubungkan `/nakes/offline-sync` & mode offline `/nakes/periksa` ke `lib/storage/indexedDb.ts` + `POST /api/sync/outbox`.
 
 **Quality Gates Fase 3**:

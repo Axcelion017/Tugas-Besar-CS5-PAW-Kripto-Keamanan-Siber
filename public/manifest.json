@@ -1,0 +1,21 @@
+{
+  "name": "JagaMedis — Hospital Information System",
+  "short_name": "JagaMedis",
+  "description": "Sistem Informasi Rekam Medis Elektronik Kriptografis & Offline-First PWA berstandar Permenkes 24/2022 dan UU PDP.",
+  "start_url": "/beranda",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#F8FAFC",
+  "theme_color": "#0F172A",
+  "lang": "id-ID",
+  "categories": ["medical", "health", "productivity"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

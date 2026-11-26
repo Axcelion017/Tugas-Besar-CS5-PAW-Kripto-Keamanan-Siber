@@ -1,13 +1,13 @@
 // public/sw.js
-// Service Worker untuk JagaMedis PWA
-// Offline-First Caching & Background Sync API Support
+// Service Worker resmi JagaMedis PWA (Offline-First & Background Sync API)
 
-const CACHE_NAME = "resilio-health-v0.2";
+const CACHE_NAME = "jagamedis-v0.3";
 const STATIC_ASSETS = [
   "/",
   "/beranda",
   "/login",
   "/manifest.json",
+  "/icon.svg",
 ];
 
 self.addEventListener("install", (event) => {
@@ -29,6 +29,7 @@ self.addEventListener("activate", (event) => {
           if (key !== CACHE_NAME) {
             return caches.delete(key);
           }
+          return undefined;
         })
       );
     })
@@ -37,12 +38,10 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
-  // Hanya intercept GET requests; navigasi dan static assets
   if (event.request.method !== "GET") return;
 
   const url = new URL(event.request.url);
-
-  // Jangan cache API routes atau server actions
+  if (url.origin !== self.location.origin) return;
   if (url.pathname.startsWith("/api/")) return;
 
   event.respondWith(
@@ -61,7 +60,6 @@ self.addEventListener("fetch", (event) => {
           if (cachedResponse) {
             return cachedResponse;
           }
-          // Fallback offline UI jika ada
           return caches.match("/");
         });
       })
@@ -72,7 +70,7 @@ self.addEventListener("fetch", (event) => {
 self.addEventListener("sync", (event) => {
   if (event.tag === "sync-medical-records") {
     event.waitUntil(
-      self.clients.matchAll().then((clients) => {
+      self.clients.matchAll({ includeUncontrolled: true }).then((clients) => {
         clients.forEach((client) => {
           client.postMessage({
             type: "RESILIO_TRIGGER_OFFLINE_SYNC",

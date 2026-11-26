@@ -256,10 +256,27 @@ async function main() {
 
   // 6. SEED ANTREAN KUNJUNGAN (APPOINTMENTS) & TRIASE
   console.log("-> Seeding Appointments & Triage Assessments...");
+  const nowSeed = new Date();
+  const todaySeedIso = `${nowSeed.getFullYear()}-${String(nowSeed.getMonth() + 1).padStart(
+    2,
+    "0"
+  )}-${String(nowSeed.getDate()).padStart(2, "0")}`;
+  const tomorrowSeed = new Date(nowSeed);
+  tomorrowSeed.setDate(nowSeed.getDate() + 1);
+  const tomorrowSeedIso = `${tomorrowSeed.getFullYear()}-${String(
+    tomorrowSeed.getMonth() + 1
+  ).padStart(2, "0")}-${String(tomorrowSeed.getDate()).padStart(2, "0")}`;
+
   for (const apt of MOCK_APPOINTMENTS) {
+    // Sinkronkan tanggal demo relatif terhadap hari ini agar Jadwal Hari Ini & Jadwal Mingguan selalu konsisten
+    const dynamicDateIso = apt.tanggal === "2026-10-16" ? tomorrowSeedIso : todaySeedIso;
+    const dynamicDate = new Date(`${dynamicDateIso}T00:00:00.000Z`);
+
     await prisma.appointment.upsert({
       where: { id: apt.id },
       update: {
+        tanggal: dynamicDate,
+        jam: apt.jam,
         status: apt.status,
         keluhanAwal: apt.keluhanAwal,
         consentActive: apt.consentActive,
@@ -271,7 +288,7 @@ async function main() {
         faskesId: apt.faskesId,
         doctorId: apt.dokterId,
         dpjpId: apt.dpjpId,
-        tanggal: new Date(apt.tanggal),
+        tanggal: dynamicDate,
         jam: apt.jam,
         poli: apt.poli,
         keluhanAwal: apt.keluhanAwal,
