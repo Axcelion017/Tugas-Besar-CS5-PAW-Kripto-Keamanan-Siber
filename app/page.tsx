@@ -3,7 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { saveSession } from "@/lib/auth/auth";
+import { saveSession, normalizeRole } from "@/lib/auth/auth";
 import { isDemoLoginEnabled } from "@/lib/auth/demoConfig";
 import { loginServerAction } from "@/lib/actions/auth";
 
@@ -16,7 +16,8 @@ export default function HomePage() {
       const res = await loginServerAction(user, pass);
       if (res.success && res.session) {
         saveSession(res.session);
-        router.push("/beranda");
+        const targetRole = res.targetRole || normalizeRole(res.session.role);
+        router.push(`/${targetRole}`);
         return;
       }
     } catch {
@@ -32,12 +33,12 @@ export default function HomePage() {
       <header className="bg-white/80 backdrop-blur-md border-b border-slate-200 sticky top-0 z-30 px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-teal-700 rounded-xl flex items-center justify-center text-white font-black text-xl shadow-md shadow-teal-200 shrink-0">
+            <div className="w-10 h-10 bg-red-600 rounded-xl flex items-center justify-center text-white font-black text-xl shadow-md shadow-red-200 shrink-0">
               J
             </div>
             <div>
               <span className="font-black text-slate-900 tracking-tight text-base sm:text-lg">
-                JAGA<span className="text-teal-700">MEDIS</span>
+                JAGA<span className="text-red-600">MEDIS</span>
               </span>
               <p className="text-[11px] text-slate-600 font-bold tracking-wider uppercase truncate">
                 Zero-Trust Hospital Information System
@@ -54,7 +55,7 @@ export default function HomePage() {
             </Link>
             <Link
               href="/login"
-              className="px-3 sm:px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md transition whitespace-nowrap"
+              className="px-3 sm:px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md transition whitespace-nowrap"
             >
               Halaman Login →
             </Link>
@@ -65,8 +66,8 @@ export default function HomePage() {
       {/* Hero Section */}
       <main className="max-w-7xl mx-auto px-6 py-12 space-y-16">
         <div className="text-center max-w-3xl mx-auto space-y-6">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-teal-50 border border-teal-200 text-teal-800 text-xs font-bold">
-            <span className="w-2 h-2 rounded-full bg-teal-700"></span>
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-red-50 border border-red-200 text-red-700 text-xs font-bold">
+            <span className="w-2 h-2 rounded-full bg-red-600"></span>
             <span>Standar Permenkes No. 24/2022 & UU Pelindungan Data Pribadi (UU PDP)</span>
           </div>
 
@@ -82,7 +83,7 @@ export default function HomePage() {
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
             <Link
               href="/login"
-              className="w-full sm:w-auto px-8 py-3.5 bg-teal-700 hover:bg-teal-800 text-white rounded-2xl text-xs font-black uppercase tracking-wider shadow-lg shadow-teal-700/25 transition text-center"
+              className="w-full sm:w-auto px-8 py-3.5 bg-red-600 hover:bg-red-700 text-white rounded-2xl text-xs font-black uppercase tracking-wider shadow-lg shadow-red-600/30 transition text-center"
             >
               Masuk ke Halaman Login →
             </Link>
@@ -176,7 +177,7 @@ export default function HomePage() {
         {/* 3 Pillars Overview */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-3">
-            <div className="w-10 h-10 rounded-xl bg-teal-100 text-teal-700 flex items-center justify-center text-xl font-bold">
+            <div className="w-10 h-10 rounded-xl bg-red-100 text-red-600 flex items-center justify-center text-xl font-bold">
               1
             </div>
             <h3 className="text-base font-bold text-slate-900">

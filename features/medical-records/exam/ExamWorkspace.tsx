@@ -51,7 +51,7 @@ export function ExamWorkspace({ bookingId }: { bookingId: string }) {
   if (form.isLoading || !form.session || !form.appointment || !form.patient) {
     return (
       <div className="min-h-[50vh] flex flex-col items-center justify-center font-sans">
-        <div className="w-8 h-8 border-3 border-teal-700 border-t-transparent rounded-full animate-spin mb-3" />
+        <div className="w-8 h-8 border-3 border-emerald-600 border-t-transparent rounded-full animate-spin mb-3" />
         <p className="text-xs font-semibold text-slate-500">
           Memverifikasi Otorisasi Sesi Pemeriksaan dari PostgreSQL...
         </p>
@@ -65,7 +65,7 @@ export function ExamWorkspace({ bookingId }: { bookingId: string }) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-2 text-xs font-bold text-teal-700 uppercase tracking-wider">
+      <div className="flex items-center gap-2 text-xs font-bold text-emerald-700 uppercase tracking-wider">
         <Link href="/nakes" className="hover:underline">
           Stasiun Nakes
         </Link>
@@ -123,7 +123,7 @@ export function ExamWorkspace({ bookingId }: { bookingId: string }) {
               type="checkbox"
               checked={form.isAddendum}
               onChange={(e) => form.setIsAddendum(e.target.checked)}
-              className="rounded text-teal-700"
+              className="rounded text-emerald-600"
             />
             <span>Mode Addendum</span>
           </label>
@@ -158,7 +158,7 @@ export function ExamWorkspace({ bookingId }: { bookingId: string }) {
                 onClick={() => form.setActiveTab(tabNum)}
                 className={`px-3.5 py-2 text-xs font-bold rounded-xl whitespace-nowrap transition cursor-pointer inline-flex items-center gap-1.5 ${
                   form.activeTab === tabNum
-                    ? "bg-teal-700 text-white shadow-xs"
+                    ? "bg-emerald-600 text-white shadow-xs"
                     : hasTabError
                     ? "bg-red-50 text-red-800 border border-red-300"
                     : "bg-slate-100 text-slate-700 hover:bg-slate-200"
@@ -266,7 +266,7 @@ export function ExamWorkspace({ bookingId }: { bookingId: string }) {
               <button
                 type="button"
                 onClick={() => form.setActiveTab((p) => (p < 5 ? ((p + 1) as 1 | 2 | 3 | 4 | 5) : 5))}
-                className="px-4 py-2 bg-teal-50 hover:bg-teal-100 text-teal-800 text-xs font-bold rounded-xl transition cursor-pointer"
+                className="px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold rounded-xl transition cursor-pointer"
               >
                 Lanjut ke Tab {form.activeTab + 1} →
               </button>
@@ -276,7 +276,7 @@ export function ExamWorkspace({ bookingId }: { bookingId: string }) {
           <button
             type="submit"
             disabled={form.isSubmitting}
-            className="px-6 py-3.5 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md transition cursor-pointer disabled:bg-slate-400"
+            className="px-6 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md transition cursor-pointer disabled:bg-slate-400"
           >
             {form.isSubmitting
               ? "Mengenkripsi & Mengesahkan..."

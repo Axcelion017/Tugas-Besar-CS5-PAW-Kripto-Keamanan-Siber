@@ -52,6 +52,7 @@ export default function PasienListPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"ALL" | "UNSIGNED" | "SIGNED" | "IN_QUEUE">("ALL");
+  const [priorityFilter, setPriorityFilter] = useState<"ALL" | "MERAH" | "KUNING" | "HIJAU">("ALL");
 
   // State Pencarian Manual NIK / Break-Glass IGD
   const [showManualNikSearch, setShowManualNikSearch] = useState(false);
@@ -137,22 +138,39 @@ export default function PasienListPage() {
     loadData();
   }, []);
 
-  // Filter Pasien
-  const filteredPatients = patients.filter((p) => {
-    const q = searchQuery.toLowerCase();
-    const matchesSearch =
-      p.name.toLowerCase().includes(q) ||
-      p.nik.includes(q) ||
-      p.mrn.toLowerCase().includes(q) ||
-      p.latestDiagnosis.toLowerCase().includes(q);
+  const priorityRank: Record<"MERAH" | "KUNING" | "HIJAU", number> = {
+    MERAH: 0,
+    KUNING: 1,
+    HIJAU: 2,
+  };
 
-    if (!matchesSearch) return false;
+  const priorityCounts = {
+    MERAH: patients.filter((p) => (p.triaseLevel || "HIJAU") === "MERAH").length,
+    KUNING: patients.filter((p) => (p.triaseLevel || "HIJAU") === "KUNING").length,
+    HIJAU: patients.filter((p) => (p.triaseLevel || "HIJAU") === "HIJAU").length,
+  };
 
-    if (statusFilter === "UNSIGNED") return p.documentStatus === "UNSIGNED";
-    if (statusFilter === "SIGNED") return p.documentStatus === "SIGNED";
-    if (statusFilter === "IN_QUEUE") return p.queueStatus === "IN_QUEUE";
-    return true;
-  });
+  // Filter & Urutkan Pasien (Otomatis prioritaskan P1 MERAH -> P2 KUNING -> P3 HIJAU sesuai NISTIR 7804)
+  const filteredPatients = patients
+    .filter((p) => {
+      const q = searchQuery.toLowerCase();
+      const matchesSearch =
+        p.name.toLowerCase().includes(q) ||
+        p.nik.includes(q) ||
+        p.mrn.toLowerCase().includes(q) ||
+        p.latestDiagnosis.toLowerCase().includes(q);
+
+      if (!matchesSearch) return false;
+
+      const triase = p.triaseLevel || "HIJAU";
+      if (priorityFilter !== "ALL" && triase !== priorityFilter) return false;
+
+      if (statusFilter === "UNSIGNED") return p.documentStatus === "UNSIGNED";
+      if (statusFilter === "SIGNED") return p.documentStatus === "SIGNED";
+      if (statusFilter === "IN_QUEUE") return p.queueStatus === "IN_QUEUE";
+      return true;
+    })
+    .sort((a, b) => priorityRank[a.triaseLevel || "HIJAU"] - priorityRank[b.triaseLevel || "HIJAU"]);
 
   const handleManualNikSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -427,69 +445,133 @@ export default function PasienListPage() {
       )}
 
       {/* Filter & Bar Pencarian List Pasien */}
-      <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-        {/* Input Pencarian Cepat */}
-        <div className="flex-1 flex items-center gap-2 bg-slate-50 px-3.5 py-2 rounded-2xl border border-slate-200">
-          <span className="text-xs font-black text-slate-400 font-mono uppercase">CARI</span>
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Cari berdasarkan nama pasien, NIK, No. RM, atau keluhan/penyakit..."
-            className="w-full bg-transparent text-xs font-semibold text-slate-800 placeholder-slate-400 outline-none"
-          />
-          {searchQuery && (
+      <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-xs space-y-3">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+          {/* Input Pencarian Cepat */}
+          <div className="flex-1 flex items-center gap-2 bg-slate-50 px-3.5 py-2 rounded-2xl border border-slate-200">
+            <span className="text-xs font-black text-slate-500 font-mono uppercase">CARI</span>
+            <input
+              type="text"
+              aria-label="Cari pasien berdasarkan nama, NIK, nomor rekam medis, atau diagnosis"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Cari berdasarkan nama pasien, NIK, No. RM, atau keluhan/penyakit..."
+              className="w-full bg-transparent text-xs font-semibold text-slate-800 placeholder-slate-400 outline-none"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="text-xs text-slate-500 hover:text-slate-800 font-bold px-1 cursor-pointer"
+              >
+                Reset
+              </button>
+            )}
+          </div>
+
+          {/* Tab Filter Status Dokumen */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0">
             <button
-              onClick={() => setSearchQuery("")}
-              className="text-xs text-slate-400 hover:text-slate-600 font-bold px-1"
+              type="button"
+              onClick={() => setStatusFilter("ALL")}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer whitespace-nowrap ${
+                statusFilter === "ALL"
+                  ? "bg-slate-900 text-white"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
             >
-              Reset
+              Semua ({patients.length})
             </button>
-          )}
+            <button
+              type="button"
+              onClick={() => setStatusFilter("UNSIGNED")}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer whitespace-nowrap ${
+                statusFilter === "UNSIGNED"
+                  ? "bg-amber-600 text-white"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              Menunggu TTD ({stats.unsignedCount})
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatusFilter("SIGNED")}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer whitespace-nowrap ${
+                statusFilter === "SIGNED"
+                  ? "bg-emerald-600 text-white"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              Sudah TTD ({stats.signedCount})
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatusFilter("IN_QUEUE")}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer whitespace-nowrap ${
+                statusFilter === "IN_QUEUE"
+                  ? "bg-blue-600 text-white"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              Dalam Antrean ({stats.totalAntrean})
+            </button>
+          </div>
         </div>
 
-        {/* Tab Filter Status Dokumen */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0">
-          <button
-            onClick={() => setStatusFilter("ALL")}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer whitespace-nowrap ${
-              statusFilter === "ALL"
-                ? "bg-slate-900 text-white"
-                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-            }`}
-          >
-            Semua ({patients.length})
-          </button>
-          <button
-            onClick={() => setStatusFilter("UNSIGNED")}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer whitespace-nowrap ${
-              statusFilter === "UNSIGNED"
-                ? "bg-amber-600 text-white"
-                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-            }`}
-          >
-            Menunggu TTD ({stats.unsignedCount})
-          </button>
-          <button
-            onClick={() => setStatusFilter("SIGNED")}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer whitespace-nowrap ${
-              statusFilter === "SIGNED"
-                ? "bg-emerald-600 text-white"
-                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-            }`}
-          >
-            Sudah TTD ({stats.signedCount})
-          </button>
-          <button
-            onClick={() => setStatusFilter("IN_QUEUE")}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer whitespace-nowrap ${
-              statusFilter === "IN_QUEUE"
-                ? "bg-blue-600 text-white"
-                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-            }`}
-          >
-            Dalam Antrean ({stats.totalAntrean})
-          </button>
+        {/* Bar Filter Skala Prioritas Triase (P1 MERAH / P2 KUNING / P3 HIJAU) */}
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-100">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[11px] font-black uppercase tracking-wider text-slate-500">
+              Skala Prioritas:
+            </span>
+            <button
+              type="button"
+              onClick={() => setPriorityFilter("ALL")}
+              className={`px-3 py-1 rounded-xl text-xs font-bold transition cursor-pointer ${
+                priorityFilter === "ALL"
+                  ? "bg-slate-800 text-white"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              Semua Prioritas
+            </button>
+            <button
+              type="button"
+              onClick={() => setPriorityFilter("MERAH")}
+              className={`px-3 py-1 rounded-xl text-xs font-bold transition cursor-pointer border ${
+                priorityFilter === "MERAH"
+                  ? "bg-red-600 text-white border-red-600 shadow-2xs"
+                  : "bg-red-50 text-red-800 border-red-200 hover:bg-red-100"
+              }`}
+            >
+              P1 • MERAH ({priorityCounts.MERAH})
+            </button>
+            <button
+              type="button"
+              onClick={() => setPriorityFilter("KUNING")}
+              className={`px-3 py-1 rounded-xl text-xs font-bold transition cursor-pointer border ${
+                priorityFilter === "KUNING"
+                  ? "bg-amber-600 text-white border-amber-600 shadow-2xs"
+                  : "bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100"
+              }`}
+            >
+              P2 • KUNING ({priorityCounts.KUNING})
+            </button>
+            <button
+              type="button"
+              onClick={() => setPriorityFilter("HIJAU")}
+              className={`px-3 py-1 rounded-xl text-xs font-bold transition cursor-pointer border ${
+                priorityFilter === "HIJAU"
+                  ? "bg-emerald-600 text-white border-emerald-600 shadow-2xs"
+                  : "bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100"
+              }`}
+            >
+              P3 • HIJAU ({priorityCounts.HIJAU})
+            </button>
+          </div>
+          <span className="text-[11px] font-semibold text-slate-500">
+            Urutan otomatis: P1 Kritis → P2 Mendesak → P3 Stabil
+          </span>
         </div>
       </div>
 
@@ -526,8 +608,15 @@ export default function PasienListPage() {
                 return (
                   <tr
                     key={p.id}
+                    tabIndex={0}
                     onClick={() => router.push(`/nakes/pasien-lookup/${p.id}`)}
-                    className="hover:bg-slate-50/90 transition-colors cursor-pointer group"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        router.push(`/nakes/pasien-lookup/${p.id}`);
+                      }
+                    }}
+                    className="hover:bg-slate-50/90 focus:bg-emerald-50/50 focus:outline-none transition-colors cursor-pointer group"
                   >
                     {/* Kolom 1: Nama & No. RM */}
                     <td className="py-4 px-5">
@@ -555,7 +644,7 @@ export default function PasienListPage() {
                     <td className="py-4 px-4">
                       {triase === "MERAH" ? (
                         <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-red-600 text-white shadow-2xs inline-flex items-center gap-1.5 whitespace-nowrap">
-                          <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
+                          <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping motion-reduce:animate-none" />
                           P1 • MERAH
                         </span>
                       ) : triase === "KUNING" ? (
