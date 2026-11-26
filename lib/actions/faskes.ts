@@ -1,17 +1,9 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
 import { AuditAction, AuditSeverity, FaskesStatus } from "@prisma/client";
 import { requireSession, recordSecurityAuditBestEffort } from "@/features/auth/guard";
-
-function safeRevalidate(path: string) {
-  try {
-    revalidatePath(path);
-  } catch {
-    // Diabaikan jika dieksekusi di luar request context Next.js
-  }
-}
+import { safeRevalidate } from "@/lib/utils/revalidate";
 
 export interface FaskesActionResponse {
   success: boolean;

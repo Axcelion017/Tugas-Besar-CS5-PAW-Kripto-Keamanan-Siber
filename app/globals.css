@@ -39,3 +39,36 @@ body {
   background-size: 200% 100%;
   animation: shimmer 1.6s infinite ease-in-out;
 }
+
+/* Isolasi cetak khusus lembar Resume Medis agar UI aplikasi/dashboard tidak ikut tercetak */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 12mm;
+  }
+
+  body.jagamedis-printing-resume {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  body.jagamedis-printing-resume > *:not(#jagamedis-print-portal) {
+    display: none !important;
+  }
+
+  #jagamedis-print-portal {
+    position: static !important;
+    inset: auto !important;
+    display: block !important;
+    width: 100% !important;
+    height: auto !important;
+    background: #ffffff !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+  }
+}

@@ -1,52 +1,72 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
+import { getOutboxItems, OUTBOX_UPDATED_EVENT } from "@/lib/storage/indexedDb";
 
 export function NetworkStatusBanner() {
   const [isOnline, setIsOnline] = useState(true);
   const [queueCount, setQueueCount] = useState(0);
 
+  const refreshOutboxCount = useCallback(async () => {
+    const items = await getOutboxItems();
+    setQueueCount(items.length);
+  }, []);
+
   useEffect(() => {
+    const syncNetworkState = () => {
+      const simulatedOffline = localStorage.getItem("resilio_network_mode") === "offline";
+      const browserOnline = typeof navigator !== "undefined" ? navigator.onLine : true;
+      setIsOnline(browserOnline && !simulatedOffline);
+    };
+
     const timer = setTimeout(() => {
-      // Muat state offline dari localStorage
-      const saved = localStorage.getItem("resilio_network_mode");
-      if (saved === "offline") {
-        setIsOnline(false);
-      }
+      syncNetworkState();
+      void refreshOutboxCount();
     }, 0);
 
-    const checkQueue = () => {
-      try {
-        const queued = localStorage.getItem("resilio_offline_queue");
-        if (queued) {
-          const arr = JSON.parse(queued);
-          setQueueCount(arr.length);
-        } else {
-          setQueueCount(0);
-        }
-      } catch {
-        setQueueCount(0);
-      }
+    const handleOnline = () => {
+      localStorage.setItem("resilio_network_mode", "online");
+      setIsOnline(true);
+      window.dispatchEvent(new CustomEvent("jagamedis-sync-requested"));
     };
 
-    checkQueue();
-    const interval = setInterval(checkQueue, 2000);
+    const handleOffline = () => {
+      setIsOnline(false);
+    };
+
+    const handleOutboxUpdated = () => {
+      void refreshOutboxCount();
+    };
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    window.addEventListener("storage", syncNetworkState);
+    window.addEventListener(OUTBOX_UPDATED_EVENT, handleOutboxUpdated);
+
     return () => {
       clearTimeout(timer);
-      clearInterval(interval);
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+      window.removeEventListener("storage", syncNetworkState);
+      window.removeEventListener(OUTBOX_UPDATED_EVENT, handleOutboxUpdated);
     };
-  }, []);
+  }, [refreshOutboxCount]);
 
   const toggleNetwork = () => {
     const next = !isOnline;
     setIsOnline(next);
     localStorage.setItem("resilio_network_mode", next ? "online" : "offline");
     window.dispatchEvent(new Event("storage"));
+    if (next) {
+      window.dispatchEvent(new CustomEvent("jagamedis-sync-requested"));
+    }
   };
 
   return (
     <div className="flex items-center gap-2">
       <div
+        role="status"
         className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-semibold transition-all ${
           isOnline
             ? "bg-emerald-50 border-emerald-200 text-emerald-800"
@@ -55,7 +75,7 @@ export function NetworkStatusBanner() {
       >
         <span
           className={`w-2.5 h-2.5 rounded-full ${
-            isOnline ? "bg-emerald-500 animate-pulse" : "bg-amber-500"
+            isOnline ? "bg-emerald-500 motion-reduce:animate-none animate-pulse" : "bg-amber-500"
           }`}
         />
         <span className="hidden sm:inline">
@@ -71,10 +91,13 @@ export function NetworkStatusBanner() {
       </div>
 
       {queueCount > 0 && (
-        <span className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-red-100 border border-red-300 text-red-700 text-xs font-bold animate-pulse">
-          <span>Antrean Sinkron:</span>
+        <Link
+          href="/nakes/offline-sync"
+          className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-red-100 border border-red-300 text-red-700 text-xs font-bold hover:bg-red-200 transition"
+        >
+          <span>Antrean IndexedDB:</span>
           <span>{queueCount}</span>
-        </span>
+        </Link>
       )}
     </div>
   );

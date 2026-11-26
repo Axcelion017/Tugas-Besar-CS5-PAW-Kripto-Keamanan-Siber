@@ -1,5 +1,5 @@
 // lib/storage/indexedDb.ts
-// Standardized IndexedDB Wrapper for Resilio-Health Offline-First Architecture
+// Standardized IndexedDB Wrapper for JagaMedis Offline-First Architecture
 // Compliant with SPECIFICATION.md: Section 4.A (Struktur Penyimpanan Lokal IndexedDB)
 
 const DB_NAME = "resilio_offline_db";
@@ -11,11 +11,18 @@ export const STORES = {
   MEDIA_BLOBS: "offline_media_blobs",
 } as const;
 
+export const OUTBOX_UPDATED_EVENT = "jagamedis-outbox-updated";
+
 export interface OfflineOutboxItem {
   recordId: string;
   encounterId: string;
   patientId: string;
+  patientName?: string;
   faskesId: string;
+  faskesNama?: string;
+  dokterNama?: string;
+  primaryIcd10: string;
+  diagnosisShort: string;
   encryptedPayload: string;
   ivHex: string;
   hmacDigest: string;
@@ -38,6 +45,27 @@ export interface OfflineMediaBlobItem {
   createdAt: string;
 }
 
+export function notifyOutboxUpdated(): void {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(OUTBOX_UPDATED_EVENT));
+  }
+}
+
+export async function requestBackgroundSync(): Promise<void> {
+  if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const syncReg = reg as ServiceWorkerRegistration & {
+      sync?: { register: (tag: string) => Promise<void> };
+    };
+    if (syncReg.sync) {
+      await syncReg.sync.register("sync-medical-records");
+    }
+  } catch {
+    // Background Sync API tidak didukung semua browser (fallback manual/online event)
+  }
+}
+
 export function openOfflineDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     if (typeof window === "undefined" || !("indexedDB" in window)) {
@@ -49,19 +77,16 @@ export function openOfflineDatabase(): Promise<IDBDatabase> {
     request.onupgradeneeded = (event) => {
       const db = (event.target as IDBOpenDBRequest).result;
 
-      // 1. Store: cached_active_patients
       if (!db.objectStoreNames.contains(STORES.CACHED_PATIENTS)) {
         db.createObjectStore(STORES.CACHED_PATIENTS, { keyPath: "patientId" });
       }
 
-      // 2. Store: offline_clinical_outbox
       if (!db.objectStoreNames.contains(STORES.CLINICAL_OUTBOX)) {
         const outboxStore = db.createObjectStore(STORES.CLINICAL_OUTBOX, { keyPath: "recordId" });
         outboxStore.createIndex("status", "status", { unique: false });
         outboxStore.createIndex("patientId", "patientId", { unique: false });
       }
 
-      // 3. Store: offline_media_blobs
       if (!db.objectStoreNames.contains(STORES.MEDIA_BLOBS)) {
         const mediaStore = db.createObjectStore(STORES.MEDIA_BLOBS, { keyPath: "attachmentId" });
         mediaStore.createIndex("clinicalRecordId", "clinicalRecordId", { unique: false });
@@ -73,41 +98,56 @@ export function openOfflineDatabase(): Promise<IDBDatabase> {
   });
 }
 
-// =============================================================================
-// Helper Functions CRUD untuk IndexedDB
-// =============================================================================
-
 export async function saveToOutbox(item: OfflineOutboxItem): Promise<void> {
   const db = await openOfflineDatabase();
-  return new Promise((resolve, reject) => {
+  await new Promise<void>((resolve, reject) => {
     const tx = db.transaction(STORES.CLINICAL_OUTBOX, "readwrite");
     const store = tx.objectStore(STORES.CLINICAL_OUTBOX);
     const req = store.put(item);
     req.onsuccess = () => resolve();
     req.onerror = () => reject(req.error);
   });
+  notifyOutboxUpdated();
+  await requestBackgroundSync();
 }
 
 export async function getOutboxItems(): Promise<OfflineOutboxItem[]> {
-  const db = await openOfflineDatabase();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORES.CLINICAL_OUTBOX, "readonly");
-    const store = tx.objectStore(STORES.CLINICAL_OUTBOX);
-    const req = store.getAll();
-    req.onsuccess = () => resolve(req.result || []);
-    req.onerror = () => reject(req.error);
-  });
+  try {
+    const db = await openOfflineDatabase();
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(STORES.CLINICAL_OUTBOX, "readonly");
+      const store = tx.objectStore(STORES.CLINICAL_OUTBOX);
+      const req = store.getAll();
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => reject(req.error);
+    });
+  } catch {
+    return [];
+  }
 }
 
 export async function removeOutboxItem(recordId: string): Promise<void> {
   const db = await openOfflineDatabase();
-  return new Promise((resolve, reject) => {
+  await new Promise<void>((resolve, reject) => {
     const tx = db.transaction(STORES.CLINICAL_OUTBOX, "readwrite");
     const store = tx.objectStore(STORES.CLINICAL_OUTBOX);
     const req = store.delete(recordId);
     req.onsuccess = () => resolve();
     req.onerror = () => reject(req.error);
   });
+  notifyOutboxUpdated();
+}
+
+export async function clearOutbox(): Promise<void> {
+  const db = await openOfflineDatabase();
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(STORES.CLINICAL_OUTBOX, "readwrite");
+    const store = tx.objectStore(STORES.CLINICAL_OUTBOX);
+    const req = store.clear();
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+  notifyOutboxUpdated();
 }
 
 export async function saveMediaBlob(item: OfflineMediaBlobItem): Promise<void> {
@@ -121,7 +161,9 @@ export async function saveMediaBlob(item: OfflineMediaBlobItem): Promise<void> {
   });
 }
 
-export async function getMediaBlobsByRecord(clinicalRecordId: string): Promise<OfflineMediaBlobItem[]> {
+export async function getMediaBlobsByRecord(
+  clinicalRecordId: string
+): Promise<OfflineMediaBlobItem[]> {
   const db = await openOfflineDatabase();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORES.MEDIA_BLOBS, "readonly");

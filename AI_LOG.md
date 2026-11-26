@@ -4,6 +4,36 @@ Dokumen pencatatan penggunaan asisten kecerdasan buatan (AI) sesuai kebijakan in
 
 ---
 
+## 2026-11-26 — Fase 3 Refactoring (`P2 — Sedang`): Modularisasi `features/`, Server Components, 4 Endpoint REST, PWA/IndexedDB & Sinkronisasi Jadwal
+
+- **Tool**: Google Antigravity (Gemini Models)
+- **Branch**: `refactor/fase-3-architecture-pwa`
+- **Catatan Perubahan Rinci**: `docs/perubahan/fase-3-architecture-pwa-2026-11-26.md`
+- **Tujuan**:
+  1. Memperbaiki ketidaksinkronan tampilan **Jadwal Hari Ini** (`/nakes`) dan **Jadwal Praktik Mingguan** (`/nakes/jadwal`) akibat tanggal seed Oktober 2026, header pekan hardcode, dan zona waktu UTC vs WIB.
+  2. Melaksanakan seluruh item **Fase 3 (`F3.1` – `F3.4`)** dari Master Plan Audit Menyeluruh JagaMedis (`docs/audit/audit_menyeluruh_jagamedis_22Nov2026.md`).
+  3. Memecah seluruh *god files* (`clinical.ts`, `auth.ts`, `appointment.ts`, `admin.ts`, `beranda`, `pasien`, `nakes`, `periksa/[bookingId]`, `pasien-lookup/[patientId]`) ke struktur modular `features/` serta menghapus duplikasi `safeRevalidate` (7 salinan) dan `parsePrescriptionDetail` (2 salinan).
+  4. Memigrasikan pembacaan awal halaman utama (`/beranda`, `/nakes`, `/pasien`) ke **Next.js 16 Server Components** dengan `<Suspense>` streaming langsung dari Prisma.
+  5. Membangun 4 endpoint REST strategis (`GET /api/health`, `/api/auth/session`, `POST /api/sync/outbox`, `GET/POST /api/attachments`) dan mengaktifkan PWA nyata (`public/manifest.json`, `PwaRegistrar`, `IndexedDB resilio_offline_db`, & `POST /api/sync/outbox`).
+- **Ringkasan Prompt**:
+  1. *"Sepertinya tampilan jadwal hari ini dengan yang jadwal praktik mingguan tidak sinkron, coba kamu cek lagi."*
+  2. *"Nama branch untuk fase 3 — yap langsung saja sekalian fase 3."*
+- **Bagian yang Dihasilkan / Dimodifikasi**:
+  - **Sinkronisasi Jadwal**: `prisma/seed.ts`, `components/clinical/DoctorCalendarSchedule.tsx`, `app/(dashboard)/nakes/jadwal/page.tsx`.
+  - **Modularisasi `features/` & Deduplikasi (`F3.1`)**: `lib/utils/revalidate.ts`, `features/medical-records/prescription-parser.ts`, `features/admin/*`, `features/auth/*`, `features/appointments/*`, `features/dashboard/*`, `features/medical-records/*` (`exam/*`, `patient-detail/*`), serta perampingan `lib/actions/{admin,auth,appointment,clinical}.ts` dan `app/(dashboard)/{beranda,nakes,pasien,nakes/periksa/[bookingId],nakes/pasien-lookup/[patientId]}/page.tsx`.
+  - **Server Components (`F3.2`)**: `features/dashboard/queries.ts`, `features/appointments/queries.ts`, `features/medical-records/queries.ts`.
+  - **Endpoint REST (`F3.3`)**: `app/api/health/route.ts`, `app/api/sync/outbox/route.ts`, `app/api/attachments/route.ts`.
+  - **PWA & IndexedDB Nyata (`F3.4`)**: `public/manifest.json`, `public/icon.svg`, `public/sw.js`, `components/shared/PwaRegistrar.tsx`, `app/layout.tsx`, `lib/storage/indexedDb.ts`, `components/shared/NetworkStatusBanner.tsx`, `app/(dashboard)/nakes/offline-sync/page.tsx`.
+  - **Pengujian & Dokumentasi**: `tests/phase3-architecture-pwa.test.ts` (baru, 4 skenario uji Quality Gates Fase 3), `docs/perubahan/fase-3-architecture-pwa-2026-11-26.md` (baru), `docs/perubahan/README.md`, `AI_LOG.md`, `CHANGELOG.md`, `EVALUASI.md`, `README.md`, `docs/audit/audit_menyeluruh_jagamedis_22Nov2026.md`.
+- **Cara Verifikasi**:
+  - `npx tsx prisma/seed.ts`: Seeding ulang idempoten dengan tanggal jadwal sinkron hari ini sukses.
+  - `npx tsc --noEmit`: 0 kesalahan tipe statis.
+  - `npx vitest run`: 7 berkas tes, **48/48 tes lulus (100%)**.
+  - `npm run lint`: 0 error, 0 warning.
+  - `npm run build`: Kompilasi produksi **36/36 rute + `ƒ Proxy (Middleware)`** sukses.
+
+---
+
 ## 2026-11-26 — Fase 2 Refactoring (`P1 — Tinggi`): Eliminasi *Split-Brain* & Integritas Alur End-to-End 4 Peran (100% PostgreSQL)
 
 - **Tool**: Google Antigravity (Gemini Models)

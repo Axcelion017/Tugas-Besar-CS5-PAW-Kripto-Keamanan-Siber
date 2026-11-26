@@ -109,8 +109,8 @@ Sistem Resilio-Health dibangun dengan arsitektur teknologi modern yang terbagi k
 | **Data Validation Engine** | **Zod** | `^4.6.7` | Validasi tipe data ketat (*Type-Safe Schema Validation*) di sisi formulir peramban dan lapisan gerbang Server Action (*Defense-in-Depth*). |
 | **Data Visualization** | **Recharts** | `^2.15.0` | Visualisasi grafik tren tanda vital dinamis (Sistolik, Diastolik, Detak Jantung) pada dashboard pasien sesuai Permenkes 24/2022. |
 | **Client-Side Cryptography** | **W3C Web Crypto API** | Native Standard | Enkripsi simetris AES-256-GCM (kunci 256-bit unik pasien, CSPRNG IV 96-bit), enkripsi citra biner, dan tag integritas HMAC-SHA256 langsung di peramban (*Zero-Knowledge*). |
-| **Offline-First Engine** | **PWA Service Worker & IndexedDB** | Web Standard | PWA Service Worker (`public/sw.js`) dengan penyimpanan biner IndexedDB berkapasitas besar untuk ketahanan operasional saat internet rumah sakit terputus. |
-| **Testing Suite** | **Vitest** | `^5.0.4` | Framework pengujian unit & integrasi otomatis berkecepatan tinggi memverifikasi **44 skenario** (kriptografi AEAD/HKDF, validasi Zod, RBAC, transaksi `RESTRICT`, *Quality Gates* keamanan Fase 1, & alur End-to-End 4 peran PostgreSQL Fase 2). |
+| **Offline-First Engine** | **PWA Service Worker, Manifest & IndexedDB** | Web Standard | `public/manifest.json`, Service Worker (`public/sw.js`), IndexedDB (`resilio_offline_db`), dan endpoint REST `POST /api/sync/outbox` ber-verifikasi AEAD+HMAC. |
+| **Testing Suite** | **Vitest** | `^5.0.4` | Framework pengujian unit & integrasi otomatis berkecepatan tinggi memverifikasi **48 skenario** (kriptografi AEAD/HKDF, validasi Zod, RBAC, transaksi `RESTRICT`, *Quality Gates* Fase 1–3, & kontrak REST API). |
 | **Linter & Code Quality** | **ESLint** | `^9.0.0` | Analisis statis kualitas kode dengan 0 error dan 0 warning. |
 
 ---

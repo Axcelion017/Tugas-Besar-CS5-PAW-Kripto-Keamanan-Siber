@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useId, useRef } from "react";
+import { createPortal } from "react-dom";
 
 export interface PrintableRecordData {
   recordId: string;
@@ -86,6 +87,13 @@ export function PrintableMedicalResume({ data, onClose }: PrintableMedicalResume
   const closeButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
+    document.body.classList.add("jagamedis-printing-resume");
+    return () => {
+      document.body.classList.remove("jagamedis-printing-resume");
+    };
+  }, []);
+
+  useEffect(() => {
     if (!onClose) return;
     const previouslyFocused = document.activeElement as HTMLElement | null;
     closeButtonRef.current?.focus();
@@ -116,8 +124,9 @@ export function PrintableMedicalResume({ data, onClose }: PrintableMedicalResume
     minimumFractionDigits: 0,
   }).format(data.billing?.totalBiaya || 235000);
 
-  return (
+  const modalContent = (
     <div
+      id="jagamedis-print-portal"
       role="dialog"
       aria-modal="true"
       aria-labelledby={headingId}
@@ -128,7 +137,7 @@ export function PrintableMedicalResume({ data, onClose }: PrintableMedicalResume
       }}
       className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-xs flex items-center justify-center p-2 sm:p-6 overscroll-contain print:p-0 print:bg-white print:static print:block"
     >
-      <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[92vh] border border-slate-300 overflow-hidden flex flex-col print:max-h-none print:overflow-visible print:border-none print:shadow-none print:rounded-none">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[92vh] border border-slate-300 overflow-hidden flex flex-col print:max-w-none print:max-h-none print:overflow-visible print:border-none print:shadow-none print:rounded-none">
         
         {/* ACTION BAR ATAS (Sticky agar tombol tutup pojok kanan atas selalu terjangkau di layar kecil & saat scroll, tersembunyi saat Cetak) */}
         <div className="sticky top-0 z-10 shrink-0 px-3 py-3 sm:px-4 sm:py-3.5 bg-slate-900 text-white flex flex-wrap items-center justify-between gap-2 print:hidden border-b border-slate-800">
@@ -426,33 +435,8 @@ export function PrintableMedicalResume({ data, onClose }: PrintableMedicalResume
           </div>
 
           {/* CATATAN MEDIKOLEGAL KAKI DOKUMEN */}
-          <div className="pt-2 text-[9px] text-slate-400 text-center font-mono border-t border-slate-200">
+          <div className="pt-2 text-[9px] text-slate-500 text-center font-mono border-t border-slate-200">
             Dokumen rekam medis elektronik ini sah dan berkekuatan hukum sesuai UU ITE No. 1/2024, UU Kesehatan No. 17/2023, dan Permenkes RI No. 24/2022.
-          </div>
-        </div>
-
-        {/* ACTION BAR BAWAH (Hanya Muncul di Layar) */}
-        <div className="p-4 bg-slate-100 border-t border-slate-200 flex items-center justify-between print:hidden">
-          <p className="text-xs text-slate-500">
-            Gunakan tombol <strong>Cetak / Simpan PDF</strong> untuk mencetak lembar resume pelayanan standar rumah sakit.
-          </p>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={handlePrint}
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition shadow-sm cursor-pointer"
-            >
-              Cetak / Simpan PDF
-            </button>
-            {onClose && (
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 bg-slate-900 hover:bg-black text-white rounded-xl text-xs font-bold uppercase tracking-wider transition cursor-pointer"
-              >
-                ✕ Tutup Dokumen
-              </button>
-            )}
           </div>
         </div>
         </div>
@@ -460,4 +444,10 @@ export function PrintableMedicalResume({ data, onClose }: PrintableMedicalResume
       </div>
     </div>
   );
+
+  if (typeof document !== "undefined") {
+    return createPortal(modalContent, document.body);
+  }
+
+  return modalContent;
 }

@@ -76,7 +76,7 @@ Pengujian dijalankan pada berkas `tests/validations.test.ts` memvalidasi skema d
 
 ## 4. Kesimpulan Kelaikan Sistem
 
-JagaMedis (sebelumnya Resilio-Health) v0.2 telah memenuhi seluruh kriteria evaluasi integrasi tiga mata kuliah (PAW, Kriptografi, KKS) dan kini telah ditingkatkan melalui **Fase 1 Hardening (`v0.3.0-fase1`)** serta **Fase 2 End-to-End PostgreSQL (`v0.3.1-fase2`, 26 November 2026)**.
+JagaMedis (sebelumnya Resilio-Health) v0.2 telah memenuhi seluruh kriteria evaluasi integrasi tiga mata kuliah (PAW, Kriptografi, KKS) dan kini telah ditingkatkan melalui **Fase 1 Hardening (`v0.3.0-fase1`)**, **Fase 2 End-to-End PostgreSQL (`v0.3.1-fase2`)**, serta **Fase 3 Arsitektur Modular, REST API & PWA/IndexedDB (`v0.3.2-fase3`, 26 November 2026)**.
 
 ---
 
@@ -106,3 +106,16 @@ Pengujian integrasi end-to-end lintas 4 peran dijalankan terhadap PostgreSQL 17 
 | **F2-02** | `F2.1`–`F2.4` | Alur End-to-End 4 Peran 100% PostgreSQL: Booking + Auto-Consent $\rightarrow$ Check-In $\rightarrow$ Triase Atomik `MERAH` $\rightarrow$ Assign DPJP ber-PIN $\rightarrow$ Periksa SOAP AEAD $\rightarrow$ Audit SIEM | ISO/IEC 25010 & NISTIR 7804 | Seluruh transisi status (`PENDING_ARRIVAL` $\rightarrow$ `WAITING_TRIAGE` $\rightarrow$ `WAITING_DOCTOR` $\rightarrow$ `IN_EXAMINATION` $\rightarrow$ `COMPLETED`), data triase `MERAH` (SpO2 89%), RME terenkripsi, & log SIEM `WRITE_RME` sinkron 100% di PostgreSQL | **LULUS (PASS)** |
 | **F2-03** | `F2.1`/`F2.3`/`F2.4` | Penegakan Kill-Switch Siber (`FaskesStatus.QUARANTINED`) oleh Admin terhadap booking pasien & penulisan RME dokter | ISO 27799 / UR-A03 | Booking pasien dan `submitPemeriksaanKlinisAction` di faskes terkarantina ditolak tegas di server | **LULUS (PASS)** |
 | **F2-04** | `F2.1`/`F2.4` | Siklus status e-KYC: pengajuan tidak menimpa `patient.nik` sebelum disetujui & penolakan Admin tersimpan permanen sebagai `REJECTED` | Permenkes / Administrasi | `patient.nik` tetap utuh saat pengajuan `PENDING`; pasca penolakan status `kyc_submissions` & `users` bernilai `REJECTED` beserta `alasanPenolakan` | **LULUS (PASS)** |
+
+---
+
+## 7. Matriks Verifikasi Quality Gates Fase 3 (`tests/phase3-architecture-pwa.test.ts`)
+
+Pengujian otomatis arsitektur modular, kontrak REST HTTP, PWA/IndexedDB, dan sinkronisasi jadwal dijalankan pada 26 November 2026 di branch `refactor/fase-3-architecture-pwa` (total **7 berkas tes, 48/48 lulus 100%**):
+
+| ID Uji | Sub-Fase | Skenario Uji | Standar Acuan | Hasil Riil | Status |
+| :--- | :---: | :--- | :--- | :--- | :---: |
+| **F3-01** | `F3.3` | Kontrak REST `GET /api/health` dengan pengujian koneksi PostgreSQL langsung (`SELECT 1`) | RESTful HTTP / Docker Healthcheck | Mengembalikan HTTP `200 OK`, `status: "ok"`, `database: "connected"`, beserta `latencyMs` | **LULUS (PASS)** |
+| **F3-02** | `F3.3`/`F3.4` | Kontrak REST `POST /api/sync/outbox`: penolakan tanpa sesi (`401`), penolakan tamper HMAC (`422`), dan sinkronisasi berkas terenkripsi AEAD+HMAC sah ke PostgreSQL (`201`) | W3C PWA Background Sync & NIST SP 800-38D | Tanpa sesi `401`, HMAC palsu ditolak `422` (+ log `HMAC_MISMATCH`), payload sah tersimpan ke `medical_records` (`201`) | **LULUS (PASS)** |
+| **F3-03** | `F3.3` | Kontrak REST `GET/POST /api/attachments`: validasi `401`, `400`, `404`, `201`, `200`, serta proteksi Anti-BOLA `403` antar pasien | OWASP API1:2023 & RESTful HTTP | Seluruh kode status akurat; pasien `P-102` ditolak `403 Forbidden` saat mencoba mengunduh lampiran pasien `P-101` | **LULUS (PASS)** |
+| **F3-04** | `F3.1`/`F3.4` | Validitas `public/manifest.json`, `public/icon.svg`, `public/sw.js`, nol duplikasi `safeRevalidate`, modul tunggal `parsePrescriptionDetail`, & sinkronisasi tanggal jadwal seed | ISO/IEC 25010 & W3C PWA | Manifest & SW valid, 0 duplikasi util, `APT-2026-001` sinkron dengan tanggal hari ini | **LULUS (PASS)** |

@@ -4,6 +4,22 @@ Semua perubahan besar pada proyek JagaMedis (sebelumnya Resilio-Health) didokume
 
 ---
 
+## [v0.3.2-fase3] - 2026-11-26 — Fase 3 Arsitektur Modular `features/`, Server Components, REST API, PWA/IndexedDB & Sinkronisasi Jadwal
+> Rincian file & stempel waktu lengkap: [docs/perubahan/fase-3-architecture-pwa-2026-11-26.md](docs/perubahan/fase-3-architecture-pwa-2026-11-26.md)
+
+### Modularisasi *Hybrid Feature-Modular* & Server Components (`F3.1` & `F3.2`)
+- **Pemecahan *God Files***: Memecah `lib/actions/{clinical,auth,appointment,admin}.ts` serta halaman `beranda`, `nakes`, `pasien`, `nakes/periksa/[bookingId]`, dan `nakes/pasien-lookup/[patientId]` ke direktori `features/{auth,appointments,medical-records,dashboard,admin}/`. Seluruh berkas halaman utama kini tipis (11–21 baris).
+- **Nol Duplikasi Util**: Menyatukan 7 salinan `safeRevalidate` menjadi `lib/utils/revalidate.ts` dan 2 salinan `parsePrescriptionDetail` menjadi `features/medical-records/prescription-parser.ts`.
+- **Migrasi Read Awal ke Server Components**: `/beranda`, `/nakes`, dan `/pasien` kini membaca data awal langsung dari PostgreSQL di server melalui `queries.ts` dibungkus `<Suspense>` tanpa *waterfall* POST Server Action di `useEffect`.
+- **Sinkronisasi Jadwal Harian & Mingguan**: Memperbarui `prisma/seed.ts` agar tanggal antrean demo relatif terhadap hari ini/besok, menggunakan formatter lokal WIB (`formatLocalIsoDate`), menyetel default kalender harian ke hari ini, menjadikan header pekan `/nakes/jadwal` dinamis (menghapus hardcode `12–18 Oktober 2026`), dan menambahkan tombol lompat ke pekan jadwal terdekat.
+
+### 4 Endpoint REST Strategis & Aktivasi PWA/IndexedDB Nyata (`F3.3` & `F3.4`)
+- **REST Endpoints (`app/api/`)**: Menambahkan `GET /api/health` (cek konektivitas DB), `POST /api/sync/outbox` (sinkronisasi offline ber-verifikasi AEAD+HMAC + Kill-Switch + idempotensi), dan `GET/POST /api/attachments` (penyimpanan & unduhan citra medis terenkripsi dengan Anti-BOLA `403`).
+- **PWA Manifest, Service Worker & IndexedDB Nyata**: Menambahkan `public/manifest.json`, `public/icon.svg`, dan `components/shared/PwaRegistrar.tsx` di `app/layout.tsx`; menghubungkan `NetworkStatusBanner`, `/nakes/offline-sync`, dan mode offline `/nakes/periksa/[bookingId]` langsung ke **IndexedDB (`resilio_offline_db`)** + `POST /api/sync/outbox`.
+- **Pengujian Otomatis**: Menambahkan 4 skenario uji *Quality Gates* Fase 3 (`tests/phase3-architecture-pwa.test.ts`), total **48/48 tes Vitest lulus (100%)**.
+
+---
+
 ## [v0.3.1-fase2] - 2026-11-26 — Fase 2 End-to-End PostgreSQL: Eliminasi *Split-Brain* 4 Peran & Penegakan Kill-Switch
 > Rincian file & stempel waktu lengkap: [docs/perubahan/fase-2-end-to-end-db-2026-11-26.md](docs/perubahan/fase-2-end-to-end-db-2026-11-26.md)
 
