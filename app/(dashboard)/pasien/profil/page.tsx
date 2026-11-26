@@ -41,7 +41,7 @@ export default function PasienProfilPage() {
   const [notifSuccess, setNotifSuccess] = useState<string | null>(null);
   const [notifError, setNotifError] = useState<string | null>(null);
 
-  const watermarkString = `HANYA UNTUK VERIFIKASI RESILIO-HEALTH - ${new Date().toLocaleDateString("id-ID")}`;
+  const watermarkString = `HANYA UNTUK VERIFIKASI JAGAMEDIS - ${new Date().toLocaleDateString("id-ID")}`;
 
   useEffect(() => {
     async function loadProfile() {
@@ -517,7 +517,7 @@ export default function PasienProfilPage() {
                 Perlindungan Privasi Siber (Auto-Watermark Digital):
               </span>
               <p className="text-xs leading-relaxed">
-                Dokumen Anda otomatis diberi tanda air transparan: <strong className="font-mono text-blue-800">&quot;{watermarkString}&quot;</strong> guna mencegah penyalahgunaan KTP di luar sistem Resilio-Health.
+                Dokumen Anda otomatis diberi tanda air transparan: <strong className="font-mono text-blue-800">&quot;{watermarkString}&quot;</strong> guna mencegah penyalahgunaan KTP di luar sistem JagaMedis.
               </p>
             </div>
 

@@ -1,4 +1,4 @@
-# CHANGELOG — Resilio-Health
+# CHANGELOG — JagaMedis
 
 Semua perubahan besar pada proyek Resilio-Health didokumentasikan di sini.
 

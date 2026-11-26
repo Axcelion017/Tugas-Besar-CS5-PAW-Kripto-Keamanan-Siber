@@ -1,5 +1,5 @@
 // prisma/seed.ts
-// Skrip Seeder Idempoten (menggunakan UPSERT) untuk Resilio-Health HIS
+// Skrip Seeder Idempoten (menggunakan UPSERT) untuk JagaMedis HIS
 // Sesuai prinsip praktikum Modul 6: aman dijalankan berulang kali tanpa memicu Unique Constraint Violation
 
 import "dotenv/config";
@@ -17,7 +17,7 @@ import {
 import { DEMO_USERS } from "../lib/auth/auth";
 
 async function main() {
-  console.log("🚀 Memulai proses database seeding idempoten Resilio-Health...");
+  console.log("🚀 Memulai proses database seeding idempoten JagaMedis...");
 
   // 1. SEED PENGGUNA INDUK (USERS)
   console.log("-> Seeding Users...");

@@ -130,22 +130,18 @@ export default function TriasePemeriksaanAwalPage() {
     }
 
     // 1. Eksekusi Server Action untuk menyimpan langsung ke basis data PostgreSQL
-    try {
-      await submitTriageServerAction(selectedApt.id, {
-        systolic: Number(systolic),
-        diastolic: Number(diastolic),
-        heartRate: Number(heartRate),
-        temperature: Number(temperature),
-        respiratoryRate: Number(respiratoryRate),
-        spo2: Number(spo2),
-        beratBadan: Number(beratBadan),
-        tinggiBadan: Number(tinggiBadan),
-        triaseLevel,
-        catatanPerawat,
-      });
-    } catch (err: unknown) {
-      console.warn("DB triage action fallback:", err);
-    }
+    await submitTriageServerAction(selectedApt.id, {
+      systolic: Number(systolic),
+      diastolic: Number(diastolic),
+      heartRate: Number(heartRate),
+      temperature: Number(temperature),
+      respiratoryRate: Number(respiratoryRate),
+      spo2: Number(spo2),
+      beratBadan: Number(beratBadan),
+      tinggiBadan: Number(tinggiBadan),
+      triaseLevel,
+      catatanPerawat,
+    });
 
     const allApts = getStorageData<Appointment[]>("resilio_appointments", MOCK_APPOINTMENTS);
     const updated = allApts.map((a) =>

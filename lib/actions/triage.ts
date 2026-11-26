@@ -96,14 +96,28 @@ export async function submitTriageServerAction(
     safeRevalidate("/staf/triase");
     safeRevalidate("/nakes");
 
+    // =========================================================================
+    // [PERBAIKAN / SOLUSI GALAT 2]:
+    // Melakukan sanitasi instans class Prisma.Decimal menjadi JavaScript primitive number
+    // sehingga mematuhi aturan serialisasi React Server Component (RSC) Next.js.
+    // =========================================================================
     return {
       success: true,
       message: "Pengkajian tanda vital dan kategori triase berhasil disimpan ke basis data.",
       data: {
-        ...saved,
+        id: saved.id,
+        appointmentId: saved.appointmentId,
+        staffId: saved.staffId,
+        systolic: saved.systolic,
+        diastolic: saved.diastolic,
+        heartRate: saved.heartRate,
         temperature: Number(saved.temperature),
+        respiratoryRate: saved.respiratoryRate,
+        spo2: saved.spo2,
         beratBadan: saved.beratBadan ? Number(saved.beratBadan) : null,
         tinggiBadan: saved.tinggiBadan ? Number(saved.tinggiBadan) : null,
+        triaseLevel: saved.triaseLevel,
+        catatanPerawat: saved.catatanPerawat,
         assessedAt: saved.assessedAt.toISOString(),
       },
     };

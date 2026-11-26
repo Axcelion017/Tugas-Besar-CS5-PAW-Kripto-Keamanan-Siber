@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db/prisma";
 import { BookingSchema } from "@/lib/validations/patient";
 import { AssignDpjpSchema } from "@/lib/validations/triage";
 import { AppointmentStatus, Prisma } from "@prisma/client";
+import { randomInt } from "node:crypto";
 
 function safeRevalidate(path: string) {
   try {
@@ -47,7 +48,7 @@ export async function createAppointmentServerAction(
   const poli = String(rawData.poli || "Poli Penyakit Dalam");
   const patientId = String(rawData.patientId || "P-101");
   const aptId = `APT-2026-${Date.now().toString().slice(-4)}`;
-  const consentPin = Math.floor(100000 + Math.random() * 900000).toString(); // 6 digit PIN
+  const consentPin = randomInt(100000, 1000000).toString(); // 6 digit PIN CSPRNG
 
   try {
     const created = await prisma.appointment.create({

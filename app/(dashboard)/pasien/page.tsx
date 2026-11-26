@@ -423,7 +423,7 @@ export default function PasienDashboardPage() {
           <div className="flex items-center justify-between border-b border-slate-700/60 pb-3">
             <div className="flex items-center gap-2">
               <span className="text-xs font-black uppercase tracking-wider text-slate-300">
-                Kartu Darurat Medis Nasional (Resilio ID)
+                Kartu Darurat Medis Nasional (JagaMedis ID)
               </span>
             </div>
             {patientData.statusKyc === "VERIFIED" ? (

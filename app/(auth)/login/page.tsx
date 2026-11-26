@@ -98,10 +98,10 @@ function LoginForm() {
         {/* Brand Header */}
         <div className="text-center">
           <div className="w-14 h-14 bg-red-600 rounded-2xl mx-auto flex items-center justify-center text-white font-black text-2xl shadow-lg shadow-red-200 mb-3">
-            R
+            J
           </div>
           <h1 className="text-2xl font-black text-slate-900 tracking-tight">
-            RESILIO<span className="text-red-600">-HEALTH</span>
+            JAGA<span className="text-red-600">MEDIS</span>
           </h1>
           <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mt-1">
             Sistem Informasi Rekam Medis & Zero-Trust Gateway

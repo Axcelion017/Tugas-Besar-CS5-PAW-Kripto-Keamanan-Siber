@@ -70,7 +70,7 @@ export default function RegisterPasienPage() {
                 Pendaftaran Pasien
               </h1>
               <p className="text-xs text-slate-500 font-medium">
-                Buat akun cepat untuk mengakses layanan kesehatan Resilio-Health.
+                Buat akun cepat untuk mengakses layanan kesehatan JagaMedis.
               </p>
             </div>
           </div>

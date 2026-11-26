@@ -1,4 +1,4 @@
-# Dokumen Teknis Modul 5 — Formulir, Validasi, Session, dan Cookie
+# Dokumen Teknis Modul 5 — Formulir, Validasi, Session, dan Cookie (JagaMedis)
 Nama/NIM : Michael Alexander Newton (105224017)
 Repositori : https://github.com/Axcelion017/Tugas-Besar-CS5-PAW-Kripto-Keamanan-Siber
 
@@ -22,7 +22,7 @@ Formulir utama produk yang digunakan adalah **Formulir Pengkajian Medis Klinis D
 
 - Aturan semantik yang diperiksa di Server Action dan alasannya
 
-Pada sistem Resilio-Health, aturan semantik adalah aturan integritas dan keamanan bisnis klinis yang **tidak dapat diperiksa oleh skema Zod saja**, melainkan memerlukan verifikasi kontekstual terhadap status relasi basis data dan sesi pengguna di sisi server:
+Pada sistem JagaMedis, aturan semantik adalah aturan integritas dan keamanan bisnis klinis yang **tidak dapat diperiksa oleh skema Zod saja**, melainkan memerlukan verifikasi kontekstual terhadap status relasi basis data dan sesi pengguna di sisi server:
 
 1. **Aturan Semantik 1: Pencegahan Kontraindikasi Alergi Obat Pasien (`UR-T10`)**:
    - *Deskripsi Aturan*: Teks resep obat yang diinput oleh dokter (`planPrescription`) wajib diperiksa silang terhadap seluruh riwayat alergi berbahaya milik pasien (`patient.allergies`) yang tersimpan di basis data sebelum rekam medis dienkripsi dan disimpan.
@@ -37,7 +37,7 @@ Pada sistem Resilio-Health, aturan semantik adalah aturan integritas dan keamana
 ## 2. Alur Server Action
 - Urutan sesi, validasi bentuk, validasi semantik, mutasi, revalidatePath, redirect
 
-Pada implementasi Next.js App Router di Resilio-Health, Server Action untuk transaksi klinis (`submitPemeriksaanKlinisAction` pada berkas `lib/actions/clinical.ts`) dirancang dengan alur eksekusi **6 tahapan linear yang ketat (*Strict 6-Stage Pipeline*)** guna menjamin prinsip *Zero-Trust*, integritas medikolegal, dan ketahanan data:
+Pada implementasi Next.js App Router di JagaMedis, Server Action untuk transaksi klinis (`submitPemeriksaanKlinisAction` pada berkas `lib/actions/clinical.ts`) dirancang dengan alur eksekusi **6 tahapan linear yang ketat (*Strict 6-Stage Pipeline*)** guna menjamin prinsip *Zero-Trust*, integritas medikolegal, dan ketahanan data:
 
 ```mermaid
 flowchart TD
@@ -202,7 +202,7 @@ Pengujian ketahanan sesi dan manipulasi cookie dilakukan secara riil terhadap en
 ## 5. Keputusan Teknis
 - Alasan pola session di server dibanding token di cookie
 
-Pada perancangan arsitektur sistem informasi rumah sakit Resilio-Health, diputuskan untuk menggunakan pola **Session di Server (*Stateful Database/Memory Session Store*)** dibandingkan menyimpan seluruh klaim otorisasi di dalam token JWT mandiri di peramban (*Stateless JWT in Cookie*). Keputusan ini didasarkan pada pertimbangan regulasi dan keamanan siber:
+Pada perancangan arsitektur sistem informasi rumah sakit JagaMedis, diputuskan untuk menggunakan pola **Session di Server (*Stateful Database/Memory Session Store*)** dibandingkan menyimpan seluruh klaim otorisasi di dalam token JWT mandiri di peramban (*Stateless JWT in Cookie*). Keputusan ini didasarkan pada pertimbangan regulasi dan keamanan siber:
 
 1. **Kemampuan Pencabutan Izin Akses Seketika (*Instant Revocation / Right to Revoke*)**:
    - Sesuai amanat **UU PDP No. 27/2022 Pasal 20**, pasien memiliki kedaulatan mutlak untuk mencabut izin akses rekam medis (*1-Click Revoke*) sewaktu-waktu. Selain itu, administrator Kemenkes memiliki wewenang saklar darurat *Ransomware Kill-Switch* untuk mengisolasi faskes yang terinfeksi malware.
@@ -215,7 +215,7 @@ Pada perancangan arsitektur sistem informasi rumah sakit Resilio-Health, diputus
 
 - Batas peran proxy.ts dibanding pemeriksaan di aksi
 
-Arsitektur pertahanan Resilio-Health membagi batas tanggung jawab (*Separation of Concerns*) secara tegas antara gerbang perbatasan (*Perimeter Edge*) dan inti logika bisnis (*Domain Core*):
+Arsitektur pertahanan JagaMedis membagi batas tanggung jawab (*Separation of Concerns*) secara tegas antara gerbang perbatasan (*Perimeter Edge*) dan inti logika bisnis (*Domain Core*):
 
 ```text
 [Klien / Browser]
@@ -254,7 +254,7 @@ Arsitektur pertahanan Resilio-Health membagi batas tanggung jawab (*Separation o
 
 ## 6. Kendala dan Penyelesaian
 
-Selama perancangan dan implementasi modul formulir, validasi Zod v4, Server Actions, dan sesi cookie pada Resilio-Health, ditemukan beberapa kendala teknis yang berhasil diselesaikan:
+Selama perancangan dan implementasi modul formulir, validasi Zod v4, Server Actions, dan sesi cookie pada JagaMedis, ditemukan beberapa kendala teknis yang berhasil diselesaikan:
 
 1. **Kendala 1: Perbedaan Sintaks Overload Parameter Zod v3 vs Zod v4**:
    - *Masalah*: Kompiler TypeScript melempar galat `TS2769: No overload matches this call` karena properti `required_error` dan `invalid_type_error` pada tipe data `z.string()`, `z.number()`, dan `z.enum()` telah dihapus pada pembaruan Zod v4.
@@ -274,7 +274,7 @@ Dokumentasi penggunaan asisten kecerdasan buatan (*Artificial Intelligence*) ses
 
 - **Alat yang Digunakan**: Google Antigravity & Hermes Coding Agent (Claude 3.5 Sonnet & Gemini 3.8 Flash).
 - **Perintah Utama (*Prompt*)**:
-  1. *"Rancang tabel aturan validasi untuk formulir utama produk Resilio-Health dengan 10 kolom lengkap, batas fisiologis tensi medis, enum ICD-10 WHO, dan pesan galat spesifik."*
+  1. *"Rancang tabel aturan validasi untuk formulir utama produk JagaMedis dengan 10 kolom lengkap, batas fisiologis tensi medis, enum ICD-10 WHO, dan pesan galat spesifik."*
   2. *"Implementasikan skema Zod v4 PemeriksaanKlinisSchema dengan z.enum ICD-10 dan refine checkbox persetujuan medikolegal sebelum enkripsi."*
   3. *"Susun alur 6 langkah Server Action yang mencakup sesi, validasi bentuk, validasi semantik kontraindikasi alergi, mutasi, revalidatePath, dan redirect."*
   4. *"Formulasikan 10 kasus uji validasi dengan minimal 3 kasus bypass validasi klien (atribut novalidate dan tembakan request POST langsung)."*

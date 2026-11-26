@@ -73,7 +73,7 @@ export async function createAuditLogServerAction(params: {
         action,
         targetResource,
         ipAddress: "127.0.0.1",
-        userAgent: "Resilio-Health Web Client",
+        userAgent: "JagaMedis Web Client",
         severity,
         detail,
       },
