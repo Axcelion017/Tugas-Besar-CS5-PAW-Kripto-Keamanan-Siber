@@ -4,6 +4,30 @@ Dokumen pencatatan penggunaan asisten kecerdasan buatan (AI) sesuai kebijakan in
 
 ---
 
+## 2026-11-26 — Tahap A (`v0.3.4`): Auth Hardening (Rate Limit & Anti-Enumeration), Poles UX Klinis & Modularitas `<350` Baris
+
+- **Tool**: Google Antigravity (Gemini Models)
+- **Branch**: `refactor/v0.3.4-auth-hardening-ux`
+- **Catatan Perubahan Rinci**: `docs/perubahan/v0.3.4-auth-hardening-ux-2026-11-26.md`
+- **Tujuan**:
+  1. Menuntaskan seluruh item **Tahap A (`P-01` s.d. `P-05b`)** dari peta jalan audit ulang `v0.3` tanpa migrasi skema basis data.
+  2. Menutup celah *Account Enumeration* (OWASP ASVS V2.2.2 / CWE-204) dengan pesan error seragam & dummy `bcrypt.compare`, serta memasang *sliding-window rate limiting* (`HTTP 429`) pada `loginServerAction` dan `POST /api/auth/session`.
+  3. Membungkus *Quick Demo* dengan *feature flag* `NEXT_PUBLIC_ENABLE_DEMO_LOGIN`, menghapus 4 fallback klien `|| "DOC-01"` serta fallback `MOCK_PATIENTS`/`MOCK_ENCRYPTED_RECORDS` (diganti cache IndexedDB `cached_active_patients`).
+  4. Menyederhanakan navigasi `RoleNav` (tanpa duplikasi `/beranda`), mengganti palet primer brand ke `teal-700` (merah khusus alert klinis sesuai NISTIR 7804), menambahkan lencana *pending* IndexedDB di sidebar dokter, dan memecah 5 berkas domain $>350$ baris menjadi modul ramping $\le 350$ baris.
+- **Ringkasan Prompt**: *"sekarang task yang dapat dilakukan nih apa ya? — opsi 1."*
+- **Bagian yang Dihasilkan / Dimodifikasi**:
+  - **Auth Hardening**: `lib/auth/rateLimit.ts` (baru), `lib/auth/demoConfig.ts` (baru), `features/auth/session-actions.ts`, `features/auth/register-actions.ts` (baru), `lib/actions/auth.ts`, `app/api/auth/session/route.ts`, `.env.example`.
+  - **UX Klinis & IndexedDB**: `components/shared/RoleNav.tsx`, `app/page.tsx`, `app/(auth)/login/page.tsx`, `lib/storage/indexedDb.ts`, `app/(dashboard)/nakes/{pasien-lookup,offline-sync}/page.tsx`, `app/(dashboard)/pasien/rekam-medis/{page,[recordId]/page}.tsx`.
+  - **Modularisasi Domain**: `features/medical-records/exam/{useExamForm.ts,exam-builders.ts,ExamTab4Plan.tsx,ExamTab5MedicoLegal.tsx,ExamTabs4To5.tsx,ExamWorkspace.tsx}`, `features/medical-records/{exam-actions.ts,exam-support-actions.ts}`, `features/medical-records/patient-detail/{PatientProfileCard.tsx,PatientRecordsSection.tsx,PatientDetailWorkspace.tsx}`, `lib/actions/clinical.ts`.
+  - **QA & Dokumentasi**: `tests/v034-auth-hardening-ux.test.ts` (baru, 4 tes Quality Gates), `docs/perubahan/v0.3.4-auth-hardening-ux-2026-11-26.md` (baru), `docs/perubahan/README.md`, `CHANGELOG.md`, `EVALUASI.md`, `AI_LOG.md`, `docs/audit/audit_ulang_menyeluruh_v0.3_26Nov2026.md`.
+- **Cara Verifikasi**:
+  - `npx tsc --noEmit`: 0 error TypeScript.
+  - `npm run lint`: 0 error, 0 warning.
+  - `npx vitest run`: **9 berkas tes, 56/56 skenario lulus (100%)** dalam `1.26s`.
+  - `npm run build`: Kompilasi produksi **36/36 rute + `ƒ Proxy (Middleware)`** sukses (`885ms`).
+
+---
+
 ## 2026-11-26 — Audit Ulang Menyeluruh, Keterlacakan Penuh, Matriks Standar Acuan & SOP Operasional (`v0.3.3-fase4`)
 
 - **Tool**: Google Antigravity (Gemini Models)

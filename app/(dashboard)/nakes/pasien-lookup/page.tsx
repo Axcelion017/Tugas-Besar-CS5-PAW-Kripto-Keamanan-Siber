@@ -4,11 +4,8 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { getUserSession } from "@/lib/auth/auth";
-import {
-  MOCK_PATIENTS,
-  getStorageData,
-  Patient,
-} from "@/lib/db/mockData";
+import type { Patient } from "@/lib/db/mockData";
+import { getCachedPatients, saveCachedPatients } from "@/lib/storage/indexedDb";
 import {
   getDoctorPatientListServerAction,
   lookupPatientByNikServerAction,
@@ -72,24 +69,43 @@ export default function PasienListPage() {
     async function loadData() {
       setIsLoading(true);
       const session = getUserSession();
-      const doctorId = session?.id || "DOC-01";
+      if (!session?.id) {
+        setIsLoading(false);
+        return;
+      }
 
       try {
-        const res = await getDoctorPatientListServerAction(doctorId);
-        if (res.success && res.patients.length > 0) {
+        const res = await getDoctorPatientListServerAction(session.id);
+        if (res.success) {
           setPatients(res.patients);
           setStats(res.stats);
+          if (res.patients.length > 0) {
+            void saveCachedPatients(
+              res.patients.map((p) => ({
+                patientId: p.id,
+                nik: p.nik,
+                name: p.name,
+                mrn: p.mrn,
+                gender: p.gender,
+                bloodType: p.bloodType,
+                birthDate: p.birthDate,
+                allergies: p.allergies,
+                phone: p.phone,
+                cachedAt: new Date().toISOString(),
+              }))
+            );
+          }
           setIsLoading(false);
           return;
         }
       } catch (err) {
-        console.warn("Failed fetching from DB, fallback to mock:", err);
+        console.warn("Failed fetching from DB, falling back to IndexedDB offline cache:", err);
       }
 
-      // Fallback data
-      const mockList = getStorageData<Patient[]>("resilio_patients", MOCK_PATIENTS);
-      const mapped: DoctorPatientItem[] = mockList.map((p, idx) => ({
-        id: p.id,
+      // Fallback luring nyata dari IndexedDB (`cached_active_patients`), tanpa menyuntikkan mock statis
+      const cachedList = await getCachedPatients();
+      const mapped: DoctorPatientItem[] = cachedList.map((p) => ({
+        id: p.patientId,
         nik: p.nik,
         name: p.name,
         mrn: p.mrn,
@@ -97,24 +113,23 @@ export default function PasienListPage() {
         bloodType: p.bloodType,
         birthDate: p.birthDate || null,
         allergies: p.allergies || [],
-        phone: p.emergencyContact?.phone || "-",
-        totalVisits: idx === 0 ? 3 : 1,
-        latestVisitDate: idx === 0 ? "8 Nov 2026" : "Belum ada kunjungan",
-        latestDiagnosis: idx === 0 ? "I10 - Hipertensi Primer" : "Pemeriksaan Poliklinik Rawat Jalan",
-        documentStatus: idx === 0 ? "SIGNED" : "UNSIGNED",
-        queueStatus: idx === 1 ? "IN_QUEUE" : "IDLE",
-        activeAppointmentId: idx === 1 ? "APT-102" : null,
-        hasAccessGrant: idx === 0,
-        recordsCount: idx === 0 ? 2 : 0,
-        triaseLevel: idx === 1 ? "MERAH" : idx === 0 ? "KUNING" : "HIJAU",
+        phone: p.phone || "-",
+        totalVisits: 0,
+        latestVisitDate: "Cache Luring IndexedDB",
+        latestDiagnosis: "Mode Luring — Data Tersimpan Lokal",
+        documentStatus: "SIGNED",
+        queueStatus: "IDLE",
+        activeAppointmentId: null,
+        hasAccessGrant: true,
+        recordsCount: 0,
       }));
 
       setPatients(mapped);
       setStats({
-        totalPatients: mockList.length,
-        totalAntrean: 1,
-        unsignedCount: mockList.length - 1,
-        signedCount: 1,
+        totalPatients: mapped.length,
+        totalAntrean: 0,
+        unsignedCount: 0,
+        signedCount: mapped.length,
       });
       setIsLoading(false);
     }
@@ -149,10 +164,13 @@ export default function PasienListPage() {
 
     const cleanNik = nikSearch.trim();
     const session = getUserSession();
-    const doctorId = session?.id || "DOC-01";
+    if (!session?.id) {
+      setNotif("Sesi dokter tidak ditemukan. Silakan masuk ulang untuk mencari pasien.");
+      return;
+    }
 
     try {
-      const res = await lookupPatientByNikServerAction(cleanNik, doctorId);
+      const res = await lookupPatientByNikServerAction(cleanNik, session.id);
       if (res.success && res.patient) {
         const p = res.patient;
         const targetPatient: Patient = {
@@ -184,34 +202,28 @@ export default function PasienListPage() {
         return;
       }
     } catch {
-      // fallback
-    }
-
-    const allPatients = getStorageData<Patient[]>("resilio_patients", MOCK_PATIENTS);
-    const target = allPatients.find((p) => p.nik === cleanNik || p.id === cleanNik);
-    if (!target) return;
-
-    if (target.id === "P-101") {
-      setSearchResult(target);
-    } else {
-      setAccessDenied(true);
-      setTargetPatientBlocked(target);
+      setNotif("Gagal menghubungi server pencarian pasien (PostgreSQL). Pastikan jaringan aktif.");
     }
   };
 
   const handleExecuteBreakGlass = async () => {
     if (!targetPatientBlocked) return;
     const session = getUserSession();
-    const doctorId = session?.id || "DOC-01";
+    if (!session?.id) {
+      setNotif("Sesi dokter tidak valid. Silakan masuk kembali sebelum mengaktifkan Break-Glass.");
+      return;
+    }
 
     try {
       await executeBreakGlassServerAction({
         patientId: targetPatientBlocked.id,
-        doctorId,
+        doctorId: session.id,
         reason: breakGlassReason,
       });
     } catch (err) {
-      console.warn("Break Glass Server Action fallback:", err);
+      console.warn("Break Glass Server Action error:", err);
+      setNotif("Gagal mencatat protokol Break-Glass ke server. Coba lagi saat koneksi pulih.");
+      return;
     }
 
     setShowBreakGlassModal(false);

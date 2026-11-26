@@ -4,6 +4,21 @@ Semua perubahan besar pada proyek JagaMedis (sebelumnya Resilio-Health) didokume
 
 ---
 
+## [v0.3.4] - 2026-11-26 — Tahap A Auth Hardening, Rate Limiting, Anti-Enumeration & Poles UX Klinis
+> Rincian file & stempel waktu lengkap: [docs/perubahan/v0.3.4-auth-hardening-ux-2026-11-26.md](docs/perubahan/v0.3.4-auth-hardening-ux-2026-11-26.md)
+
+### Keamanan Autentikasi (`P-01`, `P-05`, `P-05b`)
+- ***Sliding-Window Rate Limiting* (`lib/auth/rateLimit.ts`)**: Membatasi percobaan login gagal hingga 10 kali/menit per IP/identifier (`HTTP 429 Too Many Requests` + `Retry-After` pada `/api/auth/session` dan log SIEM `WARN` pada `loginServerAction`).
+- **Anti-*Account Enumeration* (OWASP ASVS V2.2.2 / CWE-204)**: Menyeragamkan pesan error gagal login (`"Kredensial atau kata sandi tidak valid."`) dan menjalankan dummy `bcrypt.compare` saat akun tidak ditemukan.
+- **Gating *Quick Demo* & Higiene Klien**: Membungkus tombol *Quick Demo* di `app/page.tsx` & `app/(auth)/login/page.tsx` dengan `NEXT_PUBLIC_ENABLE_DEMO_LOGIN` (`lib/auth/demoConfig.ts`), menghapus fallback `loginUser()` mock pada landing page, dan menghapus 4 fallback klien `|| "DOC-01"`.
+
+### UX Klinis, IndexedDB & Maintainability (`P-02`, `P-03`, `P-04`)
+- **Navigasi Ringkas & Palet Klinis (*NISTIR 7804*)**: Menghapus duplikasi menu `/beranda` di `RoleNav.tsx`, mengganti warna primer brand/navigasi ke `teal-700` (warna merah khusus alert klinis/keamanan), dan menampilkan lencana reaktif jumlah berkas luring IndexedDB pada menu dokter.
+- **Cache Luring IndexedDB Nyata**: Menambahkan `saveCachedPatients`/`getCachedPatients` di `lib/storage/indexedDb.ts` serta menghapus fallback `MOCK_PATIENTS`/`MOCK_ENCRYPTED_RECORDS` di `pasien-lookup` & `pasien/rekam-medis`.
+- **Modularisasi `<350` Baris & Pengujian**: Memecah `ExamWorkspace`, `ExamTabs4To5`, `PatientDetailWorkspace`, `exam-actions`, dan `session-actions` ke modul ramping di bawah 350 baris serta menambahkan 4 skenario uji baru (`tests/v034-auth-hardening-ux.test.ts`), total **56/56 tes Vitest lulus (100%)**.
+
+---
+
 ## [v0.3.3-fase4] - 2026-11-26 — Fase 4 Poles Milestone v0.3: Kepatuhan WCAG 2.1 AA, *Progressive Disclosure* & DevOps Hardening
 > Rincian file & stempel waktu lengkap: [docs/perubahan/fase-4-ui-a11y-qa-2026-11-26.md](docs/perubahan/fase-4-ui-a11y-qa-2026-11-26.md)
 

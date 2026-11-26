@@ -20,10 +20,9 @@ import {
   PrintableRecordData,
 } from "@/components/clinical/PrintableMedicalResume";
 import { ClinicalActionModals } from "@/features/medical-records/patient-detail/ClinicalActionModals";
-import {
-  DoctorMedicalRecordRow,
-  MedicalRecordItemCard,
-} from "@/features/medical-records/patient-detail/MedicalRecordItemCard";
+import { PatientProfileCard } from "@/features/medical-records/patient-detail/PatientProfileCard";
+import { PatientRecordsSection } from "@/features/medical-records/patient-detail/PatientRecordsSection";
+import type { DoctorMedicalRecordRow } from "@/features/medical-records/patient-detail/MedicalRecordItemCard";
 
 type PatientDetailResponse = Awaited<ReturnType<typeof getPatientDetailForDoctorServerAction>>;
 
@@ -265,172 +264,31 @@ export function PatientDetailWorkspace({ patientId }: { patientId: string }) {
       )}
 
       {/* Kartu Profil Pasien */}
-      <div className="p-6 md:p-8 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-5">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-5">
-          <div className="space-y-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-mono font-bold px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
-                {patient.mrn}
-              </span>
-              <span className="text-xs font-mono text-slate-600">NIK: {patient.nik}</span>
-              <span
-                className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full border ${
-                  accessAllowed || isBreakGlassActive
-                    ? "bg-emerald-100 text-emerald-800 border-emerald-300"
-                    : "bg-red-100 text-red-800 border-red-300"
-                }`}
-              >
-                {accessAllowed || isBreakGlassActive
-                  ? isBreakGlassActive
-                    ? "Akses Darurat Break-Glass"
-                    : "Consent Pasien Aktif"
-                  : "Akses Terkunci (Zero-Trust)"}
-              </span>
-            </div>
-            <h1 className="text-2xl font-black text-slate-900">{patient.name}</h1>
-            <p className="text-xs text-slate-600">
-              Gender: {patient.gender} • Gol. Darah: <strong>{patient.bloodType}</strong> • Kontak:{" "}
-              {patient.phone}
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            {accessAllowed ? (
-              <>
-                {activeQueuedApt && (
-                  <Link
-                    href={`/nakes/periksa/${activeQueuedApt.id}`}
-                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase"
-                  >
-                    Buka Ruang Periksa →
-                  </Link>
-                )}
-                <button
-                  type="button"
-                  onClick={() => setShowPrescriptionModal(true)}
-                  className="px-3.5 py-2 bg-slate-900 hover:bg-black text-white rounded-xl text-xs font-bold cursor-pointer"
-                >
-                  + Resep
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowLabModal(true)}
-                  className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold cursor-pointer"
-                >
-                  + Lab
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowProcedureModal(true)}
-                  className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold cursor-pointer"
-                >
-                  + Tindakan
-                </button>
-              </>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setShowBreakGlassModal(true)}
-                className="px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-black uppercase cursor-pointer"
-              >
-                Aktifkan Break-Glass IGD
-              </button>
-            )}
-          </div>
-        </div>
-
-        {accessAllowed && (
-          <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="font-bold text-slate-600">Alergi Kritis:</span>
-              {patient.allergies.length > 0 ? (
-                patient.allergies.map((al) => (
-                  <span
-                    key={al}
-                    className="px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 border border-red-300 font-black uppercase text-[10px]"
-                  >
-                    {al}
-                  </span>
-                ))
-              ) : (
-                <span className="text-emerald-700 font-semibold">Tidak ada alergi tercatat</span>
-              )}
-            </div>
-            {latestTriage && (
-              <span className="font-mono text-slate-600">
-                Triase Terbaru ({latestTriage.triaseLevel}): {latestTriage.systolic}/
-                {latestTriage.diastolic} mmHg • SpO2 {latestTriage.spo2}%
-              </span>
-            )}
-          </div>
-        )}
-      </div>
+      <PatientProfileCard
+        patient={patient}
+        accessAllowed={accessAllowed}
+        isBreakGlassActive={isBreakGlassActive}
+        activeQueuedAptId={activeQueuedApt?.id}
+        latestTriage={latestTriage}
+        onOpenPrescription={() => setShowPrescriptionModal(true)}
+        onOpenLab={() => setShowLabModal(true)}
+        onOpenProcedure={() => setShowProcedureModal(true)}
+        onOpenBreakGlass={() => setShowBreakGlassModal(true)}
+      />
 
       {/* Daftar Rekam Medis */}
-      {!accessAllowed ? (
-        <div className="p-8 rounded-3xl bg-red-50 border border-red-200 text-center space-y-3">
-          <h2 className="text-lg font-black text-red-900">
-            Akses Rekam Medis Ditolak (403 Zero-Trust BOLA Guard)
-          </h2>
-          <p className="text-xs text-red-800 max-w-xl mx-auto">
-            Pasien belum memberikan tiket consent aktif kepada Anda. Kunci dekripsi dan isi rekam
-            medis tidak dikirim oleh server. Gunakan protokol darurat Break-Glass hanya untuk kasus
-            gawat darurat IGD.
-          </p>
-        </div>
-      ) : medicalRecords.length === 0 ? (
-        <div className="p-8 rounded-3xl bg-white border border-slate-200 text-center text-xs text-slate-500">
-          Belum ada berkas rekam medis tersimpan untuk pasien ini di PostgreSQL.
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {medicalRecords.map((rec) => (
-            <MedicalRecordItemCard
-              key={rec.id}
-              record={rec}
-              decrypted={decryptedMap[rec.id]}
-              hmacValid={hmacStatusMap[rec.id]}
-              decryptError={decryptErrorMap[rec.id]}
-              onDecrypt={() => void handleDecryptRecord(rec)}
-              onPrint={() => {
-                const dec = decryptedMap[rec.id];
-                if (!dec) return;
-                setPrintRecordData({
-                  recordId: rec.id,
-                  faskesNama: rec.faskesNama,
-                  patientNama: patient.name,
-                  patientNik: patient.nik,
-                  patientMrn: patient.mrn,
-                  patientBloodType: patient.bloodType,
-                  tanggalPeriksa: rec.createdAt,
-                  poli: appointments[0]?.poli || "Poli Spesialis",
-                  dokterNama: rec.dokterNama,
-                  dokterSpecialty: rec.dokterSpecialty,
-                  dokterStr: rec.dokterStr,
-                  dokterSip: rec.dokterSip,
-                  triaseLevel: latestTriage?.triaseLevel || "HIJAU",
-                  triageVitals: dec.vitalSigns
-                    ? {
-                        systolic: dec.vitalSigns.systolic,
-                        diastolic: dec.vitalSigns.diastolic,
-                        heartRate: dec.vitalSigns.heartRate,
-                        temperature: dec.vitalSigns.temperature,
-                        spo2: dec.vitalSigns.spo2,
-                      }
-                    : undefined,
-                  subjective: dec.subjective,
-                  diagnosisIcd10: rec.primaryIcd10,
-                  diagnosisShort: rec.diagnosisShort,
-                  prescriptions: dec.plan?.resep || [],
-                  tindakanMedis: dec.plan?.tindakan,
-                  version: rec.version,
-                  addendumReason: rec.addendumReason || undefined,
-                });
-              }}
-            />
-          ))}
-        </div>
-      )}
+      <PatientRecordsSection
+        accessAllowed={accessAllowed}
+        patient={patient}
+        medicalRecords={medicalRecords}
+        decryptedMap={decryptedMap}
+        hmacStatusMap={hmacStatusMap}
+        decryptErrorMap={decryptErrorMap}
+        defaultPoli={appointments[0]?.poli || "Poli Spesialis"}
+        defaultTriaseLevel={latestTriage?.triaseLevel || "HIJAU"}
+        onDecrypt={(rec) => void handleDecryptRecord(rec)}
+        onSelectPrint={(printData) => setPrintRecordData(printData)}
+      />
 
       <ClinicalActionModals
         patientName={patient.name}

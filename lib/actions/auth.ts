@@ -3,9 +3,12 @@ export {
   loginServerAction,
   logoutServerAction,
   getServerSessionData,
+} from "@/features/auth/session-actions";
+
+export {
   registerPasienServerAction,
   registerPasienCepatServerAction,
-} from "@/features/auth/session-actions";
+} from "@/features/auth/register-actions";
 
 export {
   approveKycServerAction,
