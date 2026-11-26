@@ -502,7 +502,7 @@ export default function PasienProfilPage() {
                 <input
                   type="file"
                   id="ktpFile"
-                  className="hidden"
+                  className="sr-only"
                   accept="image/*"
                   onChange={(e) => {
                     if (e.target.files && e.target.files[0]) {
@@ -526,7 +526,7 @@ export default function PasienProfilPage() {
                 <input
                   type="file"
                   id="selfieFile"
-                  className="hidden"
+                  className="sr-only"
                   accept="image/*"
                   onChange={(e) => {
                     if (e.target.files && e.target.files[0]) {

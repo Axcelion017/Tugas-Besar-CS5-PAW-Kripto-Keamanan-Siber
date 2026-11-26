@@ -130,9 +130,11 @@ export function RoleNav({ session }: RoleNavProps) {
       <div className="lg:hidden bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between sticky top-0 z-30">
         <div className="flex items-center gap-2">
           <button
+            type="button"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="p-2 text-slate-700 hover:bg-slate-100 rounded-lg text-sm"
+            className="p-2 text-slate-700 hover:bg-slate-100 rounded-lg text-sm cursor-pointer"
             aria-label="Toggle navigation menu"
+            aria-expanded={mobileMenuOpen}
           >
             {mobileMenuOpen ? (
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -174,7 +176,7 @@ export function RoleNav({ session }: RoleNavProps) {
                 <span className="font-black text-slate-900 tracking-tight text-sm">
                   JAGA<span className="text-red-600">MEDIS</span>
                 </span>
-                <p className="text-[9px] text-slate-400 font-bold tracking-wider uppercase">
+                <p className="text-[11px] text-slate-600 font-bold tracking-wider uppercase">
                   Zero-Trust HIS
                 </p>
               </div>
@@ -212,8 +214,8 @@ export function RoleNav({ session }: RoleNavProps) {
           </div>
 
           {/* Navigasi Links */}
-          <nav className="p-4 space-y-1">
-            <p className="px-3 text-[10px] font-black uppercase text-slate-400 tracking-wider mb-2">
+          <nav aria-label="Navigasi utama" className="p-4 space-y-1">
+            <p className="px-3 text-xs font-black uppercase text-slate-600 tracking-wider mb-2">
               Menu {roleLabel}
             </p>
             {currentLinks.map((item) => {
@@ -251,8 +253,8 @@ export function RoleNav({ session }: RoleNavProps) {
             <IconLogOut className="text-slate-500" size={16} />
             <span>Keluar Sesi</span>
           </button>
-          <p className="text-[9px] text-slate-400 text-center">
-            JagaMedis v0.2-alpha • 2026
+          <p className="text-[11px] text-slate-600 text-center font-medium">
+            JagaMedis v0.3 • 2026
           </p>
         </div>
       </aside>

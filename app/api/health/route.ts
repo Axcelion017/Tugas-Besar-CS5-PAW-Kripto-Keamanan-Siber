@@ -14,7 +14,7 @@ export async function GET() {
       {
         status: "ok",
         service: "jagamedis-his",
-        version: "0.3.2-fase3",
+        version: "0.3.3-fase4",
         database: "connected",
         latencyMs: Date.now() - startedAt,
         timestamp: new Date().toISOString(),

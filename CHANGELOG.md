@@ -4,6 +4,21 @@ Semua perubahan besar pada proyek JagaMedis (sebelumnya Resilio-Health) didokume
 
 ---
 
+## [v0.3.3-fase4] - 2026-11-26 — Fase 4 Poles Milestone v0.3: Kepatuhan WCAG 2.1 AA, *Progressive Disclosure* & DevOps Hardening
+> Rincian file & stempel waktu lengkap: [docs/perubahan/fase-4-ui-a11y-qa-2026-11-26.md](docs/perubahan/fase-4-ui-a11y-qa-2026-11-26.md)
+
+### Kepatuhan Penuh WCAG 2.1 Level AA & Poles UX (`F4.2`)
+- **Kontras, Reduced Motion & Isolasi Cetak A4 (`app/globals.css`)**: Menghapus konflik `@media (prefers-color-scheme: dark)` agar kartu putih selalu memenuhi rasio kontras $\ge 4.5:1$, menambahkan `@media (prefers-reduced-motion: reduce)`, serta mengisolasi cetak lembar resume medis melalui `createPortal` + `#jagamedis-print-portal`.
+- **Komponen Modal & Floating Toast Aksesibel (`components/ui/{Modal,ToastBanner}.tsx`)**: Menghapus **100% sisa `window.alert()`/`window.confirm()`** di seluruh aplikasi (`admin/faskes`, `pasien/booking`, `pasien/consent`, `ExamWorkspace`) dan memigrasikan `LogoutModal` ke `<Modal>` (`role="dialog"`, `aria-modal`, `Escape`, fokus otomatis & pemulihan fokus).
+- **Navigasi Keyboard, Mobile Header & Hydration Fix**: Memperbaiki *double sticky header* di layar mobile (`layout.tsx` `<header>` menjadi `lg:sticky`), menambahkan *skip-to-content* `#main-content`, memperbaiki aksesibilitas keyboard kartu kalender & input berkas `sr-only`, memindahkan pembacaan sesi `error.tsx` ke `useEffect` + menampilkan `error.digest`, serta menambahkan *unsaved changes guard* (`beforeunload`) dan indikator error per-tab di formulir SOAP 5-tab.
+- ***Progressive Disclosure* Pasien**: Menyederhanakan tampilan kartu RME Pasien dengan bahasa awam yang menenangkan dan menaruh bukti teknis (`IV 96-bit`, `HMAC-SHA256`) di dalam accordion `<details>`.
+
+### Penyelarasan DevOps & Quality Gates (`F4.3`)
+- **Container Hardening**: Memperbarui `Dockerfile` ke `node:24-alpine` dengan `USER node`, salinan `features/` & `proxy.ts`, serta `HEALTHCHECK /api/health`; memindahkan kredensial `docker-compose.yml` ke `.env` + menambahkan `.env.example`.
+- **Pengujian Otomatis**: Menambahkan 4 skenario uji *Quality Gates* Fase 4 (`tests/phase4-ui-a11y-devops.test.ts`), total **52/52 tes Vitest lulus (100%)**.
+
+---
+
 ## [v0.3.2-fase3] - 2026-11-26 — Fase 3 Arsitektur Modular `features/`, Server Components, REST API, PWA/IndexedDB & Sinkronisasi Jadwal
 > Rincian file & stempel waktu lengkap: [docs/perubahan/fase-3-architecture-pwa-2026-11-26.md](docs/perubahan/fase-3-architecture-pwa-2026-11-26.md)
 

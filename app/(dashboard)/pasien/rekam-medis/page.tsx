@@ -382,21 +382,35 @@ export default function RekamMedisPasienPage() {
                     </div>
                   )}
                   {!isDecrypted ? (
-                    <div className="p-5 rounded-2xl bg-slate-50 border border-dashed border-slate-300 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
-                      <div className="space-y-0.5">
-                        <span className="font-bold text-slate-700 block">
-                          [TERENKRIPSI] Konten Medis Terenkripsi Zero-Knowledge
-                        </span>
-                        <p className="text-[11px] text-slate-500">
-                          Data keluhan, tanda vital lengkap, dan resep obat terlindungi oleh kunci AES-256-GCM pada peramban Anda.
-                        </p>
+                    <div className="p-5 rounded-2xl bg-slate-50 border border-dashed border-slate-300 space-y-3 text-xs">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="space-y-0.5">
+                          <span className="font-bold text-slate-900 block">
+                            Rekam Medis Terlindungi &amp; Asli
+                          </span>
+                          <p className="text-xs text-slate-600">
+                            Catatan dokter, hasil pemeriksaan, dan resep obat Anda dijaga secara privat dan hanya dapat dibuka oleh Anda atau dokter berizin.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleDecryptSingle(rec)}
+                          className="px-4 py-2 bg-slate-900 hover:bg-black text-white rounded-xl text-xs font-bold cursor-pointer transition shrink-0"
+                        >
+                          Buka Rincian Medis →
+                        </button>
                       </div>
-                      <button
-                        onClick={() => handleDecryptSingle(rec)}
-                        className="px-4 py-2 bg-slate-900 hover:bg-black text-white rounded-xl text-xs font-bold cursor-pointer transition shrink-0"
-                      >
-                        Buka Rincian Medis →
-                      </button>
+
+                      <details className="pt-2 border-t border-slate-200 text-slate-600">
+                        <summary className="cursor-pointer font-bold text-[11px] text-slate-700 hover:text-slate-900">
+                          Lihat Bukti Kriptografi (Opsional — AES-256-GCM &amp; HMAC-SHA256)
+                        </summary>
+                        <div className="mt-2 p-3 rounded-xl bg-slate-900 text-emerald-300 font-mono text-[11px] space-y-1 overflow-x-auto">
+                          <p className="truncate">ID Berkas: {rec.recordId} (v{rec.version})</p>
+                          <p className="truncate">IV 96-bit: {rec.ivHex}</p>
+                          <p className="truncate">HMAC-SHA256: {rec.hmacDigest}</p>
+                        </div>
+                      </details>
                     </div>
                   ) : (
                     <div className="space-y-4 pt-2">

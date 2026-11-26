@@ -13,6 +13,8 @@ import {
   updateAppointmentDetailsServerAction,
   deleteAppointmentServerAction,
 } from "@/lib/actions/appointment";
+import { ConfirmModal } from "@/components/ui/Modal";
+import { ToastBanner } from "@/components/ui/ToastBanner";
 
 interface DbDoctorOption {
   id: string;
@@ -136,10 +138,17 @@ function BookingContent() {
     loadData();
   }, [preselectedDokter, preselectedFaskes]);
 
-  const handleCancelAppointment = async (aptId: string) => {
-    if (!confirm(`Apakah Anda yakin ingin membatalkan dan menghapus tiket antrean ${aptId}?`)) {
-      return;
-    }
+  const [pendingCancelAptId, setPendingCancelAptId] = useState<string | null>(null);
+  const [isCancelling, setIsCancelling] = useState(false);
+
+  const handleCancelAppointment = (aptId: string) => {
+    setPendingCancelAptId(aptId);
+  };
+
+  const confirmCancelAppointment = async () => {
+    if (!pendingCancelAptId || isCancelling) return;
+    const aptId = pendingCancelAptId;
+    setIsCancelling(true);
     setErrorMsg(null);
     setNotification(null);
 
@@ -153,6 +162,9 @@ function BookingContent() {
       }
     } catch {
       setErrorMsg("Terjadi kendala saat membatalkan antrean.");
+    } finally {
+      setIsCancelling(false);
+      setPendingCancelAptId(null);
     }
   };
 
@@ -592,6 +604,26 @@ function BookingContent() {
           )}
         </div>
       </div>
+
+      <ConfirmModal
+        isOpen={Boolean(pendingCancelAptId)}
+        onClose={() => setPendingCancelAptId(null)}
+        onConfirm={() => void confirmCancelAppointment()}
+        title="Batalkan Tiket Antrean?"
+        description={`Tiket antrean ${pendingCancelAptId || ""} akan dibatalkan dan dihapus permanen dari PostgreSQL.`}
+        confirmLabel="Ya, Batalkan Antrean"
+        tone="danger"
+        isBusy={isCancelling}
+      />
+
+      <ToastBanner
+        message={errorMsg || notification}
+        type={errorMsg ? "error" : "success"}
+        onDismiss={() => {
+          setErrorMsg(null);
+          setNotification(null);
+        }}
+      />
     </div>
   );
 }

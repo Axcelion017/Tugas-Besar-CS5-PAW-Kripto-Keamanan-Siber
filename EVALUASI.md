@@ -76,7 +76,7 @@ Pengujian dijalankan pada berkas `tests/validations.test.ts` memvalidasi skema d
 
 ## 4. Kesimpulan Kelaikan Sistem
 
-JagaMedis (sebelumnya Resilio-Health) v0.2 telah memenuhi seluruh kriteria evaluasi integrasi tiga mata kuliah (PAW, Kriptografi, KKS) dan kini telah ditingkatkan melalui **Fase 1 Hardening (`v0.3.0-fase1`)**, **Fase 2 End-to-End PostgreSQL (`v0.3.1-fase2`)**, serta **Fase 3 Arsitektur Modular, REST API & PWA/IndexedDB (`v0.3.2-fase3`, 26 November 2026)**.
+JagaMedis (sebelumnya Resilio-Health) v0.2 telah memenuhi seluruh kriteria evaluasi integrasi tiga mata kuliah (PAW, Kriptografi, KKS) dan kini telah ditingkatkan tuntas melalui seluruh **Fase 1–4 menuju Milestone 3 (`v0.3` / `v0.3.3-fase4`)** (26 November 2026).
 
 ---
 
@@ -119,3 +119,16 @@ Pengujian otomatis arsitektur modular, kontrak REST HTTP, PWA/IndexedDB, dan sin
 | **F3-02** | `F3.3`/`F3.4` | Kontrak REST `POST /api/sync/outbox`: penolakan tanpa sesi (`401`), penolakan tamper HMAC (`422`), dan sinkronisasi berkas terenkripsi AEAD+HMAC sah ke PostgreSQL (`201`) | W3C PWA Background Sync & NIST SP 800-38D | Tanpa sesi `401`, HMAC palsu ditolak `422` (+ log `HMAC_MISMATCH`), payload sah tersimpan ke `medical_records` (`201`) | **LULUS (PASS)** |
 | **F3-03** | `F3.3` | Kontrak REST `GET/POST /api/attachments`: validasi `401`, `400`, `404`, `201`, `200`, serta proteksi Anti-BOLA `403` antar pasien | OWASP API1:2023 & RESTful HTTP | Seluruh kode status akurat; pasien `P-102` ditolak `403 Forbidden` saat mencoba mengunduh lampiran pasien `P-101` | **LULUS (PASS)** |
 | **F3-04** | `F3.1`/`F3.4` | Validitas `public/manifest.json`, `public/icon.svg`, `public/sw.js`, nol duplikasi `safeRevalidate`, modul tunggal `parsePrescriptionDetail`, & sinkronisasi tanggal jadwal seed | ISO/IEC 25010 & W3C PWA | Manifest & SW valid, 0 duplikasi util, `APT-2026-001` sinkron dengan tanggal hari ini | **LULUS (PASS)** |
+
+---
+
+## 8. Matriks Verifikasi Quality Gates Fase 4 (`tests/phase4-ui-a11y-devops.test.ts`)
+
+Pengujian otomatis kepatuhan WCAG 2.1 AA, *Progressive Disclosure*, isolasi cetak, dan hardening DevOps dijalankan pada 26 November 2026 di branch `refactor/fase-4-ui-a11y-qa` (total **8 berkas tes, 52/52 lulus 100%**):
+
+| ID Uji | Sub-Fase | Skenario Uji | Standar Acuan | Hasil Riil | Status |
+| :--- | :---: | :--- | :--- | :--- | :---: |
+| **F4-01** | `F4.2` | Penghapusan konflik OS Dark Mode (`globals.css`), dukungan `prefers-reduced-motion: reduce`, dan isolasi cetak A4 `#jagamedis-print-portal` | WCAG 2.1 SC 1.4.3 & 2.3.3 | Tidak ada aturan konflik dark mode; reduced-motion & print isolation aktif | **LULUS (PASS)** |
+| **F4-02** | `F4.2` | Pemindaian seluruh berkas `app/`, `features/`, dan `components/` dari dialog pemblokir `window.alert()` / `window.confirm()` | Nielsen #5 & WCAG 2.1 AA | **0 pelanggaran** — seluruh konfirmasi memakai `<ConfirmModal>` | **LULUS (PASS)** |
+| **F4-03** | `F4.2` | Kepatuhan atribut WCAG (`role="dialog"`, `aria-modal`, `Escape`, `aria-live`, `#main-content`, `sr-only`, `error.digest`, `<details>` Progressive Disclosure, portal cetak) | WCAG 2.1 Level AA & Nielsen #2 | Seluruh komponen & halaman lulus pengecekan struktural | **LULUS (PASS)** |
+| **F4-04** | `F4.3` | Hardening `Dockerfile` (`node:24-alpine`, `USER node`, `HEALTHCHECK`), `docker-compose.yml` (tanpa password hardcode, `cap_drop: ALL`), & `.env.example` | OWASP Docker / CIS Benchmark | Seluruh standar container produksi & higienitas kredensial terpenuhi | **LULUS (PASS)** |

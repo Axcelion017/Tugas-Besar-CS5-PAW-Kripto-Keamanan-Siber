@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { getUserSession, normalizeRole } from "@/lib/auth/auth";
 
@@ -11,35 +11,50 @@ export default function DashboardError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const [rolePath, setRolePath] = useState<string>("beranda");
+
   useEffect(() => {
     console.error("Dashboard caught error:", error);
+    const timer = setTimeout(() => {
+      const session = getUserSession();
+      if (session) {
+        setRolePath(normalizeRole(session.role));
+      }
+    }, 0);
+    return () => clearTimeout(timer);
   }, [error]);
 
-  const session = typeof window !== "undefined" ? getUserSession() : null;
-  const role = session ? normalizeRole(session.role) : "pasien";
-
   return (
-    <div className="p-8 md:p-12 rounded-3xl bg-white border border-red-200 shadow-xl max-w-2xl mx-auto my-12 text-center space-y-5">
-      <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600 font-black text-2xl shadow-inner">
+    <div
+      role="alert"
+      className="p-8 md:p-12 rounded-3xl bg-white border border-red-200 shadow-xl max-w-2xl mx-auto my-12 text-center space-y-5"
+    >
+      <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-700 font-black text-2xl shadow-inner">
         !
       </div>
 
       <div className="space-y-1">
-        <span className="text-[10px] font-mono font-black uppercase px-2.5 py-1 rounded-full bg-red-100 text-red-800 border border-red-200">
+        <span className="text-xs font-mono font-black uppercase px-2.5 py-1 rounded-full bg-red-100 text-red-800 border border-red-200">
           TERJADI KENDALA OPERASIONAL
         </span>
         <h2 className="text-2xl font-black text-slate-900 tracking-tight pt-2">
           Gagal Memuat Komponen Data
         </h2>
-        <p className="text-xs text-slate-500 font-medium">
+        <p className="text-xs text-slate-600 font-medium">
           {error.message || "Terjadi kesalahan internal saat merender antarmuka data."}
         </p>
+        {error.digest && (
+          <p className="text-xs font-mono text-slate-600 pt-1">
+            Kode Referensi Galat: <span className="font-bold text-slate-900">{error.digest}</span>
+          </p>
+        )}
       </div>
 
-      <div className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-4 rounded-2xl border border-slate-200 text-left font-mono space-y-1">
-        <p className="font-bold text-slate-800 uppercase text-[10px]">Sistem Tetap Terlindungi:</p>
+      <div className="text-xs text-slate-700 leading-relaxed bg-slate-50 p-4 rounded-2xl border border-slate-200 text-left font-mono space-y-1">
+        <p className="font-bold text-slate-900 uppercase text-xs">Sistem Tetap Terlindungi:</p>
         <p>
-          Sesi autentikasi Anda tetap aktif. Data lokal Anda tersimpan aman dan tidak terhapus.
+          Sesi autentikasi Anda tetap aktif. Data lokal IndexedDB Anda tersimpan aman dan tidak
+          terhapus.
         </p>
       </div>
 
@@ -52,8 +67,8 @@ export default function DashboardError({
           Coba Muat Ulang Halaman
         </button>
         <Link
-          href={`/${role}`}
-          className="px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold transition text-center"
+          href={`/${rolePath}`}
+          className="px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-900 rounded-xl text-xs font-bold transition text-center"
         >
           ← Kembali ke Dashboard
         </Link>

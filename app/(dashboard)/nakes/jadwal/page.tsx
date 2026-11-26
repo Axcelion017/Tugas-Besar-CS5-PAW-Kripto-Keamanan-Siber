@@ -302,8 +302,16 @@ export default function NakesJadwalMingguanPage() {
                         return (
                           <div
                             key={apt.id}
+                            role="button"
+                            tabIndex={0}
                             onClick={() => router.push(`/nakes/periksa/${apt.id}`)}
-                            className={`p-3 rounded-2xl border transition-all cursor-pointer shadow-2xs space-y-1.5 ${
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                router.push(`/nakes/periksa/${apt.id}`);
+                              }
+                            }}
+                            className={`p-3 rounded-2xl border transition-all cursor-pointer shadow-2xs space-y-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-600 ${
                               isRed
                                 ? "bg-red-50/90 border-red-300 hover:border-red-500"
                                 : isYellow
