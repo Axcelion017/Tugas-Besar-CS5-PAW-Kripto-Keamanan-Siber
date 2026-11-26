@@ -407,16 +407,16 @@ Aplikasi klinis memiliki standar usability lebih ketat dari aplikasi umum karena
 
 ---
 
-### Fase 4 (`P3 — Poles & Rilis v1.0`) — Perampingan Skema DB, UX Pasien, WCAG 2.1 AA & DevOps
-- [ ] **F4.1 — Perampingan Skema Database *(Opsional Pasca-Penilaian Modul 6)***:
+### Fase 4 (`P3 — Poles Milestone v0.3`) — Perampingan Skema DB, UX Pasien, WCAG 2.1 AA & DevOps *(SELESAI & TERVERIFIKASI — 26 Nov 2026, 09:57 WIB; catatan lengkap: [fase-4-ui-a11y-qa-2026-11-26.md](../perubahan/fase-4-ui-a11y-qa-2026-11-26.md))*
+- [ ] **F4.1 — Perampingan Skema Database *(Opsional Pasca-Penilaian Modul 6 — sengaja dipertahankan utuh demi stabilitas artefak penilaian Modul 6)***:
   - *Target*: `prisma/schema.prisma`, `prisma/seed.ts`.
   - *Aksi*: Hapus `active_encounters`, gabung `kyc_submissions` + `kyd_submissions` menjadi `verifications`, tambah tabel `referrals` serta kolom `phone`/`alamat` pada `Patient`, lebarkan seluruh Primary Key ke `VarChar(36)` + `crypto.randomUUID()`, dan bersihkan duplikasi enum `AppointmentStatus`.
-- [ ] **F4.2 — Kepatuhan Penuh WCAG 2.1 AA & Poles UX (*Progressive Disclosure*)**:
-  - *Target*: `app/globals.css`, `components/ui/{Modal,ToastBanner}.tsx` (baru), `components/shared/RoleNav.tsx`, `app/(dashboard)/layout.tsx`, `app/(dashboard)/error.tsx`, halaman Pasien & form/modal.
-  - *Aksi*: Hapus konflik `@media (prefers-color-scheme: dark)` di `globals.css`; terapkan *Progressive Disclosure* pada halaman Pasien (bahasa awam di depan, bukti kriptografi di accordion); ganti seluruh modal & `window.alert()`/`confirm()` dengan `Modal.tsx` (`role="dialog"`, `Escape`, focus trap) & *floating* `ToastBanner.tsx` (`role="alert"`/`role="status"`); pasang `htmlFor`/`id` di semua form & `role="tablist"` di SOAP 5-tab (jaga state tetap mounted dengan badge error per tab + peringatan *unsaved changes*); ubah `<tr/div onClick>` agar ramah keyboard; perbaiki double sticky header mobile; naikkan kontras teks (`text-slate-400` -> `text-slate-600`, minimal `text-xs`); tambahkan `motion-reduce:animate-none`; pindahkan `getUserSession()` di `error.tsx` ke `useEffect`.
-- [ ] **F4.3 — Penyelarasan DevOps & Pengujian Otomatis**:
-  - *Target*: `Dockerfile`, `docker-compose.yml`, `tests/`.
-  - *Aksi*: Perbarui base image `Dockerfile` ke `node:24-alpine`, pindahkan kredensial `docker-compose.yml` ke `.env`, dan tambahkan integration tests untuk Server Actions serta E2E test alur utama.
+- [x] **F4.2 — Kepatuhan Penuh WCAG 2.1 AA & Poles UX (*Progressive Disclosure*)**:
+  - *Target*: `app/globals.css`, `components/ui/{Modal,ToastBanner}.tsx` (baru), `components/ui/LogoutModal.tsx`, `components/shared/RoleNav.tsx`, `app/(dashboard)/layout.tsx`, `app/(dashboard)/error.tsx`, halaman Pasien, Admin, & formulir SOAP 5-tab.
+  - *Aksi*: Hapus konflik `@media (prefers-color-scheme: dark)` di `globals.css` + tambah `prefers-reduced-motion: reduce`; terapkan *Progressive Disclosure* pada halaman Pasien (bahasa awam di depan, bukti kriptografi di `<details>`); ganti seluruh modal & 100% `window.alert()`/`confirm()` dengan `Modal.tsx` / `ConfirmModal` (`role="dialog"`, `Escape`, focus restore) & *floating* `ToastBanner.tsx` (`role="alert"`/`role="status"`); pasang *skip link* `#main-content`, indikator error per-tab + *unsaved changes guard* (`beforeunload`) di SOAP 5-tab, dukungan keyboard `Enter`/`Space` pada kartu kalender, `sr-only` pada input file KYC, perbaiki double sticky header mobile, naikkan kontras teks, serta pindahkan `getUserSession()` di `error.tsx` ke `useEffect` + tampilkan `error.digest`.
+- [x] **F4.3 — Penyelarasan DevOps & Pengujian Otomatis**:
+  - *Target*: `Dockerfile`, `docker-compose.yml`, `.env.example` (baru), `tests/phase4-ui-a11y-devops.test.ts` (baru).
+  - *Aksi*: Perbarui base image `Dockerfile` ke `node:24-alpine` + `HEALTHCHECK /api/health`, pindahkan kredensial `docker-compose.yml` ke `.env`, sediakan `.env.example`, dan tambahkan uji otomatis *Quality Gates* Fase 4 (**52/52 Vitest lulus**).
 
 **Quality Gates Fase 4**:
 | Indikator Uji | Standar Acuan | Cara Menguji | Target Lulus |

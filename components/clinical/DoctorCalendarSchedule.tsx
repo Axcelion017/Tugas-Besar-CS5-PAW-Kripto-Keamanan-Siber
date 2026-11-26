@@ -255,8 +255,16 @@ export function DoctorCalendarSchedule({ appointments }: DoctorCalendarScheduleP
                         return (
                           <div
                             key={apt.id}
+                            role="button"
+                            tabIndex={0}
                             onClick={() => router.push(`/nakes/periksa/${apt.id}`)}
-                            className={`p-4 rounded-2xl border transition-all cursor-pointer shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3 ${
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                router.push(`/nakes/periksa/${apt.id}`);
+                              }
+                            }}
+                            className={`p-4 rounded-2xl border transition-all cursor-pointer shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3 focus:outline-none focus:ring-2 focus:ring-emerald-600 ${
                               isRed
                                 ? "bg-red-50/80 border-red-300 hover:bg-red-100/90"
                                 : isYellow

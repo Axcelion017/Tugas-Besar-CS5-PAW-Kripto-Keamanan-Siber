@@ -8,6 +8,8 @@ import {
   toggleFaskesKillSwitchServerAction,
 } from "@/lib/actions/faskes";
 import { createFaskesServerAction } from "@/lib/actions/admin";
+import { ConfirmModal } from "@/components/ui/Modal";
+import { ToastBanner } from "@/components/ui/ToastBanner";
 
 function formatFaskesType(tipe: string): Faskes["tipe"] {
   if (tipe === "KLINIK_PRATAMA" || tipe === "Klinik Pratama") return "Klinik Pratama";
@@ -24,6 +26,8 @@ export default function MasterFaskesAdminPage() {
   const [kontakBaru, setKontakBaru] = useState("");
   const [notif, setNotif] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [pendingToggleFaskes, setPendingToggleFaskes] = useState<Faskes | null>(null);
+  const [isToggling, setIsToggling] = useState(false);
 
   const loadFaskesFromDb = useCallback(async () => {
     try {
@@ -60,38 +64,36 @@ export default function MasterFaskesAdminPage() {
     return () => clearTimeout(timer);
   }, [loadFaskesFromDb]);
 
-  const handleToggleQuarantine = async (faskes: Faskes) => {
+  const handleToggleQuarantine = (faskes: Faskes) => {
     setErrorMsg(null);
+    setPendingToggleFaskes(faskes);
+  };
+
+  const confirmToggleQuarantine = async () => {
+    if (!pendingToggleFaskes || isToggling) return;
+    const faskes = pendingToggleFaskes;
     const isQuarantining = faskes.status === "ACTIVE";
-    const actionText = isQuarantining ? "MENGISOLASI" : "MEMULIHKAN";
+    setIsToggling(true);
+    try {
+      const res = await toggleFaskesKillSwitchServerAction(
+        faskes.id,
+        isQuarantining ? "QUARANTINED" : "ACTIVE"
+      );
+      if (!res.success) {
+        setErrorMsg(res.message || "Gagal mengubah status Kill-Switch faskes.");
+        return;
+      }
 
-    if (
-      !confirm(
-        `PERINGATAN SIBER: Apakah Anda yakin ingin ${actionText} Faskes ${faskes.nama}? ${
-          isQuarantining
-            ? "Seluruh jalur booking dan penulisan RME faskes ini akan dibekukan di server untuk mengisolasi potensi ransomware!"
-            : "Koneksi ke server pusat akan diizinkan kembali."
-        }`
-      )
-    ) {
-      return;
+      setNotif(
+        `Status Faskes ${faskes.nama} berhasil diubah menjadi ${
+          isQuarantining ? "QUARANTINED (Terisolasi)" : "ACTIVE (Normal)"
+        } di PostgreSQL.`
+      );
+      await loadFaskesFromDb();
+    } finally {
+      setIsToggling(false);
+      setPendingToggleFaskes(null);
     }
-
-    const res = await toggleFaskesKillSwitchServerAction(
-      faskes.id,
-      isQuarantining ? "QUARANTINED" : "ACTIVE"
-    );
-    if (!res.success) {
-      setErrorMsg(res.message || "Gagal mengubah status Kill-Switch faskes.");
-      return;
-    }
-
-    setNotif(
-      `Status Faskes ${faskes.nama} berhasil diubah menjadi ${
-        isQuarantining ? "QUARANTINED (Terisolasi)" : "ACTIVE (Normal)"
-      } di PostgreSQL.`
-    );
-    await loadFaskesFromDb();
   };
 
   const handleAddFaskes = async (e: React.FormEvent) => {
@@ -303,6 +305,36 @@ export default function MasterFaskesAdminPage() {
           </table>
         </div>
       </div>
+
+      <ConfirmModal
+        isOpen={Boolean(pendingToggleFaskes)}
+        onClose={() => setPendingToggleFaskes(null)}
+        onConfirm={() => void confirmToggleQuarantine()}
+        title={
+          pendingToggleFaskes?.status === "ACTIVE"
+            ? `Aktifkan Kill-Switch Karantina — ${pendingToggleFaskes.nama}?`
+            : `Pulihkan Koneksi Faskes — ${pendingToggleFaskes?.nama || ""}?`
+        }
+        description={
+          pendingToggleFaskes?.status === "ACTIVE"
+            ? "Seluruh jalur booking dan penulisan RME faskes ini akan segera dibekukan di server untuk mengisolasi potensi ransomware."
+            : "Koneksi layanan pendaftaran dan penulisan RME faskes ke server pusat akan diaktifkan kembali."
+        }
+        confirmLabel={
+          pendingToggleFaskes?.status === "ACTIVE" ? "Ya, Isolasi Faskes" : "Ya, Pulihkan Faskes"
+        }
+        tone={pendingToggleFaskes?.status === "ACTIVE" ? "danger" : "default"}
+        isBusy={isToggling}
+      />
+
+      <ToastBanner
+        message={errorMsg || notif}
+        type={errorMsg ? "error" : "success"}
+        onDismiss={() => {
+          setErrorMsg(null);
+          setNotif(null);
+        }}
+      />
     </div>
   );
 }

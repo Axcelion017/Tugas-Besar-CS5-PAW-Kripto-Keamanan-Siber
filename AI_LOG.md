@@ -4,6 +4,30 @@ Dokumen pencatatan penggunaan asisten kecerdasan buatan (AI) sesuai kebijakan in
 
 ---
 
+## 2026-11-26 — Fase 4 Refactoring (`P3 — Poles Milestone v0.3`): WCAG 2.1 AA, *Progressive Disclosure* & DevOps Hardening
+
+- **Tool**: Google Antigravity (Gemini Models)
+- **Branch**: `refactor/fase-4-ui-a11y-qa`
+- **Catatan Perubahan Rinci**: `docs/perubahan/fase-4-ui-a11y-qa-2026-11-26.md`
+- **Tujuan**:
+  1. Melaksanakan item **Fase 4 (`F4.2` & `F4.3`)** dari Master Plan Audit Menyeluruh JagaMedis (`docs/audit/audit_menyeluruh_jagamedis_22Nov2026.md`) untuk mematangkan transisi Milestone `v0.2` $\rightarrow$ **`v0.3`** (`v0.3.3-fase4`, dengan tetap menjaga skema 17 tabel Modul 6 utuh).
+  2. Menghapus konflik kontras OS Dark Mode (`globals.css`), memasang `prefers-reduced-motion: reduce`, membangun komponen `Modal`/`ConfirmModal` & `ToastBanner` berstandar WCAG 2.1 AA, mengganti 100% sisa `window.alert()`/`window.confirm()`, memperbaiki *double sticky header* mobile & risiko hidrasi `error.tsx`, menerapkan *Progressive Disclosure* pada halaman RME Pasien, serta menambahkan peringatan *unsaved changes* & indikator error per-tab di formulir SOAP 5-tab.
+  3. Menyelaraskan DevOps container (`Dockerfile` $\rightarrow$ `node:24-alpine` + `HEALTHCHECK`, `docker-compose.yml` menarik kredensial dari `.env`, dan templat `.env.example`).
+- **Ringkasan Prompt**:
+  1. *"Sepertinya ada bug dibagian cetak rekam medis, hapus tombol duplikat di bawah dan pastikan yang dicetak hanya dokumen rekam medisnya saja."*
+  2. *"Berikan saya nama branch untuk fase 4 — okeh lakukan fase 4."*
+- **Bagian yang Dihasilkan / Dimodifikasi**:
+  - **Aksesibilitas & UI (`F4.2`)**: `components/ui/Modal.tsx` (baru), `components/ui/ToastBanner.tsx` (baru), `components/ui/LogoutModal.tsx`, `app/globals.css`, `components/shared/RoleNav.tsx`, `app/(dashboard)/layout.tsx`, `app/(dashboard)/error.tsx`, `app/(dashboard)/pasien/{profil,rekam-medis,booking,consent}/page.tsx`, `app/(dashboard)/admin/faskes/page.tsx`, `features/medical-records/exam/ExamWorkspace.tsx`, `components/clinical/DoctorCalendarSchedule.tsx`, `app/(dashboard)/nakes/jadwal/page.tsx`.
+  - **DevOps (`F4.3`)**: `Dockerfile`, `docker-compose.yml`, `.env.example` (baru).
+  - **Pengujian & Dokumentasi**: `tests/phase4-ui-a11y-devops.test.ts` (baru, 4 tes Quality Gates Fase 4), `docs/perubahan/fase-4-ui-a11y-qa-2026-11-26.md` (baru), `docs/perubahan/README.md`, `AI_LOG.md`, `CHANGELOG.md`, `EVALUASI.md`, `README.md`, `docs/audit/audit_menyeluruh_jagamedis_22Nov2026.md`.
+- **Cara Verifikasi**:
+  - `npx tsc --noEmit`: 0 kesalahan tipe statis.
+  - `npx vitest run`: 8 berkas tes, **52/52 tes lulus (100%)**.
+  - `npm run lint`: 0 error, 0 warning.
+  - `npm run build`: Kompilasi produksi **36/36 rute + `ƒ Proxy (Middleware)`** sukses.
+
+---
+
 ## 2026-11-26 — Fase 3 Refactoring (`P2 — Sedang`): Modularisasi `features/`, Server Components, 4 Endpoint REST, PWA/IndexedDB & Sinkronisasi Jadwal
 
 - **Tool**: Google Antigravity (Gemini Models)

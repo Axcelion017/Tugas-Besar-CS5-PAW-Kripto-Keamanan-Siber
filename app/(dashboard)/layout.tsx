@@ -99,13 +99,19 @@ export default function DashboardLayout({
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-slate-800 font-sans flex flex-col lg:flex-row">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:px-4 focus:py-2 focus:bg-slate-900 focus:text-white focus:rounded-xl focus:text-xs focus:font-bold"
+      >
+        Lewati ke Konten Utama
+      </a>
       {/* Sidebar Navigasi Berdasarkan Role */}
       <RoleNav session={session} />
 
       {/* Konten Utama */}
       <div className="flex-1 lg:pl-72 flex flex-col min-h-screen min-w-0">
-        {/* Top Navbar */}
-        <header className="bg-white/90 backdrop-blur-md border-b border-slate-200 sticky top-0 z-20 px-4 sm:px-6 py-3 flex items-center justify-between gap-2">
+        {/* Top Navbar: sticky hanya pada desktop (lg+) agar tidak tumpang tindih dengan mobile bar RoleNav */}
+        <header className="bg-white/95 backdrop-blur-md border-b border-slate-200 lg:sticky lg:top-0 z-20 px-4 sm:px-6 py-3 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
             <h2 className="text-xs sm:text-sm font-black text-slate-800 uppercase tracking-wider truncate">
               {pathname === "/beranda"
@@ -126,7 +132,7 @@ export default function DashboardLayout({
         </header>
 
         {/* Konten Halaman */}
-        <main className="p-4 sm:p-6 md:p-8 flex-1 max-w-7xl w-full mx-auto min-w-0">
+        <main id="main-content" className="p-4 sm:p-6 md:p-8 flex-1 max-w-7xl w-full mx-auto min-w-0">
           {isUnauthorizedAccess ? (
             <div className="p-8 rounded-3xl bg-white border border-red-200 shadow-xl max-w-2xl mx-auto my-12 text-center space-y-4">
               <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600">

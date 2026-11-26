@@ -20,6 +20,8 @@ import {
 } from "@/lib/actions/clinical";
 import { saveToOutbox } from "@/lib/storage/indexedDb";
 import { PrintableMedicalResume } from "@/components/clinical/PrintableMedicalResume";
+import { ConfirmModal } from "@/components/ui/Modal";
+import { ToastBanner } from "@/components/ui/ToastBanner";
 import { StickyPatientBanner } from "@/features/medical-records/exam/StickyPatientBanner";
 import { ExamTabs1To3 } from "@/features/medical-records/exam/ExamTabs1To3";
 import {
@@ -91,6 +93,23 @@ export function ExamWorkspace({ bookingId }: { bookingId: string }) {
   const [submitStatus, setSubmitStatus] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [showAllergyConfirmModal, setShowAllergyConfirmModal] = useState(false);
+
+  const hasUnsavedChanges =
+    !isSubmitting &&
+    !submitStatus?.startsWith("SUKSES") &&
+    !submitStatus?.startsWith("MODE OFFLINE") &&
+    (planPrescription.trim().length > 0 || planAction.trim().length > 0 || attachedImages.length > 0);
+
+  useEffect(() => {
+    if (!hasUnsavedChanges) return;
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [hasUnsavedChanges]);
 
   useEffect(() => {
     let mounted = true;
@@ -239,12 +258,16 @@ export function ExamWorkspace({ bookingId }: { bookingId: string }) {
       return;
     }
 
-    if (
-      detectedAllergies.length > 0 &&
-      !confirm(`PERINGATAN KLINIS: Pasien alergi terhadap (${detectedAllergies.join(", ")}). Lanjutkan?`)
-    ) {
+    if (detectedAllergies.length > 0) {
+      setShowAllergyConfirmModal(true);
       return;
     }
+
+    await executeSaveAndSign();
+  };
+
+  const executeSaveAndSign = async () => {
+    setShowAllergyConfirmModal(false);
 
     if (!isValidMasterKeyHex(patient.encryptionKeyHex)) {
       setSubmitStatus("GALAT KRIPTOGRAFI (Fail-Closed): Kunci 256-bit pasien tidak tersedia.");
@@ -464,28 +487,39 @@ export function ExamWorkspace({ bookingId }: { bookingId: string }) {
         <div role="tablist" className="flex border-b border-slate-200 overflow-x-auto gap-2 pb-2">
           {(
             [
-              [1, "Tab 1: Administratif & Alergi"],
-              [2, "Tab 2: Anamnesis & Fisik"],
-              [3, "Tab 3: Diagnosis & Citra Medis"],
-              [4, "Tab 4: Penatalaksanaan & Resep"],
-              [5, "Tab 5: CPPT & Pengesahan"],
+              [1, "Tab 1: Administratif & Alergi", []],
+              [2, "Tab 2: Anamnesis & Fisik", ["subjective", "systolic", "diastolic", "heartRate", "temperature", "spo2"]],
+              [3, "Tab 3: Diagnosis & Citra Medis", ["icd10"]],
+              [4, "Tab 4: Penatalaksanaan & Resep", ["planPrescription", "planAction"]],
+              [5, "Tab 5: CPPT & Pengesahan", ["isMedicallyConfirmed"]],
             ] as const
-          ).map(([tabNum, label]) => (
-            <button
-              key={tabNum}
-              type="button"
-              role="tab"
-              aria-selected={activeTab === tabNum}
-              onClick={() => setActiveTab(tabNum)}
-              className={`px-3.5 py-2 text-xs font-bold rounded-xl whitespace-nowrap transition cursor-pointer ${
-                activeTab === tabNum
-                  ? "bg-emerald-600 text-white shadow-xs"
-                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-              }`}
-            >
-              {label}
-            </button>
-          ))}
+          ).map(([tabNum, label, tabKeys]) => {
+            const hasTabError = tabKeys.some((k) => Boolean(validationErrors[k]));
+            return (
+              <button
+                key={tabNum}
+                type="button"
+                role="tab"
+                aria-selected={activeTab === tabNum}
+                onClick={() => setActiveTab(tabNum)}
+                className={`px-3.5 py-2 text-xs font-bold rounded-xl whitespace-nowrap transition cursor-pointer inline-flex items-center gap-1.5 ${
+                  activeTab === tabNum
+                    ? "bg-emerald-600 text-white shadow-xs"
+                    : hasTabError
+                    ? "bg-red-50 text-red-800 border border-red-300"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                }`}
+              >
+                <span>{label}</span>
+                {hasTabError && (
+                  <span
+                    aria-label="Terdapat kesalahan validasi pada tab ini"
+                    className="w-2 h-2 rounded-full bg-red-600 inline-block"
+                  />
+                )}
+              </button>
+            );
+          })}
         </div>
 
         <ExamTabs1To3
@@ -658,6 +692,29 @@ export function ExamWorkspace({ bookingId }: { bookingId: string }) {
           onClose={() => setIsPrintOpen(false)}
         />
       )}
+
+      <ConfirmModal
+        isOpen={showAllergyConfirmModal}
+        onClose={() => setShowAllergyConfirmModal(false)}
+        onConfirm={() => void executeSaveAndSign()}
+        title="Peringatan Kontraindikasi Alergi Obat (UR-T10)"
+        description={`Resep memuat zat yang tercatat sebagai alergi pasien (${detectedAllergies.join(
+          ", "
+        )}). Konfirmasi bahwa Anda tetap ingin menandatangani peresepan ini berdasarkan pertimbangan klinis khusus.`}
+        confirmLabel="Tetap Sahkan Resep"
+        tone="warning"
+        isBusy={isSubmitting}
+      />
+
+      <ToastBanner
+        message={submitStatus}
+        type={
+          submitStatus?.startsWith("GALAT") || submitStatus?.startsWith("GAGAL")
+            ? "error"
+            : "success"
+        }
+        onDismiss={() => setSubmitStatus(null)}
+      />
     </div>
   );
 }

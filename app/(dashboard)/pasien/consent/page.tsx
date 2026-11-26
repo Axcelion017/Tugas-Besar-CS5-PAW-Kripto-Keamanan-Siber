@@ -11,6 +11,8 @@ import {
   deleteAccessGrantServerAction,
 } from "@/lib/actions/consent";
 import { getFaskesListServerAction } from "@/lib/actions/faskes";
+import { ConfirmModal } from "@/components/ui/Modal";
+import { ToastBanner } from "@/components/ui/ToastBanner";
 
 interface GrantRow {
   id: string;
@@ -49,6 +51,7 @@ export default function ConsentManagerPage() {
   const [notif, setNotif] = useState<{ type: "ok" | "err"; msg: string } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [pendingDeleteGrantId, setPendingDeleteGrantId] = useState<string | null>(null);
 
   const fetchGrantsFromDb = useCallback(async (user: UserSession) => {
     const grantsRes = await getAccessGrantsServerAction(user.id);
@@ -159,9 +162,14 @@ export default function ConsentManagerPage() {
     }
   };
 
-  const handleDeleteGrant = async (grantId: string) => {
+  const handleDeleteGrant = (grantId: string) => {
     if (!session || isSubmitting) return;
-    if (!confirm(`Hapus permanen riwayat izin akses ${grantId} dari basis data?`)) return;
+    setPendingDeleteGrantId(grantId);
+  };
+
+  const confirmDeleteGrant = async () => {
+    if (!session || !pendingDeleteGrantId || isSubmitting) return;
+    const grantId = pendingDeleteGrantId;
     setIsSubmitting(true);
     try {
       const res = await deleteAccessGrantServerAction(grantId);
@@ -173,6 +181,7 @@ export default function ConsentManagerPage() {
       }
     } finally {
       setIsSubmitting(false);
+      setPendingDeleteGrantId(null);
     }
   };
 
@@ -452,6 +461,23 @@ export default function ConsentManagerPage() {
           </table>
         </div>
       </div>
+
+      <ConfirmModal
+        isOpen={Boolean(pendingDeleteGrantId)}
+        onClose={() => setPendingDeleteGrantId(null)}
+        onConfirm={() => void confirmDeleteGrant()}
+        title="Hapus Riwayat Izin Akses?"
+        description={`Riwayat izin akses ${pendingDeleteGrantId || ""} akan dihapus permanen dari PostgreSQL. Tindakan ini tidak dapat dibatalkan.`}
+        confirmLabel="Ya, Hapus Permanen"
+        tone="danger"
+        isBusy={isSubmitting}
+      />
+
+      <ToastBanner
+        message={notif?.msg || null}
+        type={notif?.type === "err" ? "error" : "success"}
+        onDismiss={() => setNotif(null)}
+      />
     </div>
   );
 }
