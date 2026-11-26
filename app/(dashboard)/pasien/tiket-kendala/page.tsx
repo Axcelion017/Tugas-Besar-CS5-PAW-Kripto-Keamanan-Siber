@@ -118,7 +118,7 @@ export default function PasienTiketKendalaPage() {
     const all = getStorageData<TroubleTicket[]>("resilio_trouble_tickets", MOCK_TROUBLE_TICKETS);
     const updated = [newTicket, ...all];
     setStorageData("resilio_trouble_tickets", updated);
-    setTickets(updated.filter((t) => t.pengirimId === session.id || t.pengirimId === "P-101"));
+    setTickets(updated.filter((t) => t.pengirimId === session.id));
 
     setNotif("Laporan kendala berhasil dikirimkan ke Pusat Insiden Admin Regulator.");
     setJudul("");

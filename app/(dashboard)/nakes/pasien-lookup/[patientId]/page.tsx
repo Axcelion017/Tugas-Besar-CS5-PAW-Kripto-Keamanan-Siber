@@ -3,8 +3,11 @@
 import React, { useState, useEffect, use } from "react";
 import Link from "next/link";
 import { getUserSession } from "@/lib/auth/auth";
-import { decryptAES } from "@/lib/crypto/aes";
-import { verifyHMAC } from "@/lib/crypto/hmac";
+import {
+  CanonicalSoapPayload,
+  decryptMedicalRecordPayload,
+} from "@/features/medical-records/crypto-service";
+import { createAuditLogServerAction } from "@/lib/actions/audit";
 import {
   getPatientDetailForDoctorServerAction,
   executeBreakGlassServerAction,
@@ -23,74 +26,7 @@ import {
 } from "@/lib/db/mockData";
 import { PrintableMedicalResume } from "@/components/clinical/PrintableMedicalResume";
 
-interface DecryptedSoapData {
-  subjective?: string;
-  vitalSigns?: {
-    systolic?: number;
-    diastolic?: number;
-    heartRate?: number;
-    temperature?: number;
-    spo2?: number;
-  };
-  assessment?: {
-    icd10?: string;
-    desc?: string;
-  };
-  plan?: {
-    resep?: string[];
-    tindakan?: string;
-  };
-}
-
-async function smartDecryptPayload(
-  payload: string,
-  ivHex: string,
-  keyHex: string
-): Promise<DecryptedSoapData | null> {
-  if (!payload) return null;
-
-  try {
-    const plain = await decryptAES(payload, ivHex, keyHex);
-    return JSON.parse(plain) as DecryptedSoapData;
-  } catch {
-    // lanjut fallback
-  }
-
-  try {
-    const cleanHex = payload.trim();
-    if (/^[0-9a-fA-F]+$/.test(cleanHex) && cleanHex.length % 2 === 0) {
-      const buf = new Uint8Array(cleanHex.length / 2);
-      for (let i = 0; i < cleanHex.length; i += 2) {
-        buf[i / 2] = parseInt(cleanHex.substring(i, i + 2), 16);
-      }
-      const text = new TextDecoder().decode(buf);
-      if (text.trim().startsWith("{") && text.trim().endsWith("}")) {
-        return JSON.parse(text.trim()) as DecryptedSoapData;
-      }
-    }
-  } catch {
-    // lanjut
-  }
-
-  try {
-    const decodedBase64 = atob(payload);
-    if (decodedBase64.trim().startsWith("{") && decodedBase64.trim().endsWith("}")) {
-      return JSON.parse(decodedBase64.trim()) as DecryptedSoapData;
-    }
-  } catch {
-    // lanjut
-  }
-
-  try {
-    if (payload.trim().startsWith("{") && payload.trim().endsWith("}")) {
-      return JSON.parse(payload.trim()) as DecryptedSoapData;
-    }
-  } catch {
-    // ignore
-  }
-
-  return null;
-}
+type DecryptedSoapData = CanonicalSoapPayload;
 
 export default function DoctorPatientDetailPage({
   params,
@@ -102,6 +38,7 @@ export default function DoctorPatientDetailPage({
   const [isLoading, setIsLoading] = useState(true);
   const [decryptedMap, setDecryptedMap] = useState<Record<string, DecryptedSoapData>>({});
   const [hmacStatusMap, setHmacStatusMap] = useState<Record<string, boolean>>({});
+  const [decryptErrorMap, setDecryptErrorMap] = useState<Record<string, string>>({});
 
   // Break-Glass state
   const [showBreakGlassModal, setShowBreakGlassModal] = useState(false);
@@ -314,37 +251,48 @@ export default function DoctorPatientDetailPage({
   }
 
   const { patient, accessAllowed, medicalRecords, appointments } = data;
-  const patientKey =
-    patient.encryptionKeyHex ||
-    "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90";
+  const patientKey = patient.encryptionKeyHex;
 
-  const handleDecryptRecord = async (recordId: string, encryptedPayload: string, ivHex: string, hmacDigest: string) => {
-    try {
-      let isIntegrityValid = false;
-      try {
-        isIntegrityValid = await verifyHMAC(encryptedPayload, hmacDigest, patientKey);
-      } catch {
-        isIntegrityValid = false;
-      }
-      setHmacStatusMap((prev) => ({ ...prev, [recordId]: isIntegrityValid }));
+  const handleDecryptRecord = async (
+    recordId: string,
+    encryptedPayload: string,
+    ivHex: string,
+    hmacDigest: string,
+    version: number = 1
+  ) => {
+    setDecryptErrorMap((prev) => {
+      const next = { ...prev };
+      delete next[recordId];
+      return next;
+    });
 
-      const parsed = await smartDecryptPayload(encryptedPayload, ivHex, patientKey);
-      if (parsed) {
-        setDecryptedMap((prev) => ({ ...prev, [recordId]: parsed }));
-      } else {
-        setDecryptedMap((prev) => ({
-          ...prev,
-          [recordId]: {
-            subjective: "Pemeriksaan medis rawat jalan poliklinik spesialis.",
-            vitalSigns: { systolic: 120, diastolic: 80, heartRate: 75, temperature: 36.5, spo2: 98 },
-            assessment: { icd10: "I10", desc: "Hipertensi Primer" },
-            plan: { resep: ["Amlodipine 10mg tab 1x1"], tindakan: "Kontrol tensi berkala" },
-          },
-        }));
-      }
-    } catch (err) {
-      console.warn("Decrypt error:", err);
+    const result = await decryptMedicalRecordPayload(
+      { encryptedPayload, ivHex, hmacDigest },
+      patientKey,
+      { patientId: patient.id, recordId, version }
+    );
+
+    if (result.ok) {
+      setHmacStatusMap((prev) => ({ ...prev, [recordId]: true }));
+      setDecryptedMap((prev) => ({ ...prev, [recordId]: result.data }));
+      return;
     }
+
+    // Fail-Closed Murni: Blokir tampilan konten klinis, hapus cache dekripsi, dan catat SIEM
+    setHmacStatusMap((prev) => ({ ...prev, [recordId]: false }));
+    setDecryptedMap((prev) => {
+      const next = { ...prev };
+      delete next[recordId];
+      return next;
+    });
+    setDecryptErrorMap((prev) => ({ ...prev, [recordId]: result.message }));
+
+    await createAuditLogServerAction({
+      action: "HMAC_MISMATCH",
+      targetResource: `/api/rme/record/${recordId}`,
+      severity: "CRITICAL",
+      detail: `Fail-Closed Triggered (${result.errorCode}): ${result.message} [Pasien: ${patient.id}]`,
+    }).catch(() => {});
   };
 
   const handleExecuteBreakGlass = async () => {
@@ -762,7 +710,15 @@ export default function DoctorPatientDetailPage({
                       {!isDecrypted && (
                         <button
                           type="button"
-                          onClick={() => handleDecryptRecord(rec.id, rec.encryptedPayload, rec.ivHex, rec.hmacDigest)}
+                          onClick={() =>
+                            handleDecryptRecord(
+                              rec.id,
+                              rec.encryptedPayload,
+                              rec.ivHex,
+                              rec.hmacDigest,
+                              rec.version
+                            )
+                          }
                           className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer"
                         >
                           Dekripsi & Buka SOAP
@@ -773,6 +729,20 @@ export default function DoctorPatientDetailPage({
 
                   {/* Isi Berkas RME */}
                   <div className="p-6">
+                    {decryptErrorMap[rec.id] && (
+                      <div
+                        role="alert"
+                        className="mb-4 p-4 rounded-2xl bg-red-50 border border-red-300 text-red-900 text-xs space-y-1"
+                      >
+                        <p className="font-black uppercase tracking-wider text-red-700">
+                          PROSEDUR FAIL-CLOSED DIAKTIFKAN — INTEGRITAS KRIPTOGRAFI GAGAL
+                        </p>
+                        <p className="font-semibold">{decryptErrorMap[rec.id]}</p>
+                        <p className="text-[11px] font-mono text-red-700">
+                          Insiden HMAC_MISMATCH telah dilaporkan ke konsol SIEM Regulator. Tidak ada data medis fiktif yang ditampilkan.
+                        </p>
+                      </div>
+                    )}
                     {!isDecrypted ? (
                       <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 text-xs space-y-2">
                         <span className="font-bold text-slate-700 block">

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
 import { TroubleTicketSchema } from "@/lib/validations/patient";
 import { TicketCategory, TicketStatus, UserRole } from "@prisma/client";
+import { requireSession } from "@/features/auth/guard";
 
 function safeRevalidate(path: string) {
   try {
@@ -21,10 +22,16 @@ export interface TicketActionResponse {
 
 /**
  * Server Action: Pembuatan Tiket Kendala Sistem & Sengketa Data Medis
+ * Identitas pelapor diambil langsung dari sesi server terverifikasi.
  */
 export async function createTroubleTicketServerAction(
   rawData: Record<string, unknown>
 ): Promise<TicketActionResponse> {
+  const auth = await requireSession(["pasien", "staf", "nakes", "admin"], "createTroubleTicket");
+  if (!auth.ok) {
+    return { success: false, message: auth.message };
+  }
+
   const validation = TroubleTicketSchema.safeParse(rawData);
   if (!validation.success) {
     return {
@@ -34,18 +41,23 @@ export async function createTroubleTicketServerAction(
   }
 
   const { kategori, judul, deskripsi } = validation.data;
-  const reporterId = String(rawData.reporterId || "P-101");
-  const reporterName = String(rawData.reporterName || "Budi Santoso");
-  const ticketId = `TCK-${Date.now().toString().slice(-4)}`;
+  const ticketId = `TCK-${Date.now().toString().slice(-6)}`;
+
+  const roleMap: Record<string, UserRole> = {
+    pasien: UserRole.pasien,
+    nakes: UserRole.nakes,
+    staf: UserRole.staf,
+    admin: UserRole.admin,
+  };
 
   try {
     const created = await prisma.troubleTicket.create({
       data: {
         id: ticketId,
-        reporterId,
-        reporterName,
-        reporterRole: UserRole.pasien,
-        faskesId: "FAS-01",
+        reporterId: auth.session.id,
+        reporterName: auth.session.name,
+        reporterRole: roleMap[auth.role] || UserRole.pasien,
+        faskesId: auth.session.faskesId || "FAS-01",
         kategori: kategori as TicketCategory,
         judul,
         deskripsi,
@@ -68,11 +80,18 @@ export async function createTroubleTicketServerAction(
 }
 
 /**
- * Server Action: Mengambil Daftar Seluruh Tiket Kendala dari PostgreSQL
+ * Server Action: Mengambil Daftar Tiket Kendala dari PostgreSQL
+ * Non-admin hanya melihat tiket yang dibuat oleh dirinya sendiri (Anti-BOLA).
  */
 export async function getTroubleTicketsServerAction() {
+  const auth = await requireSession(["pasien", "staf", "nakes", "admin"], "getTroubleTickets");
+  if (!auth.ok) {
+    return { success: false, message: auth.message, data: [] };
+  }
+
   try {
     const tickets = await prisma.troubleTicket.findMany({
+      where: auth.role === "admin" ? {} : { reporterId: auth.session.id },
       orderBy: { createdAt: "desc" },
     });
     return { success: true, data: tickets };
@@ -83,11 +102,16 @@ export async function getTroubleTicketsServerAction() {
 }
 
 /**
- * Server Action: Resolusi / Penutupan Tiket Kendala oleh Admin
+ * Server Action: Resolusi / Penutupan Tiket Kendala — khusus Admin Regulator
  */
 export async function resolveTroubleTicketServerAction(
   ticketId: string
 ): Promise<TicketActionResponse> {
+  const auth = await requireSession(["admin"], `resolveTroubleTicket:${ticketId}`);
+  if (!auth.ok) {
+    return { success: false, message: auth.message };
+  }
+
   try {
     const updated = await prisma.troubleTicket.update({
       where: { id: ticketId },

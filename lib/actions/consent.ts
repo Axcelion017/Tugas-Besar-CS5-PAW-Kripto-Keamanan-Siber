@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
-import { GrantEntityType, Prisma } from "@prisma/client";
+import { AuditAction, AuditSeverity, GrantEntityType, Prisma } from "@prisma/client";
+import { requireSession, recordSecurityAuditBestEffort } from "@/features/auth/guard";
 
 function safeRevalidate(path: string) {
   try {
@@ -20,11 +21,19 @@ export interface ConsentActionResponse {
 
 /**
  * Server Action: Mengambil Daftar Izin Akses Pasien (UU PDP No. 27/2022)
+ * Identitas pasien diambil dari sesi server terverifikasi untuk mencegah BOLA/IDOR.
  */
-export async function getAccessGrantsServerAction(patientId: string = "P-101") {
+export async function getAccessGrantsServerAction(patientId?: string) {
+  const auth = await requireSession(["pasien", "admin"], "getAccessGrants");
+  if (!auth.ok) {
+    return { success: false, message: auth.message, data: [] };
+  }
+
+  const targetPatientId = auth.role === "admin" && patientId ? patientId : auth.session.id;
+
   try {
     const grants = await prisma.accessGrant.findMany({
-      where: { patientId },
+      where: { patientId: targetPatientId },
       orderBy: { createdAt: "desc" },
     });
     return { success: true, data: grants };
@@ -38,15 +47,19 @@ export async function getAccessGrantsServerAction(patientId: string = "P-101") {
  * Server Action: Memberikan Izin Akses Rekam Medis ke Faskes / Dokter
  */
 export async function grantAccessServerAction(params: {
-  patientId: string;
+  patientId?: string;
   entityId: string;
   entityName: string;
   entityType: "DOKTER" | "FASKES";
   scope?: string;
   durationHours?: number;
 }): Promise<ConsentActionResponse> {
+  const auth = await requireSession(["pasien"], "grantAccess");
+  if (!auth.ok) {
+    return { success: false, message: auth.message };
+  }
+
   const {
-    patientId = "P-101",
     entityId,
     entityName,
     entityType,
@@ -54,14 +67,16 @@ export async function grantAccessServerAction(params: {
     durationHours = 24,
   } = params;
 
+  const ownerPatientId = auth.session.id;
+
   try {
-    const grantId = `AG-${Date.now().toString().slice(-4)}`;
+    const grantId = `AG-${Date.now().toString().slice(-6)}`;
     const validUntil = new Date(Date.now() + durationHours * 60 * 60 * 1000);
 
     const created = await prisma.accessGrant.create({
       data: {
         id: grantId,
-        patientId,
+        patientId: ownerPatientId,
         entityId,
         entityName,
         entityType: entityType === "DOKTER" ? GrantEntityType.DOKTER : GrantEntityType.FASKES,
@@ -88,18 +103,57 @@ export async function grantAccessServerAction(params: {
 
 /**
  * Server Action: Pencabutan Hak Akses Seketika (1-Click Revoke - UU PDP Pasal 20)
- * Mengubah kolom `is_revoked` menjadi TRUE dan mencatat `revoked_at` di PostgreSQL
+ * Memverifikasi kepemilikan `grant.patientId === auth.session.id` sebelum mutasi.
  */
 export async function revokeAccessServerAction(
   grantId: string
 ): Promise<ConsentActionResponse> {
+  const auth = await requireSession(["pasien", "admin"], `revokeAccess:${grantId}`);
+  if (!auth.ok) {
+    return { success: false, message: auth.message };
+  }
+
   try {
+    const existing = await prisma.accessGrant.findUnique({
+      where: { id: grantId },
+    });
+
+    if (!existing) {
+      return { success: false, message: "Izin akses tidak ditemukan." };
+    }
+
+    if (auth.role !== "admin" && existing.patientId !== auth.session.id) {
+      await recordSecurityAuditBestEffort({
+        actorId: auth.session.id,
+        actorName: auth.session.name,
+        actorRole: auth.role,
+        action: AuditAction.IDOR_BLOCKED,
+        targetResource: `/api/consent/revoke/${grantId}`,
+        severity: AuditSeverity.CRITICAL,
+        detail: `BOLA Guard: Pengguna ${auth.session.id} mencoba mencabut consent milik pasien ${existing.patientId}.`,
+      });
+      return {
+        success: false,
+        message: "403 Forbidden: Anda tidak berwenang mencabut izin akses milik pasien lain.",
+      };
+    }
+
     const updated = await prisma.accessGrant.update({
       where: { id: grantId },
       data: {
         isRevoked: true,
         revokedAt: new Date(),
       },
+    });
+
+    await recordSecurityAuditBestEffort({
+      actorId: auth.session.id,
+      actorName: auth.session.name,
+      actorRole: auth.role,
+      action: AuditAction.REVOKE_CONSENT,
+      targetResource: `/api/consent/revoke/${grantId}`,
+      severity: AuditSeverity.INFO,
+      detail: `Pasien ${auth.session.name} mencabut izin akses untuk ${existing.entityName} (1-Click Revoke UU PDP).`,
     });
 
     safeRevalidate("/pasien/consent");
@@ -124,6 +178,11 @@ export async function updateAccessGrantServerAction(
   grantId: string,
   additionalHours: number = 24
 ): Promise<ConsentActionResponse> {
+  const auth = await requireSession(["pasien", "admin"], `updateAccessGrant:${grantId}`);
+  if (!auth.ok) {
+    return { success: false, message: auth.message };
+  }
+
   try {
     const existing = await prisma.accessGrant.findUnique({
       where: { id: grantId },
@@ -133,14 +192,31 @@ export async function updateAccessGrantServerAction(
       return { success: false, message: "Izin akses tidak ditemukan." };
     }
 
-    const currentExpiry = new Date(existing.validUntil) > new Date() ? new Date(existing.validUntil) : new Date();
+    if (auth.role !== "admin" && existing.patientId !== auth.session.id) {
+      await recordSecurityAuditBestEffort({
+        actorId: auth.session.id,
+        actorName: auth.session.name,
+        actorRole: auth.role,
+        action: AuditAction.IDOR_BLOCKED,
+        targetResource: `/api/consent/extend/${grantId}`,
+        severity: AuditSeverity.CRITICAL,
+        detail: `BOLA Guard: Pengguna ${auth.session.id} mencoba memperpanjang consent milik pasien ${existing.patientId}.`,
+      });
+      return {
+        success: false,
+        message: "403 Forbidden: Anda tidak berwenang mengubah izin akses milik pasien lain.",
+      };
+    }
+
+    const currentExpiry =
+      new Date(existing.validUntil) > new Date() ? new Date(existing.validUntil) : new Date();
     const newValidUntil = new Date(currentExpiry.getTime() + additionalHours * 60 * 60 * 1000);
 
     const updated = await prisma.accessGrant.update({
       where: { id: grantId },
       data: {
         validUntil: newValidUntil,
-        isRevoked: false, // Otomatis aktif kembali jika diperpanjang
+        isRevoked: false,
       },
     });
 
@@ -165,7 +241,40 @@ export async function updateAccessGrantServerAction(
 export async function deleteAccessGrantServerAction(
   grantId: string
 ): Promise<ConsentActionResponse> {
+  const auth = await requireSession(["pasien", "admin"], `deleteAccessGrant:${grantId}`);
+  if (!auth.ok) {
+    return { success: false, message: auth.message };
+  }
+
   try {
+    const existing = await prisma.accessGrant.findUnique({
+      where: { id: grantId },
+    });
+
+    if (!existing) {
+      return {
+        success: false,
+        message:
+          "[Prisma P2025] Rekaman tidak ditemukan: Izin akses yang hendak dihapus tidak ada di database.",
+      };
+    }
+
+    if (auth.role !== "admin" && existing.patientId !== auth.session.id) {
+      await recordSecurityAuditBestEffort({
+        actorId: auth.session.id,
+        actorName: auth.session.name,
+        actorRole: auth.role,
+        action: AuditAction.IDOR_BLOCKED,
+        targetResource: `/api/consent/delete/${grantId}`,
+        severity: AuditSeverity.CRITICAL,
+        detail: `BOLA Guard: Pengguna ${auth.session.id} mencoba menghapus consent milik pasien ${existing.patientId}.`,
+      });
+      return {
+        success: false,
+        message: "403 Forbidden: Anda tidak berwenang menghapus izin akses milik pasien lain.",
+      };
+    }
+
     await prisma.accessGrant.delete({
       where: { id: grantId },
     });
@@ -184,7 +293,8 @@ export async function deleteAccessGrantServerAction(
       if (error.code === "P2025") {
         return {
           success: false,
-          message: "[Prisma P2025] Rekaman tidak ditemukan: Izin akses yang hendak dihapus tidak ada di database.",
+          message:
+            "[Prisma P2025] Rekaman tidak ditemukan: Izin akses yang hendak dihapus tidak ada di database.",
         };
       }
     }

@@ -3,7 +3,7 @@
 import React, { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { saveSession, loginUser } from "@/lib/auth/auth";
+import { saveSession } from "@/lib/auth/auth";
 import { LoginSchema } from "@/lib/validations/auth";
 import { loginServerAction } from "@/lib/actions/auth";
 
@@ -64,18 +64,10 @@ function LoginForm() {
         router.replace("/beranda");
         return;
       }
+      setErrorMsg(result.message || "Gagal melakukan demo login otomatis.");
     } catch {
-      // Fallback lokal client jika ada kendala server
+      setErrorMsg("Terjadi kendala jaringan saat menghubungkan ke server autentikasi.");
     }
-
-    const localSession = loginUser(user, pass);
-    if (localSession) {
-      saveSession(localSession);
-      router.replace("/beranda");
-      return;
-    }
-
-    setErrorMsg("Gagal melakukan demo login otomatis.");
     setIsLoading(false);
   };
 

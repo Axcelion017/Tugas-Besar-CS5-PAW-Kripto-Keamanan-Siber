@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
-import { FaskesStatus } from "@prisma/client";
+import { AuditAction, AuditSeverity, FaskesStatus } from "@prisma/client";
+import { requireSession, recordSecurityAuditBestEffort } from "@/features/auth/guard";
 
 function safeRevalidate(path: string) {
   try {
@@ -20,6 +21,7 @@ export interface FaskesActionResponse {
 
 /**
  * Server Action: Mengambil Daftar Seluruh Faskes & Dokter Praktik dari PostgreSQL
+ * (Data direktori faskes bersifat publik/terautentikasi untuk pencarian fasilitas)
  */
 export async function getFaskesListServerAction() {
   try {
@@ -68,16 +70,31 @@ export async function getFaskesDetailServerAction(faskesId: string) {
 
 /**
  * Server Action: Saklar Isolasi Siber Faskes (Ransomware Kill-Switch - UR-A03)
- * Mengubah status faskes menjadi QUARANTINED di PostgreSQL
+ * Dibatasi ketat khusus peran Admin Regulator (`requireSession(["admin"])`).
  */
 export async function toggleFaskesKillSwitchServerAction(
   faskesId: string,
   newStatus: FaskesStatus
 ): Promise<FaskesActionResponse> {
+  const auth = await requireSession(["admin"], `toggleFaskesKillSwitch:${faskesId}`);
+  if (!auth.ok) {
+    return { success: false, message: auth.message };
+  }
+
   try {
     const updated = await prisma.faskes.update({
       where: { id: faskesId },
       data: { status: newStatus },
+    });
+
+    await recordSecurityAuditBestEffort({
+      actorId: auth.session.id,
+      actorName: auth.session.name,
+      actorRole: auth.role,
+      action: AuditAction.QUARANTINE_FASKES,
+      targetResource: `/api/faskes/${faskesId}/kill-switch`,
+      severity: newStatus === FaskesStatus.QUARANTINED ? AuditSeverity.CRITICAL : AuditSeverity.WARN,
+      detail: `Admin ${auth.session.name} mengubah status isolasi faskes ${updated.nama} (${faskesId}) menjadi ${newStatus}.`,
     });
 
     safeRevalidate("/admin/faskes");

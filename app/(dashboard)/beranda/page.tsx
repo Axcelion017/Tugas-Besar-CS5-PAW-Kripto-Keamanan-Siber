@@ -25,16 +25,25 @@ export default function BerandaPage() {
       const s = getUserSession();
       if (s) {
         setSession(s);
+        const normRole = normalizeRole(s.role);
         try {
           const [patientRes, aptRes] = await Promise.all([
-            getDoctorPatientListServerAction(s.id),
+            normRole === "nakes" || normRole === "admin"
+              ? getDoctorPatientListServerAction(s.id)
+              : Promise.resolve({
+                  success: false,
+                  stats: { totalPatients: 0, totalAntrean: 0, unsignedCount: 0, signedCount: 0 },
+                  patients: [],
+                }),
             getAppointmentsServerAction({}),
           ]);
 
           setStatsData({
-            totalPatients: patientRes.success ? patientRes.stats.totalPatients : 4,
-            totalAppointments: aptRes.success && aptRes.data ? aptRes.data.length : 4,
-            totalRecords: patientRes.success ? patientRes.stats.signedCount + patientRes.stats.unsignedCount : 5,
+            totalPatients: patientRes.success ? patientRes.stats.totalPatients : 0,
+            totalAppointments: aptRes.success && aptRes.data ? aptRes.data.length : 0,
+            totalRecords: patientRes.success
+              ? patientRes.stats.signedCount + patientRes.stats.unsignedCount
+              : 0,
           });
         } catch (err) {
           console.warn("Beranda live stats fetch fallback:", err);

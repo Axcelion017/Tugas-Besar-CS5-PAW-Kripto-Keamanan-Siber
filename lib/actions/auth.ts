@@ -2,11 +2,16 @@
 
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
-import { DEMO_USERS, UserSession, normalizeRole } from "@/lib/auth/auth";
+import { UserSession, normalizeRole } from "@/lib/auth/auth";
 import { LoginSchema, RegisterPasienSchema, RegisterPasienCepatSchema } from "@/lib/validations/auth";
-import { registerSession, revokeSession, getSessionFromStore } from "@/lib/auth/sessionStore";
+import {
+  registerSessionAsync,
+  revokeSessionAsync,
+  getSessionFromStoreAsync,
+} from "@/lib/auth/sessionStore";
+import { requireSession, recordSecurityAuditBestEffort } from "@/features/auth/guard";
 import { prisma } from "@/lib/db/prisma";
-import { AccountStatus, Gender } from "@prisma/client";
+import { AccountStatus, AuditAction, AuditSeverity, Gender } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { randomInt } from "node:crypto";
 
@@ -26,14 +31,14 @@ export interface ServerAuthResponse {
 }
 
 /**
- * Server Action: Login Pengguna & Penerbitan Cookie Sesi HTTP-Only
- * Menerapkan 4 atribut cookie keamanan: HttpOnly, Secure, SameSite=Lax, Max-Age=14400
+ * Server Action: Login Pengguna & Penerbitan Cookie Sesi HTTP-Only Persisten (PostgreSQL)
+ * - Verifikasi 100% Bcrypt (`bcrypt.compare`) tanpa fallback plaintext atau DEMO_USERS.
+ * - Menerapkan atribut cookie keamanan: HttpOnly, Secure (prod), SameSite=Lax, Max-Age=14400.
  */
 export async function loginServerAction(
   identifier: string,
   password: string
 ): Promise<ServerAuthResponse> {
-  // 1. Validasi Bentuk Kredensial via Skema Zod
   const validation = LoginSchema.safeParse({ identifier, password });
   if (!validation.success) {
     return {
@@ -44,7 +49,6 @@ export async function loginServerAction(
 
   const cleanId = identifier.trim().toLowerCase();
 
-  // 2. Verifikasi Kredensial Pengguna via PostgreSQL (Prisma)
   let userSession: UserSession | null = null;
 
   try {
@@ -59,131 +63,99 @@ export async function loginServerAction(
       },
       include: {
         patient: true,
-        doctor: true,
-        staffMember: true,
+        doctor: { include: { faskes: { select: { nama: true } } } },
+        staffMember: { include: { faskes: { select: { nama: true } } } },
       },
     });
 
-    if (dbUser) {
-      // Verifikasi Password Hash Bcrypt (Salt rounds 10) atau legacy demo
-      let isPasswordMatch = false;
-      try {
-        if (
-          dbUser.passwordHash.startsWith("$2a$") ||
-          dbUser.passwordHash.startsWith("$2b$")
-        ) {
-          // Tangani string placeholder seed misalnya "$2b$10$hashed_doctor123"
-          if (dbUser.passwordHash.startsWith("$2b$10$hashed_")) {
-            const expectedPlain = dbUser.passwordHash.replace("$2b$10$hashed_", "");
-            isPasswordMatch = password === expectedPlain;
-          } else {
-            isPasswordMatch = await bcrypt.compare(password, dbUser.passwordHash);
-          }
-        } else {
-          isPasswordMatch = dbUser.passwordHash === password;
-        }
-      } catch {
-        isPasswordMatch = dbUser.passwordHash === password;
-      }
-
-      if (!isPasswordMatch) {
-        return {
-          success: false,
-          message: "Kata sandi salah. Periksa kembali kredensial Anda.",
-        };
-      }
-
-      // Verifikasi Status Akun Kemenkes: jika akun ditangguhkan/ditolak
-      if (dbUser.status === AccountStatus.SUSPENDED || dbUser.status === AccountStatus.REJECTED) {
-        return {
-          success: false,
-          message: "Akun Anda dinonaktifkan atau permohonan verifikasi ditolak oleh Admin Kemenkes.",
-        };
-      }
-
-      const roleStr = dbUser.role.toString();
-      const role =
-        roleStr === "nakes"
-          ? ("doctor" as const)
-          : roleStr === "pasien"
-          ? ("patient" as const)
-          : (roleStr as "admin" | "staf");
-
-      const displayName =
-        dbUser.doctor?.name ||
-        dbUser.patient?.name ||
-        dbUser.staffMember?.name ||
-        dbUser.username;
-
-      userSession = {
-        id: dbUser.id,
-        name: displayName,
-        username: dbUser.username,
-        role,
-        nik: dbUser.patient?.nik,
-        strNumber: dbUser.doctor?.strNumber,
-        sipNumber: dbUser.doctor?.sipNumber,
-        specialization: dbUser.doctor?.specialty,
-        faskesId: dbUser.doctor?.faskesId || dbUser.staffMember?.faskesId,
-        status: dbUser.status === AccountStatus.VERIFIED ? "VERIFIED" : "PENDING",
-        allergies: dbUser.patient?.allergies || [],
-        bloodType: dbUser.patient?.bloodType || undefined,
-        encryptionKeyHex: dbUser.patient?.encryptionKeyHex || undefined,
-      };
-    }
-  } catch (dbErr) {
-    console.warn("Prisma User Login Lookup fallback:", dbErr);
-  }
-
-  // Fallback ke DEMO_USERS jika tidak ditemukan di DB
-  if (!userSession) {
-    const demoUser = DEMO_USERS.find(
-      (u) =>
-        (u.username.toLowerCase() === cleanId ||
-          u.email.toLowerCase() === cleanId ||
-          (u.nik && u.nik === cleanId)) &&
-        u.password === password
-    );
-
-    if (!demoUser) {
+    if (!dbUser) {
       return {
         success: false,
-        message: "Kredensial atau NIK tidak valid. Periksa kembali atau gunakan tombol demo.",
+        message: "Kredensial atau NIK tidak valid. Periksa kembali akun Anda.",
       };
     }
 
+    // Verifikasi 100% Bcrypt — tolak segala hash non-Bcrypt atau perbandingan plaintext
+    const isBcryptHash =
+      dbUser.passwordHash.startsWith("$2a$") || dbUser.passwordHash.startsWith("$2b$");
+    const isPasswordMatch = isBcryptHash
+      ? await bcrypt.compare(password, dbUser.passwordHash)
+      : false;
+
+    if (!isPasswordMatch) {
+      return {
+        success: false,
+        message: "Kata sandi salah. Periksa kembali kredensial Anda.",
+      };
+    }
+
+    if (dbUser.status === AccountStatus.SUSPENDED || dbUser.status === AccountStatus.REJECTED) {
+      return {
+        success: false,
+        message: "Akun Anda dinonaktifkan atau permohonan verifikasi ditolak oleh Admin Kemenkes.",
+      };
+    }
+
+    const roleStr = dbUser.role.toString();
+    const role: UserSession["role"] =
+      roleStr === "nakes"
+        ? "nakes"
+        : roleStr === "pasien"
+        ? "pasien"
+        : (roleStr as "admin" | "staf");
+
+    const displayName =
+      dbUser.doctor?.name ||
+      dbUser.patient?.name ||
+      dbUser.staffMember?.name ||
+      dbUser.username;
+
     userSession = {
-      id: demoUser.id,
-      name: demoUser.name,
-      username: demoUser.username,
-      role: demoUser.role,
-      nik: demoUser.nik,
-      strNumber: demoUser.strNumber,
-      sipNumber: demoUser.sipNumber,
-      specialization: demoUser.specialization,
-      faskesId: demoUser.faskesId,
-      faskesName: demoUser.faskesName,
-      status: demoUser.status,
-      allergies: demoUser.allergies,
-      bloodType: demoUser.bloodType,
-      phone: demoUser.phone,
-      encryptionKeyHex: demoUser.encryptionKeyHex,
-      posisiStaf: demoUser.posisiStaf,
+      id: dbUser.id,
+      name: displayName,
+      username: dbUser.username,
+      role,
+      nik: dbUser.patient?.nik,
+      strNumber: dbUser.doctor?.strNumber,
+      sipNumber: dbUser.doctor?.sipNumber,
+      specialization: dbUser.doctor?.specialty,
+      faskesId: dbUser.doctor?.faskesId || dbUser.staffMember?.faskesId,
+      faskesName: dbUser.doctor?.faskes?.nama || dbUser.staffMember?.faskes?.nama,
+      status: dbUser.status === AccountStatus.VERIFIED ? "VERIFIED" : "PENDING",
+      allergies: dbUser.patient?.allergies || [],
+      bloodType: dbUser.patient?.bloodType || undefined,
+      phone: dbUser.patient?.emergencyContactPhone || undefined,
+      encryptionKeyHex: dbUser.patient?.encryptionKeyHex || undefined,
+      posisiStaf: dbUser.staffMember?.posisi as UserSession["posisiStaf"],
+    };
+  } catch (dbErr) {
+    console.error("[Auth] Prisma User Login Lookup error:", dbErr);
+    return {
+      success: false,
+      message: "Layanan autentikasi basis data sedang tidak tersedia. Coba beberapa saat lagi.",
     };
   }
 
-  // 3. Bangkitkan Token Sesi Acak CSPRNG (Opaque Session Token)
+  // Bangkitkan Token Sesi Acak CSPRNG (Opaque Session Token) & simpan ke tabel `sessions`
   const sessionToken = crypto.randomUUID();
   const maxAge = 14400; // 4 Jam (14.400 detik)
 
-  // 4. Catat Sesi ke Stateful Session Store Server
-  registerSession(sessionToken, userSession, maxAge);
+  await registerSessionAsync(sessionToken, userSession, maxAge);
 
-  // 5. Terbitkan Cookie Sesi Melalui Header Set-Cookie Resmi (jika dalam request context)
+  const targetRole = normalizeRole(userSession.role);
+
+  await recordSecurityAuditBestEffort({
+    actorId: userSession.id,
+    actorName: userSession.name,
+    actorRole: targetRole,
+    action: AuditAction.LOGIN,
+    targetResource: "/login",
+    severity: AuditSeverity.INFO,
+    detail: `Autentikasi berhasil untuk ${userSession.name} (${targetRole}) dengan sesi persisten HTTP-Only.`,
+  });
+
   try {
     const cookieStore = await cookies();
-
-    // Cookie 1: Token Sesi Terenkripsi / Opaque (HttpOnly, Secure, SameSite=Lax, Max-Age)
     cookieStore.set("resilio_session_token", sessionToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
@@ -191,20 +163,11 @@ export async function loginServerAction(
       maxAge,
       path: "/",
     });
-
-    // Cookie 2: Peran Pengguna Publik
-    cookieStore.set("resilio_user_role", normalizeRole(userSession.role), {
-      httpOnly: false,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge,
-      path: "/",
-    });
+    // Bersihkan cookie peran publik lama agar tidak pernah menjadi vektor eskalasi
+    cookieStore.delete("resilio_user_role");
   } catch {
     // Diabaikan jika dieksekusi di lingkungan uji CLI / script tanpa request context
   }
-
-  const targetRole = normalizeRole(userSession.role);
 
   return {
     success: true,
@@ -214,13 +177,11 @@ export async function loginServerAction(
 }
 
 /**
- * Server Action: Pendaftaran Pasien Baru (e-KYC) ke PostgreSQL
- * Menyimpan data ke tabel User (status: PENDING_VERIFICATION), Patient, dan KycSubmission
+ * Server Action: Pendaftaran Pasien Baru (e-KYC) ke PostgreSQL (Publik)
  */
 export async function registerPasienServerAction(
   data: Record<string, unknown>
 ): Promise<{ success: boolean; message: string; kycId?: string; userId?: string }> {
-  // 1. Validasi Skema Zod
   const validation = RegisterPasienSchema.safeParse(data);
   if (!validation.success) {
     return {
@@ -242,7 +203,6 @@ export async function registerPasienServerAction(
   } = validation.data;
 
   try {
-    // 2. Periksa apakah NIK atau Email sudah terdaftar di PostgreSQL
     const existingUser = await prisma.user.findFirst({
       where: {
         OR: [{ email }, { patient: { nik } }],
@@ -256,8 +216,8 @@ export async function registerPasienServerAction(
       };
     }
 
-    const userId = `P-${Date.now().toString().slice(-4)}`;
-    const kycId = `KYC-${Date.now().toString().slice(-4)}`;
+    const userId = `P-${Date.now().toString().slice(-6)}`;
+    const kycId = `KYC-${Date.now().toString().slice(-6)}`;
     const mrn = `MRN-2026-${randomInt(1000, 10000)}`;
     const passwordHash = await bcrypt.hash(password, 10);
     const encryptionKeyHex = Array.from(crypto.getRandomValues(new Uint8Array(32)))
@@ -276,13 +236,11 @@ export async function registerPasienServerAction(
       .toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })
       .toUpperCase()}`;
 
-    // 3. Mutasi Transaksional ke PostgreSQL: User + Patient + KycSubmission
     await prisma.$transaction(async (tx) => {
-      // Buat Induk Akun Pengguna (User) dengan status PENDING
       await tx.user.create({
         data: {
           id: userId,
-          username: nik, // Default login NIK
+          username: nik,
           email,
           passwordHash,
           role: "pasien",
@@ -290,7 +248,6 @@ export async function registerPasienServerAction(
         },
       });
 
-      // Buat Profil Pasien (Patient)
       await tx.patient.create({
         data: {
           id: userId,
@@ -309,7 +266,6 @@ export async function registerPasienServerAction(
         },
       });
 
-      // Buat Pengajuan e-KYC (KycSubmission)
       await tx.kycSubmission.create({
         data: {
           id: kycId,
@@ -343,12 +299,16 @@ export async function registerPasienServerAction(
 }
 
 /**
- * Server Action: Admin Menyetujui e-KYC Pasien
- * Mengubah status KycSubmission dan User menjadi VERIFIED di PostgreSQL
+ * Server Action: Admin Menyetujui e-KYC Pasien — khusus peran Admin Regulator
  */
 export async function approveKycServerAction(
   submissionId: string
 ): Promise<{ success: boolean; message: string }> {
+  const auth = await requireSession(["admin"], `approveKyc:${submissionId}`);
+  if (!auth.ok) {
+    return { success: false, message: auth.message };
+  }
+
   try {
     const kyc = await prisma.kycSubmission.findUnique({
       where: { id: submissionId },
@@ -360,7 +320,6 @@ export async function approveKycServerAction(
     }
 
     await prisma.$transaction(async (tx) => {
-      // 1. Update status KycSubmission
       await tx.kycSubmission.update({
         where: { id: submissionId },
         data: {
@@ -369,7 +328,6 @@ export async function approveKycServerAction(
         },
       });
 
-      // 2. Aktifkan akun pengguna User agar dapat login
       await tx.user.update({
         where: { id: kyc.userId },
         data: {
@@ -377,6 +335,8 @@ export async function approveKycServerAction(
         },
       });
     });
+
+    safeRevalidate("/admin/verifikasi-kyc");
 
     return {
       success: true,
@@ -393,12 +353,17 @@ export async function approveKycServerAction(
 }
 
 /**
- * Server Action: Admin Menolak e-KYC Pasien
+ * Server Action: Admin Menolak e-KYC Pasien — khusus peran Admin Regulator
  */
 export async function rejectKycServerAction(
   submissionId: string,
   reason: string
 ): Promise<{ success: boolean; message: string }> {
+  const auth = await requireSession(["admin"], `rejectKyc:${submissionId}`);
+  if (!auth.ok) {
+    return { success: false, message: auth.message };
+  }
+
   try {
     const kyc = await prisma.kycSubmission.findUnique({
       where: { id: submissionId },
@@ -412,8 +377,9 @@ export async function rejectKycServerAction(
       await tx.kycSubmission.update({
         where: { id: submissionId },
         data: {
-          status: AccountStatus.SUSPENDED,
-          alasanPenolakan: reason || "Data identitas tidak sesuai standar verifikasi visual Kemenkes.",
+          status: AccountStatus.REJECTED,
+          alasanPenolakan:
+            reason || "Data identitas tidak sesuai standar verifikasi visual Kemenkes.",
           verifiedAt: new Date(),
         },
       });
@@ -421,14 +387,16 @@ export async function rejectKycServerAction(
       await tx.user.update({
         where: { id: kyc.userId },
         data: {
-          status: AccountStatus.SUSPENDED,
+          status: AccountStatus.REJECTED,
         },
       });
     });
 
+    safeRevalidate("/admin/verifikasi-kyc");
+
     return {
       success: true,
-      message: `Pengajuan e-KYC telah ditolak. Status akun ditangguhkan.`,
+      message: `Pengajuan e-KYC telah ditolak.`,
     };
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : "Kesalahan basis data";
@@ -441,9 +409,14 @@ export async function rejectKycServerAction(
 }
 
 /**
- * Mengambil daftar pengajuan e-KYC dari PostgreSQL
+ * Mengambil daftar pengajuan e-KYC dari PostgreSQL — khusus peran Admin Regulator
  */
 export async function getKycSubmissionsServerAction() {
+  const auth = await requireSession(["admin"], "getKycSubmissions");
+  if (!auth.ok) {
+    return { success: false, message: auth.message, data: [] };
+  }
+
   try {
     const list = await prisma.kycSubmission.findMany({
       orderBy: { submittedAt: "desc" },
@@ -455,17 +428,16 @@ export async function getKycSubmissionsServerAction() {
 }
 
 /**
- * Server Action: Logout Pengguna & Pemusnahan Cookie Sesi
+ * Server Action: Logout Pengguna & Pemusnahan Sesi Persisten + Cookie HTTP-Only
  */
 export async function logoutServerAction(): Promise<{ success: boolean }> {
   const cookieStore = await cookies();
   const token = cookieStore.get("resilio_session_token")?.value;
 
   if (token) {
-    revokeSession(token);
+    await revokeSessionAsync(token);
   }
 
-  // Hapus cookie sesi dari peramban
   cookieStore.delete("resilio_session_token");
   cookieStore.delete("resilio_user_role");
 
@@ -473,7 +445,7 @@ export async function logoutServerAction(): Promise<{ success: boolean }> {
 }
 
 /**
- * Mengambil sesi server yang valid berdasarkan cookie aktif
+ * Mengambil sesi server yang valid berdasarkan cookie aktif (PostgreSQL persistent)
  */
 export async function getServerSessionData(): Promise<UserSession | null> {
   const cookieStore = await cookies();
@@ -481,12 +453,11 @@ export async function getServerSessionData(): Promise<UserSession | null> {
 
   if (!token) return null;
 
-  return getSessionFromStore(token);
+  return getSessionFromStoreAsync(token);
 }
 
 /**
- * Server Action: Pendaftaran Cepat Pasien Baru (Username, Nama, Email, Password)
- * Akun langsung aktif di PostgreSQL dengan status PENDING untuk diverifikasi kemudian
+ * Server Action: Pendaftaran Cepat Pasien Baru (Publik)
  */
 export async function registerPasienCepatServerAction(
   rawData: Record<string, unknown>
@@ -517,7 +488,7 @@ export async function registerPasienCepatServerAction(
       };
     }
 
-    const userId = `P-${Date.now().toString().slice(-4)}`;
+    const userId = `P-${Date.now().toString().slice(-6)}`;
     const passwordHash = await bcrypt.hash(password, 10);
     const mrn = `MRN-2026-${randomInt(1000, 10000)}`;
     const tempNik = `TEMP-${Date.now().toString().slice(-8)}`;
@@ -569,13 +540,21 @@ export async function registerPasienCepatServerAction(
 }
 
 /**
- * Server Action: Mengambil Profil Pasien Terkini dari PostgreSQL berdasarkan Session ID / Username
+ * Server Action: Mengambil Profil Pasien Terkini dari PostgreSQL
+ * Pasien hanya dapat membaca profil dirinya sendiri (Anti-BOLA).
  */
-export async function getPatientProfileServerAction(userId: string) {
+export async function getPatientProfileServerAction(userId?: string) {
+  const auth = await requireSession(["pasien", "admin", "nakes", "staf"], "getPatientProfile");
+  if (!auth.ok) {
+    return { success: false, message: auth.message, data: null };
+  }
+
+  const targetUserId = auth.role === "pasien" ? auth.session.id : userId || auth.session.id;
+
   try {
     const user = await prisma.user.findFirst({
       where: {
-        OR: [{ id: userId }, { username: userId }, { patient: { id: userId } }],
+        OR: [{ id: targetUserId }, { username: targetUserId }, { patient: { id: targetUserId } }],
       },
       include: {
         patient: {
@@ -594,6 +573,12 @@ export async function getPatientProfileServerAction(userId: string) {
       return { success: false, data: null };
     }
 
+    // Jangan kirim encryptionKeyHex ke staf/admin yang tidak memerlukan kunci dekripsi RME
+    const sanitizedPatient =
+      auth.role === "pasien"
+        ? user.patient
+        : { ...user.patient, encryptionKeyHex: "" };
+
     return {
       success: true,
       data: {
@@ -601,7 +586,7 @@ export async function getPatientProfileServerAction(userId: string) {
         username: user.username,
         email: user.email,
         statusAccount: user.status,
-        patient: user.patient,
+        patient: sanitizedPatient,
         latestKyc: user.kycSubmissions[0] || null,
       },
     };
@@ -612,7 +597,7 @@ export async function getPatientProfileServerAction(userId: string) {
 }
 
 /**
- * Server Action: Perbarui Data Mandiri Pasien (Non-Sensitif: HP, Alamat, Alergi, Kontak Darurat)
+ * Server Action: Perbarui Data Mandiri Pasien — dibatasi hanya pemilik akun / Admin
  */
 export async function updatePatientProfileServerAction(
   patientId: string,
@@ -626,11 +611,34 @@ export async function updatePatientProfileServerAction(
     emergencyContactPhone?: string;
   }
 ): Promise<{ success: boolean; message: string }> {
+  const auth = await requireSession(["pasien", "admin"], `updatePatientProfile:${patientId}`);
+  if (!auth.ok) {
+    return { success: false, message: auth.message };
+  }
+
+  if (auth.role === "pasien" && patientId && patientId !== auth.session.id) {
+    await recordSecurityAuditBestEffort({
+      actorId: auth.session.id,
+      actorName: auth.session.name,
+      actorRole: auth.role,
+      action: AuditAction.IDOR_BLOCKED,
+      targetResource: `/api/patients/${patientId}/profile`,
+      severity: AuditSeverity.CRITICAL,
+      detail: `BOLA Guard: Pasien ${auth.session.id} mencoba mengubah profil pasien ${patientId}.`,
+    });
+    return {
+      success: false,
+      message: "403 Forbidden: Anda hanya dapat mengubah data profil milik Anda sendiri.",
+    };
+  }
+
+  const targetPatientId = auth.role === "admin" ? patientId : auth.session.id;
+
   try {
     await prisma.patient.update({
-      where: { id: patientId },
+      where: { id: targetPatientId },
       data: {
-        emergencyContactPhone: data.phone,
+        emergencyContactPhone: data.emergencyContactPhone || data.phone,
         bloodType: data.bloodType,
         allergies: data.allergies,
         emergencyContactName: data.emergencyContactName,
@@ -649,11 +657,11 @@ export async function updatePatientProfileServerAction(
 }
 
 /**
- * Server Action: Ajukan Verifikasi Data Sensitif e-KYC (NIK, Nama KTP, Tgl Lahir, KTP + Selfie)
+ * Server Action: Ajukan Verifikasi Data Sensitif e-KYC — dibatasi hanya pemilik sesi Pasien
  */
 export async function submitKycVerificationServerAction(params: {
-  userId: string;
-  patientId: string;
+  userId?: string;
+  patientId?: string;
   nik: string;
   namaLengkap: string;
   tanggalLahir: string;
@@ -662,9 +670,12 @@ export async function submitKycVerificationServerAction(params: {
   selfieUrl?: string;
   watermarkText?: string;
 }): Promise<{ success: boolean; message: string }> {
+  const auth = await requireSession(["pasien"], "submitKycVerification");
+  if (!auth.ok) {
+    return { success: false, message: auth.message };
+  }
+
   const {
-    userId,
-    patientId,
     nik,
     namaLengkap,
     tanggalLahir,
@@ -678,14 +689,15 @@ export async function submitKycVerificationServerAction(params: {
     return { success: false, message: "NIK wajib terdiri dari tepat 16 digit angka." };
   }
 
+  const ownerId = auth.session.id;
+
   try {
-    const kycId = `KYC-${Date.now().toString().slice(-4)}`;
+    const kycId = `KYC-${Date.now().toString().slice(-6)}`;
     const birthDate = new Date(tanggalLahir);
 
     await prisma.$transaction(async (tx) => {
-      // 1. Update profil pasien dengan NIK dan nama baru
       await tx.patient.update({
-        where: { id: patientId },
+        where: { id: ownerId },
         data: {
           nik,
           name: namaLengkap,
@@ -693,11 +705,10 @@ export async function submitKycVerificationServerAction(params: {
         },
       });
 
-      // 2. Buat antrean permohonan e-KYC
       await tx.kycSubmission.create({
         data: {
           id: kycId,
-          userId,
+          userId: ownerId,
           namaLengkap,
           nik,
           birthDate,

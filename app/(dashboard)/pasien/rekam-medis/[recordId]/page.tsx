@@ -3,42 +3,20 @@
 import React, { use, useState, useEffect } from "react";
 import Link from "next/link";
 import { getUserSession } from "@/lib/auth/auth";
-import { decryptAES } from "@/lib/crypto/aes";
-import { verifyHMAC } from "@/lib/crypto/hmac";
 import {
   getStorageData,
   EncryptedMedicalRecord,
   MOCK_ENCRYPTED_RECORDS,
 } from "@/lib/db/mockData";
 import { getSingleMedicalRecordServerAction } from "@/lib/actions/clinical";
+import { createAuditLogServerAction } from "@/lib/actions/audit";
 import { PrintableMedicalResume } from "@/components/clinical/PrintableMedicalResume";
+import {
+  CanonicalSoapPayload,
+  decryptMedicalRecordPayload,
+} from "@/features/medical-records/crypto-service";
 
-interface DecryptedSoapData {
-  subjective?: string;
-  vitalSigns?: {
-    systolic?: number;
-    diastolic?: number;
-    heartRate?: number;
-    temperature?: number;
-    spo2?: number;
-  };
-  assessment?: {
-    icd10?: string;
-    desc?: string;
-  };
-  plan?: {
-    resep?: string[];
-    tindakan?: string;
-  };
-  meta?: {
-    dokterId?: string;
-    dokterNama?: string;
-    dokterStr?: string;
-    faskesNama?: string;
-    timestamp?: string;
-  };
-  [key: string]: unknown;
-}
+type DecryptedSoapData = CanonicalSoapPayload;
 
 interface EnrichedRecordDetail extends EncryptedMedicalRecord {
   dokterSip?: string;
@@ -51,59 +29,7 @@ interface EnrichedRecordDetail extends EncryptedMedicalRecord {
   faskesKontak?: string;
 }
 
-async function smartDecryptPayload(
-  payload: string,
-  ivHex: string,
-  keyHex: string
-): Promise<DecryptedSoapData | null> {
-  if (!payload) return null;
-
-  // 1. Coba dekripsi AES-256-GCM native
-  try {
-    const plain = await decryptAES(payload, ivHex, keyHex);
-    return JSON.parse(plain) as DecryptedSoapData;
-  } catch {
-    // lanjut
-  }
-
-  // 2. Coba jika hex string JSON
-  try {
-    const cleanHex = payload.trim();
-    if (/^[0-9a-fA-F]+$/.test(cleanHex) && cleanHex.length % 2 === 0) {
-      const buf = new Uint8Array(cleanHex.length / 2);
-      for (let i = 0; i < cleanHex.length; i += 2) {
-        buf[i / 2] = parseInt(cleanHex.substring(i, i + 2), 16);
-      }
-      const text = new TextDecoder().decode(buf);
-      if (text.trim().startsWith("{") && text.trim().endsWith("}")) {
-        return JSON.parse(text.trim()) as DecryptedSoapData;
-      }
-    }
-  } catch {
-    // lanjut
-  }
-
-  // 3. Coba jika Base64 JSON
-  try {
-    const decodedBase64 = atob(payload);
-    if (decodedBase64.trim().startsWith("{") && decodedBase64.trim().endsWith("}")) {
-      return JSON.parse(decodedBase64.trim()) as DecryptedSoapData;
-    }
-  } catch {
-    // lanjut
-  }
-
-  // 4. Coba langsung string JSON plaintext
-  try {
-    if (payload.trim().startsWith("{") && payload.trim().endsWith("}")) {
-      return JSON.parse(payload.trim()) as DecryptedSoapData;
-    }
-  } catch {
-    // ignore
-  }
-
-  return null;
-}
+// Helper pengurai detail resep obat untuk tampilan detail pasien
 
 interface PrescriptionDetail {
   medicineName: string;
@@ -239,6 +165,7 @@ export default function RecordDetailPage({
   const [decryptedData, setDecryptedData] = useState<DecryptedSoapData | null>(null);
   const [isHmacValid, setIsHmacValid] = useState<boolean | null>(null);
   const [isTampered, setIsTampered] = useState(false);
+  const [decryptError, setDecryptError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isPrintOpen, setIsPrintOpen] = useState(false);
@@ -420,49 +347,53 @@ export default function RecordDetailPage({
     );
   }
 
-  const patientKey =
-    getUserSession()?.encryptionKeyHex ||
-    "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90";
+  const patientKey = getUserSession()?.encryptionKeyHex;
 
   const handleVerifyAndDecrypt = async (tamper: boolean = false) => {
     if (!record) return;
+    setDecryptError(null);
 
     const payloadToTest = tamper
-      ? record.encryptedPayload.slice(0, -4) + "ffff"
+      ? record.encryptedPayload.slice(0, -4) +
+        (record.encryptedPayload.slice(-4).toLowerCase() === "ffff" ? "0000" : "ffff")
       : record.encryptedPayload;
 
-    let valid = false;
-    try {
-      valid = await verifyHMAC(payloadToTest, record.hmacDigest, patientKey);
-    } catch {
-      valid = false;
-    }
+    const result = await decryptMedicalRecordPayload(
+      {
+        encryptedPayload: payloadToTest,
+        ivHex: record.ivHex,
+        hmacDigest: record.hmacDigest,
+      },
+      patientKey,
+      {
+        patientId: record.patientId,
+        recordId: record.recordId,
+        version: record.version,
+      }
+    );
 
-    if (tamper) {
-      valid = false;
-    }
-
-    setIsHmacValid(valid);
-    setIsTampered(tamper);
-
-    if (tamper) {
-      setDecryptedData(null);
-      alert("PERINGATAN KRIPTO: Tanda tangan HMAC tidak valid! Data telah dimanipulasi (Tamper Test Berhasil).");
+    if (result.ok && !tamper) {
+      setIsHmacValid(true);
+      setIsTampered(false);
+      setDecryptedData(result.data);
       return;
     }
 
-    // Dekripsi cerdas mendukung berbagai representasi payload medis
-    const parsed = await smartDecryptPayload(record.encryptedPayload, record.ivHex, patientKey);
-    if (parsed) {
-      setDecryptedData(parsed);
-    } else {
-      setDecryptedData({
-        subjective: "Pemeriksaan medis rawat jalan poliklinik spesialis.",
-        vitalSigns: { systolic: 120, diastolic: 80, heartRate: 75, temperature: 36.5, spo2: 98 },
-        assessment: { icd10: record.primaryIcd10, desc: record.diagnosisShort },
-        plan: { resep: ["Amlodipine 10mg tab 1x1 pagi", "Kandesartan 8mg tab 1x1 malam"], tindakan: "Kontrol tensi berkala" },
-      });
-    }
+    // Fail-Closed Murni: Tolak tampilan konten klinis dan catat HMAC_MISMATCH ke SIEM
+    setIsHmacValid(false);
+    setIsTampered(true);
+    setDecryptedData(null);
+    const errorMsg = result.ok
+      ? "PERINGATAN KRIPTO: Manipulasi payload terdeteksi (Tamper Test)."
+      : result.message;
+    setDecryptError(errorMsg);
+
+    await createAuditLogServerAction({
+      action: "HMAC_MISMATCH",
+      targetResource: `/api/rme/record/${record.recordId}`,
+      severity: "CRITICAL",
+      detail: `Fail-Closed Triggered (${tamper ? "TAMPER_TEST" : !result.ok ? result.errorCode : "INTEGRITY_FAIL"}): ${errorMsg}`,
+    }).catch(() => {});
   };
 
   return (
@@ -604,7 +535,8 @@ export default function RecordDetailPage({
             <div>
               {isHmacValid
                 ? "Integritas Terkonfirmasi: Nilai HMAC-SHA256 cocok persis dengan kunci rahasia pasien. Data terbukti otentik dari dokter."
-                : "GAGAL INTEGRITAS: 1 atau lebih bit payload diubah secara ilegal! Sistem menolak mendekripsi (Fail-Closed)."}
+                : decryptError ||
+                  "GAGAL INTEGRITAS: 1 atau lebih bit payload diubah secara ilegal! Sistem menolak mendekripsi (Fail-Closed)."}
             </div>
             <span className="text-[10px] font-mono uppercase px-2.5 py-1 rounded-md bg-white border">
               {isTampered ? "Status: Bit Dimanipulasi" : "Status: Payload Murni"}

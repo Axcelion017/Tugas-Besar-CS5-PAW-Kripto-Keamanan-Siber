@@ -4,6 +4,38 @@ Dokumen pencatatan penggunaan asisten kecerdasan buatan (AI) sesuai kebijakan in
 
 ---
 
+## 2026-11-26 — Fase 1 Refactoring (`P0 — Kritis`): Keamanan Server-Side, Sesi Persisten & Kriptografi Nyata
+
+- **Tool**: Google Antigravity (Gemini Models)
+- **Branch**: `refactor/fase-1-security-crypto`
+- **Catatan Perubahan Rinci**: `docs/perubahan/fase-1-security-crypto-2026-11-26.md`
+- **Tujuan**:
+  1. Melaksanakan seluruh item **Fase 1 (`F1.1` – `F1.4`)** dari Master Plan Audit Menyeluruh JagaMedis (`docs/audit/audit_menyeluruh_jagamedis_22Nov2026.md`) untuk menutup seluruh temuan keamanan & kriptografi berprioritas Kritis (`P0`).
+  2. Menerapkan sesi persisten PostgreSQL (tabel ke-17 `sessions`), guard server-side terpusat `requireSession(allowedRoles)`, network boundary Next.js 16 `proxy.ts`, serta menghapus celah cookie escalation `resilio_user_role` dan cabang fallback password plaintext.
+  3. Menutup seluruh celah BOLA/IDOR, bypass PIN 6-digit, serta kebocoran PII & `encryptionKeyHex` lintas pengguna pada seluruh berkas Server Actions.
+  4. Menghapus enkripsi palsu Base64/Hex dan IV/HMAC statis; menerapkan enkripsi AEAD nyata (`HKDF` + `AES-256-GCM` + `AAD` + *constant-time* `crypto.subtle.verify`) dan prinsip *Fail-Closed* murni (0 data medis fiktif) pada seluruh alur penulisan, pembacaan, dan seeding RME.
+  5. Memasang HTTP Security Headers (OWASP Secure Headers) pada `next.config.ts` dan menyinkronkan seluruh dokumentasi proyek serta membuat direktori pencatatan perubahan khusus `docs/perubahan/`.
+- **Ringkasan Prompt**:
+  1. *"Cek keseluruhan modul07.md."*
+  2. *"Konflik PR #12 pada app/(dashboard)/layout.tsx."*
+  3. *"Cek docs/audit/audit_menyeluruh_jagamedis_22Nov2026.md, saya sudah lakukan fase 0, sekarang ingin melakukan fase 1 namun bingung nama branch."*
+  4. *"Lakukan bertahap fase 1 nya dan buat dokumen pencatatan perubahan di direktori khusus yang lengkap ada dokumentasi apa saja yang berubah di filenya dan waktunya, AI_LOG.md, dan keseluruhan dokumen yang ada."*
+- **Bagian yang Dihasilkan / Dimodifikasi**:
+  - **Skema & Migrasi DB**: `prisma/schema.prisma` (model `Session` / `sessions`), `prisma/migrations/20261126011004_add_persistent_sessions/migration.sql`, `prisma/seed.ts` (enkripsi seed RME menggunakan HKDF + AES-256-GCM + AAD + HMAC).
+  - **Autentikasi & Guard Server (`F1.1`)**: `features/auth/guard.ts` (baru), `proxy.ts` (baru, konvensi resmi Next.js 16), `lib/auth/sessionStore.ts`, `lib/auth/auth.ts`, `app/api/auth/session/route.ts`, `app/(dashboard)/layout.tsx`, `app/(auth)/login/page.tsx`.
+  - **Hardening Server Actions Anti-BOLA (`F1.2`)**: `lib/actions/{auth,appointment,clinical,consent,faskes,ticket,triage,audit}.ts`, `lib/validations/triage.ts`.
+  - **Kriptografi Nyata & Fail-Closed (`F1.3`)**: `features/medical-records/crypto-service.ts` (baru), `lib/crypto/{aes,hmac}.ts`, serta 11 halaman dashboard klien (`periksa`, `pasien-lookup`, `pasien/rekam-medis`, `pasien/consent`, `pasien/tiket-kendala`, `pasien/page`, `staf/assign-dpjp`, `beranda`, `admin/verifikasi-kyc`).
+  - **HTTP Security Headers & Pengujian (`F1.4` & QA)**: `next.config.ts`, `vitest.config.ts` (baru), `tests/phase1-security-crypto.test.ts` (baru, 7 tes Quality Gates).
+  - **Dokumentasi**: `docs/perubahan/README.md` (baru), `docs/perubahan/fase-1-security-crypto-2026-11-26.md` (baru), `AI_LOG.md`, `CHANGELOG.md`, `EVALUASI.md`, `README.md`, `docs/database.md`, `docs/keamanan.md`, `docs/audit/audit_menyeluruh_jagamedis_22Nov2026.md`.
+- **Cara Verifikasi**:
+  - `npx prisma migrate dev --name add_persistent_sessions && npx tsx prisma/seed.ts`: Migrasi diterapkan dan seeding idempoten 100% sukses.
+  - `npx tsc --noEmit`: 0 kesalahan tipe statis.
+  - `npx vitest run`: 5 berkas tes, **40/40 tes lulus (100%)**.
+  - `npm run lint`: 0 error, 0 warning.
+  - `npm run build`: Kompilasi produksi **33/33 rute + `ƒ Proxy (Middleware)`** sukses.
+
+---
+
 ## 2026-11-22 — Penyelesaian Konflik PR #12, Tindak Lanjut Code Review, Penyelarasan Merek JagaMedis, & Audit Arsitektur Menyeluruh
 
 - **Tool**: Google Antigravity (Gemini Models)

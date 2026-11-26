@@ -1,8 +1,15 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { getUserSession, UserSession, normalizeRole } from "@/lib/auth/auth";
+import {
+  getUserSession,
+  syncSessionFromServer,
+  logoutUser,
+  UserSession,
+  normalizeRole,
+} from "@/lib/auth/auth";
+import { createAuditLogServerAction } from "@/lib/actions/audit";
 import RoleNav from "@/components/shared/RoleNav";
 import NetworkStatusBanner from "@/components/shared/NetworkStatusBanner";
 import { IconShield } from "@/components/ui/Icons";
@@ -17,36 +24,78 @@ export default function DashboardLayout({
   const pathname = usePathname();
   const [session, setSession] = useState<UserSession | null>(null);
   const [isChecking, setIsChecking] = useState(true);
+  const loggedPathRef = useRef<string | null>(null);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      const cur = getUserSession();
-      if (!cur) {
+    let active = true;
+
+    async function verifySession() {
+      const serverResult = await syncSessionFromServer();
+      if (!active) return;
+
+      if (serverResult.status === "ok") {
+        setSession(serverResult.session);
+        setIsChecking(false);
+        return;
+      }
+
+      if (serverResult.status === "unauthenticated") {
+        logoutUser();
         router.replace("/login");
         return;
       }
-      setSession(cur);
+
+      // Offline-first fallback: gunakan sesi lokal hanya ketika server tidak dapat dijangkau
+      const offlineSession = getUserSession();
+      if (!offlineSession) {
+        router.replace("/login");
+        return;
+      }
+      setSession(offlineSession);
       setIsChecking(false);
-    }, 0);
-    return () => clearTimeout(timer);
+    }
+
+    verifySession();
+    return () => {
+      active = false;
+    };
   }, [router]);
 
-  if (isChecking || !session) {
+  const role = session ? normalizeRole(session.role) : null;
+
+  // Pengecekan Zero-Trust / BOLA Defense pada sisi rute
+  const isUnauthorizedAccess =
+    role !== null &&
+    ((pathname.startsWith("/pasien") && role !== "pasien") ||
+      (pathname.startsWith("/nakes") && role !== "nakes") ||
+      (pathname.startsWith("/staf") && role !== "staf") ||
+      (pathname.startsWith("/admin") && role !== "admin"));
+
+  useEffect(() => {
+    if (!isUnauthorizedAccess || !session || !role) return;
+    if (loggedPathRef.current === pathname) return;
+    loggedPathRef.current = pathname;
+
+    createAuditLogServerAction({
+      actorId: session.id,
+      actorName: session.name,
+      actorRole: role,
+      action: "IDOR_BLOCKED",
+      targetResource: pathname,
+      severity: "CRITICAL",
+      detail: `Zero-Trust Route Guard: Pengguna ${session.name} (${role}) ditolak mengakses rute terlarang ${pathname}.`,
+    }).catch(() => {
+      // Abaikan jika sedang offline
+    });
+  }, [isUnauthorizedAccess, pathname, role, session]);
+
+  if (isChecking || !session || !role) {
     return (
       <div className="min-h-screen bg-[#F8FAFC] p-6 md:p-12 max-w-7xl mx-auto font-sans">
         <DashboardSkeleton noticeText="Memverifikasi Kredensial & Kunci Sesi Kriptografi Zero-Trust..." />
       </div>
     );
   }
-
-  const role = normalizeRole(session.role);
-
-  // Pengecekan Zero-Trust / BOLA Defense pada sisi rute
-  const isUnauthorizedAccess =
-    (pathname.startsWith("/pasien") && role !== "pasien") ||
-    (pathname.startsWith("/nakes") && role !== "nakes") ||
-    (pathname.startsWith("/staf") && role !== "staf") ||
-    (pathname.startsWith("/admin") && role !== "admin");
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-slate-800 font-sans flex flex-col lg:flex-row">

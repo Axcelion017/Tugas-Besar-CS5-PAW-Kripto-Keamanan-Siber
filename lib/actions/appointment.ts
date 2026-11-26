@@ -4,8 +4,15 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db/prisma";
 import { BookingSchema } from "@/lib/validations/patient";
 import { AssignDpjpSchema } from "@/lib/validations/triage";
-import { AppointmentStatus, Prisma } from "@prisma/client";
+import {
+  AppointmentStatus,
+  AuditAction,
+  AuditSeverity,
+  FaskesStatus,
+  Prisma,
+} from "@prisma/client";
 import { randomInt } from "node:crypto";
+import { requireSession, recordSecurityAuditBestEffort } from "@/features/auth/guard";
 
 function safeRevalidate(path: string) {
   try {
@@ -23,11 +30,16 @@ export interface AppointmentActionResponse {
 
 /**
  * Server Action: Pemesanan Jadwal Antrean Pasien (Booking & Auto-Consent)
- * Menyimpan data ke tabel `appointments` di PostgreSQL
+ * Pasien hanya dapat memesan jadwal atas nama dirinya sendiri (`auth.session.id`).
  */
 export async function createAppointmentServerAction(
   rawData: Record<string, unknown>
 ): Promise<AppointmentActionResponse> {
+  const auth = await requireSession(["pasien", "staf", "admin"], "createAppointment");
+  if (!auth.ok) {
+    return { success: false, message: auth.message };
+  }
+
   const validation = BookingSchema.safeParse(rawData);
   if (!validation.success) {
     return {
@@ -46,11 +58,34 @@ export async function createAppointmentServerAction(
   } = validation.data;
 
   const poli = String(rawData.poli || "Poli Penyakit Dalam");
-  const patientId = String(rawData.patientId || "P-101");
-  const aptId = `APT-2026-${Date.now().toString().slice(-4)}`;
+  const patientId =
+    auth.role === "pasien" ? auth.session.id : String(rawData.patientId || "").trim();
+
+  if (!patientId) {
+    return { success: false, message: "Identitas pasien tujuan wajib diisi." };
+  }
+
+  const aptId = `APT-2026-${Date.now().toString().slice(-6)}`;
   const consentPin = randomInt(100000, 1000000).toString(); // 6 digit PIN CSPRNG
 
   try {
+    // Cek status Kill-Switch Faskes sebelum mengizinkan pendaftaran
+    const targetFaskes = await prisma.faskes.findUnique({
+      where: { id: faskesId },
+      select: { id: true, nama: true, status: true },
+    });
+
+    if (!targetFaskes) {
+      return { success: false, message: "Fasilitas kesehatan tujuan tidak ditemukan." };
+    }
+
+    if (targetFaskes.status === FaskesStatus.QUARANTINED) {
+      return {
+        success: false,
+        message: `Pendaftaran ditolak: ${targetFaskes.nama} sedang berada dalam status KARANTINA (Kill-Switch Siber) oleh Admin Regulator.`,
+      };
+    }
+
     const created = await prisma.appointment.create({
       data: {
         id: aptId,
@@ -81,7 +116,9 @@ export async function createAppointmentServerAction(
   } catch (error: unknown) {
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
       if (error.code === "P2002") {
-        const target = Array.isArray(error.meta?.target) ? error.meta?.target.join(", ") : "identitas unik";
+        const target = Array.isArray(error.meta?.target)
+          ? error.meta?.target.join(", ")
+          : "identitas unik";
         return {
           success: false,
           message: `[Prisma P2002] Pelanggaran batasan unik: Janji temu dengan ${target} sudah terdaftar di sistem.`,
@@ -105,6 +142,7 @@ export async function createAppointmentServerAction(
 
 /**
  * Server Action: Membaca Daftar Antrean dari PostgreSQL
+ * Menerapkan pemisahan lingkup data per peran (Anti-BOLA).
  */
 export async function getAppointmentsServerAction(filters?: {
   faskesId?: string;
@@ -112,11 +150,24 @@ export async function getAppointmentsServerAction(filters?: {
   patientId?: string;
   status?: AppointmentStatus;
 }) {
+  const auth = await requireSession(["pasien", "staf", "nakes", "admin"], "getAppointments");
+  if (!auth.ok) {
+    return { success: false, message: auth.message, data: [] };
+  }
+
   try {
-    const whereClause: Record<string, unknown> = {};
-    if (filters?.faskesId) whereClause.faskesId = filters.faskesId;
-    if (filters?.doctorId) whereClause.doctorId = filters.doctorId;
-    if (filters?.patientId) whereClause.patientId = filters.patientId;
+    const whereClause: Prisma.AppointmentWhereInput = {};
+
+    if (auth.role === "pasien") {
+      whereClause.patientId = auth.session.id;
+    } else if (auth.role === "nakes") {
+      whereClause.OR = [{ doctorId: auth.session.id }, { dpjpId: auth.session.id }];
+    } else {
+      if (filters?.faskesId) whereClause.faskesId = filters.faskesId;
+      if (filters?.doctorId) whereClause.doctorId = filters.doctorId;
+      if (filters?.patientId) whereClause.patientId = filters.patientId;
+    }
+
     if (filters?.status) whereClause.status = filters.status;
 
     const appointments = await prisma.appointment.findMany({
@@ -136,9 +187,10 @@ export async function getAppointmentsServerAction(filters?: {
       orderBy: { createdAt: "desc" },
     });
 
-    // Sanitasi tipe Prisma.Decimal dan Date menjadi plain objects untuk Client Components
     const serializedAppointments = appointments.map((apt) => ({
       ...apt,
+      // Jangan kirim consentPin mentah ke peran selain pasien pemilik tiket
+      consentPin: auth.role === "pasien" ? apt.consentPin : null,
       tanggal: apt.tanggal.toISOString(),
       createdAt: apt.createdAt.toISOString(),
       checkInTime: apt.checkInTime ? apt.checkInTime.toISOString() : null,
@@ -146,8 +198,12 @@ export async function getAppointmentsServerAction(filters?: {
         ? {
             ...apt.triageAssessment,
             temperature: Number(apt.triageAssessment.temperature),
-            beratBadan: apt.triageAssessment.beratBadan ? Number(apt.triageAssessment.beratBadan) : null,
-            tinggiBadan: apt.triageAssessment.tinggiBadan ? Number(apt.triageAssessment.tinggiBadan) : null,
+            beratBadan: apt.triageAssessment.beratBadan
+              ? Number(apt.triageAssessment.beratBadan)
+              : null,
+            tinggiBadan: apt.triageAssessment.tinggiBadan
+              ? Number(apt.triageAssessment.tinggiBadan)
+              : null,
             assessedAt: apt.triageAssessment.assessedAt.toISOString(),
           }
         : null,
@@ -161,11 +217,17 @@ export async function getAppointmentsServerAction(filters?: {
 }
 
 /**
- * Server Action: Penugasan DPJP dengan Validasi PIN (Active Encounter Ticket)
+ * Server Action: Penugasan DPJP dengan Penegakan Wajib PIN 6-Digit (OWASP ASVS V2.1)
+ * Menolak tegas `inputPin` kosong maupun PIN yang tidak cocok.
  */
 export async function assignDpjpServerAction(
   rawData: Record<string, unknown>
 ): Promise<AppointmentActionResponse> {
+  const auth = await requireSession(["staf", "admin"], "assignDpjp");
+  if (!auth.ok) {
+    return { success: false, message: auth.message };
+  }
+
   const validation = AssignDpjpSchema.safeParse(rawData);
   if (!validation.success) {
     return {
@@ -185,16 +247,16 @@ export async function assignDpjpServerAction(
       return { success: false, message: "Tiket antrean tidak ditemukan di basis data." };
     }
 
-    // Verifikasi kecocokan PIN 6 Digit Pasien
-    if (apt.consentPin && inputPin && apt.consentPin !== inputPin) {
+    // Penegakan ketat PIN 6-Digit Pasien (tidak boleh bypass dengan string kosong)
+    if (!apt.consentPin || !inputPin || apt.consentPin !== inputPin.trim()) {
       return {
         success: false,
-        message: "PIN Persetujuan Medis tidak cocok! Minta pasien melihat 6-digit PIN di aplikasi.",
+        message:
+          "PIN Persetujuan Medis 6-digit wajib diisi dan harus cocok dengan PIN pada aplikasi pasien.",
       };
     }
 
     const updated = await prisma.$transaction(async (tx) => {
-      // 1. Update status appointment dan DPJP di tabel appointments
       const updatedApt = await tx.appointment.update({
         where: { id: aptId },
         data: {
@@ -203,7 +265,6 @@ export async function assignDpjpServerAction(
         },
       });
 
-      // 2. Terbitkan atau perbarui Active Encounter Ticket
       await tx.activeEncounter.upsert({
         where: { appointmentId: aptId },
         update: {
@@ -216,12 +277,22 @@ export async function assignDpjpServerAction(
           doctorId,
           patientId: apt.patientId,
           encounterToken: `ENC-TOKEN-${crypto.randomUUID()}`,
-          expiresAt: new Date(Date.now() + 2 * 60 * 60 * 1000), // 2 jam masa aktif tiket
+          expiresAt: new Date(Date.now() + 2 * 60 * 60 * 1000),
           isClosed: false,
         },
       });
 
       return updatedApt;
+    });
+
+    await recordSecurityAuditBestEffort({
+      actorId: auth.session.id,
+      actorName: auth.session.name,
+      actorRole: auth.role,
+      action: AuditAction.ASSIGN_DPJP,
+      targetResource: `/api/appointments/${aptId}/assign-dpjp`,
+      severity: AuditSeverity.INFO,
+      detail: `Staf ${auth.session.name} menugaskan DPJP ${doctorId} untuk antrean ${aptId} setelah verifikasi PIN 6-digit pasien.`,
     });
 
     safeRevalidate("/staf");
@@ -244,12 +315,20 @@ export async function assignDpjpServerAction(
 }
 
 /**
- * Server Action: Perbarui Status Antrean (Misal saat check-in loket atau batal)
+ * Server Action: Perbarui Status Antrean — khusus Staf, Nakes, atau Admin
  */
 export async function updateAppointmentStatusServerAction(
   appointmentId: string,
   newStatus: AppointmentStatus
 ): Promise<AppointmentActionResponse> {
+  const auth = await requireSession(
+    ["staf", "nakes", "admin"],
+    `updateAppointmentStatus:${appointmentId}`
+  );
+  if (!auth.ok) {
+    return { success: false, message: auth.message };
+  }
+
   try {
     const updated = await prisma.appointment.update({
       where: { id: appointmentId },
@@ -272,7 +351,7 @@ export async function updateAppointmentStatusServerAction(
 }
 
 /**
- * Server Action: Perbarui Detail Janji Temu (UPDATE - Reschedule Tanggal, Jam, dan Keluhan)
+ * Server Action: Perbarui Detail Janji Temu (Reschedule) dengan cek kepemilikan Anti-BOLA
  */
 export async function updateAppointmentDetailsServerAction(
   appointmentId: string,
@@ -282,6 +361,14 @@ export async function updateAppointmentDetailsServerAction(
     keluhanAwal?: string;
   }
 ): Promise<AppointmentActionResponse> {
+  const auth = await requireSession(
+    ["pasien", "staf", "admin"],
+    `updateAppointmentDetails:${appointmentId}`
+  );
+  if (!auth.ok) {
+    return { success: false, message: auth.message };
+  }
+
   try {
     const existing = await prisma.appointment.findUnique({
       where: { id: appointmentId },
@@ -291,8 +378,27 @@ export async function updateAppointmentDetailsServerAction(
       return { success: false, message: "Tiket antrean tidak ditemukan." };
     }
 
+    if (auth.role === "pasien" && existing.patientId !== auth.session.id) {
+      await recordSecurityAuditBestEffort({
+        actorId: auth.session.id,
+        actorName: auth.session.name,
+        actorRole: auth.role,
+        action: AuditAction.IDOR_BLOCKED,
+        targetResource: `/api/appointments/${appointmentId}`,
+        severity: AuditSeverity.CRITICAL,
+        detail: `BOLA Guard: Pasien ${auth.session.id} mencoba mengubah jadwal antrean milik pasien ${existing.patientId}.`,
+      });
+      return {
+        success: false,
+        message: "403 Forbidden: Anda tidak berwenang mengubah jadwal antrean milik pasien lain.",
+      };
+    }
+
     if (existing.status === AppointmentStatus.COMPLETED) {
-      return { success: false, message: "Antrean yang sudah selesai diperiksa tidak dapat diubah jadwalnya." };
+      return {
+        success: false,
+        message: "Antrean yang sudah selesai diperiksa tidak dapat diubah jadwalnya.",
+      };
     }
 
     const updated = await prisma.appointment.update({
@@ -320,7 +426,8 @@ export async function updateAppointmentDetailsServerAction(
       if (error.code === "P2025") {
         return {
           success: false,
-          message: "[Prisma P2025] Rekaman tidak ditemukan: Janji temu yang ingin diubah tidak ada di database.",
+          message:
+            "[Prisma P2025] Rekaman tidak ditemukan: Janji temu yang ingin diubah tidak ada di database.",
         };
       }
     }
@@ -330,21 +437,47 @@ export async function updateAppointmentDetailsServerAction(
 }
 
 /**
- * Server Action: Batalkan / Hapus Janji Temu Pasien (DELETE)
+ * Server Action: Batalkan / Hapus Janji Temu Pasien dengan cek kepemilikan Anti-BOLA
  */
 export async function deleteAppointmentServerAction(
   appointmentId: string
 ): Promise<AppointmentActionResponse> {
+  const auth = await requireSession(
+    ["pasien", "staf", "admin"],
+    `deleteAppointment:${appointmentId}`
+  );
+  if (!auth.ok) {
+    return { success: false, message: auth.message };
+  }
+
   try {
     const existing = await prisma.appointment.findUnique({
       where: { id: appointmentId },
     });
 
     if (!existing) {
-      return { success: false, message: "[Prisma P2025] Tiket antrean tidak ditemukan di database." };
+      return {
+        success: false,
+        message: "[Prisma P2025] Tiket antrean tidak ditemukan di database.",
+      };
     }
 
-    // Jika antrean sudah memiliki rekam medis terkait, tidak boleh dihapus sembarangan (onDelete: Restrict)
+    if (auth.role === "pasien" && existing.patientId !== auth.session.id) {
+      await recordSecurityAuditBestEffort({
+        actorId: auth.session.id,
+        actorName: auth.session.name,
+        actorRole: auth.role,
+        action: AuditAction.IDOR_BLOCKED,
+        targetResource: `/api/appointments/${appointmentId}`,
+        severity: AuditSeverity.CRITICAL,
+        detail: `BOLA Guard: Pasien ${auth.session.id} mencoba menghapus jadwal antrean milik pasien ${existing.patientId}.`,
+      });
+      return {
+        success: false,
+        message: "403 Forbidden: Anda tidak berwenang menghapus jadwal antrean milik pasien lain.",
+      };
+    }
+
     await prisma.appointment.delete({
       where: { id: appointmentId },
     });
@@ -365,13 +498,15 @@ export async function deleteAppointmentServerAction(
       if (error.code === "P2025") {
         return {
           success: false,
-          message: "[Prisma P2025] Rekaman tidak ditemukan: Data antrean yang hendak dihapus tidak ada di database.",
+          message:
+            "[Prisma P2025] Rekaman tidak ditemukan: Data antrean yang hendak dihapus tidak ada di database.",
         };
       }
       if (error.code === "P2003") {
         return {
           success: false,
-          message: "[Prisma P2003/RESTRICT] Larangan hapus: Antrean ini masih terikat dengan data medis/triase lain.",
+          message:
+            "[Prisma P2003/RESTRICT] Larangan hapus: Antrean ini masih terikat dengan data medis/triase lain.",
         };
       }
     }

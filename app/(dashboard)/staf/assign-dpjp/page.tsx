@@ -102,11 +102,11 @@ function AssignDpjpContent() {
     e.preventDefault();
     setErrorMsg(null);
 
-    // Validasi penugasan menggunakan Skema Zod
+    // Validasi penugasan menggunakan Skema Zod (wajib PIN 6-digit)
     const validation = AssignDpjpSchema.safeParse({
       aptId: selectedAptId,
       doctorId: selectedDoctorId,
-      inputPin: inputPin || undefined,
+      inputPin: inputPin.trim(),
     });
 
     if (!validation.success) {
@@ -123,9 +123,9 @@ function AssignDpjpContent() {
       return;
     }
 
-    // Validasi PIN atau persetujuan meja admisi
-    if (selectedApt.consentPin && inputPin && inputPin !== selectedApt.consentPin) {
-      setErrorMsg("Kode PIN Persetujuan Pasien salah! Mintalah pasien melihat 6-digit PIN di aplikasi mereka.");
+    // Penegakan ketat PIN 6-Digit Pasien (tidak boleh kosong)
+    if (!inputPin.trim() || (selectedApt.consentPin && inputPin.trim() !== selectedApt.consentPin)) {
+      setErrorMsg("Kode PIN Persetujuan Pasien 6-digit wajib diisi dan cocok dengan PIN di aplikasi pasien.");
       return;
     }
 
@@ -134,7 +134,7 @@ function AssignDpjpContent() {
       const res = await assignDpjpServerAction({
         aptId: selectedAptId,
         doctorId: selectedDoctorId,
-        inputPin: inputPin || undefined,
+        inputPin: inputPin.trim(),
       });
       if (!res.success) {
         setErrorMsg(res.message || "Gagal menyimpan penugasan DPJP ke database.");
@@ -142,6 +142,8 @@ function AssignDpjpContent() {
       }
     } catch (err: unknown) {
       console.warn("DB assign DPJP action fallback:", err);
+      setErrorMsg("Gagal menghubungi server untuk verifikasi PIN persetujuan pasien.");
+      return;
     }
 
     const session = getUserSession();
@@ -333,28 +335,24 @@ function AssignDpjpContent() {
             </div>
 
             <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-              <label className="block text-xs font-bold text-slate-700 uppercase">
-                Verifikasi 6-Digit PIN Persetujuan Pasien (Opsional / Loket Walk-in)
+              <label htmlFor="dpjp-consent-pin" className="block text-xs font-bold text-slate-700 uppercase">
+                Verifikasi 6-Digit PIN Persetujuan Pasien (Wajib)
               </label>
               <div className="flex gap-2">
                 <input
+                  id="dpjp-consent-pin"
                   type="text"
+                  inputMode="numeric"
                   maxLength={6}
+                  required
                   value={inputPin}
-                  onChange={(e) => setInputPin(e.target.value)}
-                  placeholder={`Contoh PIN Pasien: ${selectedApt?.consentPin || "884120"}`}
+                  onChange={(e) => setInputPin(e.target.value.replace(/\D/g, ""))}
+                  placeholder="Masukkan 6 digit PIN dari layar aplikasi pasien"
                   className="flex-1 px-4 py-2 border rounded-xl font-mono font-bold text-sm"
                 />
-                <button
-                  type="button"
-                  onClick={() => setInputPin(selectedApt?.consentPin || "884120")}
-                  className="px-3 py-2 bg-slate-200 hover:bg-slate-300 rounded-xl text-xs font-bold text-slate-700"
-                >
-                  Gunakan PIN Demo
-                </button>
               </div>
               <p className="text-[11px] text-slate-500">
-                Di rumah sakit nyata, pasien menyebutkan 6-digit kode PIN yang muncul di layar HP mereka untuk mengonfirmasi bahwa mereka menyetujui dokter tersebut menjadi DPJP-nya.
+                Pasien wajib menyebutkan 6-digit kode PIN yang tampil pada portal pasien mereka sebagai bukti persetujuan penunjukan DPJP (OWASP ASVS V2.1).
               </p>
             </div>
 

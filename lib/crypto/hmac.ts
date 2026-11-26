@@ -12,6 +12,12 @@ function bufToHex(buf: ArrayBuffer): string {
     .join("");
 }
 
+function isValidHex(value: string, expectedLength?: number): boolean {
+  if (!value || value.length % 2 !== 0) return false;
+  if (expectedLength !== undefined && value.length !== expectedLength) return false;
+  return /^[0-9a-fA-F]+$/.test(value);
+}
+
 export async function generateHMAC(message: string, keyHex: string): Promise<string> {
   const encoder = new TextEncoder();
   const rawKey = hexToBuf(keyHex);
@@ -33,13 +39,45 @@ export async function generateHMAC(message: string, keyHex: string): Promise<str
   return bufToHex(signature);
 }
 
+/**
+ * Verifikasi integritas HMAC-SHA256 secara constant-time menggunakan W3C Web Crypto API
+ * `crypto.subtle.verify("HMAC", ...)` untuk mencegah Timing Attack (CWE-208 / NIST SP 800-107).
+ */
 export async function verifyHMAC(
   message: string,
   expectedHmacHex: string,
   keyHex: string
 ): Promise<boolean> {
-  const calculated = await generateHMAC(message, keyHex);
-  return calculated.toLowerCase() === expectedHmacHex.toLowerCase();
+  const cleanExpected = (expectedHmacHex || "").trim();
+  const cleanKey = (keyHex || "").trim();
+
+  // HMAC-SHA256 wajib tepat 32 byte (64 karakter hex)
+  if (!isValidHex(cleanExpected, 64) || !isValidHex(cleanKey)) {
+    return false;
+  }
+
+  try {
+    const encoder = new TextEncoder();
+    const rawKey = hexToBuf(cleanKey);
+    const expectedSig = hexToBuf(cleanExpected);
+
+    const cryptoKey = await crypto.subtle.importKey(
+      "raw",
+      rawKey as BufferSource,
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["verify"]
+    );
+
+    return await crypto.subtle.verify(
+      "HMAC",
+      cryptoKey,
+      expectedSig as BufferSource,
+      encoder.encode(message) as BufferSource
+    );
+  } catch {
+    return false;
+  }
 }
 
 export const createHMAC = generateHMAC;

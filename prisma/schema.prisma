@@ -134,6 +134,7 @@ model User {
   kycSubmissions KycSubmission[]
   kydSubmissions KydSubmission[]
   troubleTickets TroubleTicket[]
+  sessions       Session[]
 
   @@map("users")
 }
@@ -502,4 +503,23 @@ model TroubleTicket {
   faskes   Faskes? @relation(fields: [faskesId], references: [id], onDelete: SetNull)
 
   @@map("trouble_tickets")
+}
+
+// -----------------------------------------------------------------------------
+// 17. SESI AUTENTIKASI PERSISTEN SERVER (SESSIONS)
+// -----------------------------------------------------------------------------
+model Session {
+  token     String   @id @db.VarChar(64)
+  userId    String   @map("user_id") @db.VarChar(36)
+  role      UserRole
+  payload   Json
+  expiresAt DateTime @map("expires_at") @db.Timestamptz
+  isRevoked Boolean  @default(false) @map("is_revoked")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRevoked])
+  @@index([expiresAt])
+  @@map("sessions")
 }

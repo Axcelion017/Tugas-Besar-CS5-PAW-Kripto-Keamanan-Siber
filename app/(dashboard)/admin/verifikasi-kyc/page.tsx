@@ -109,7 +109,7 @@ export default function VerifikasiKycPage() {
         emergencyContact: { name: "Keluarga", relation: "Keluarga", phone: "0812000000" },
         lastVisit: "-",
         hasAccess: true,
-        encryptionKeyHex: "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90",
+        encryptionKeyHex: "",
         statusKyc: "VERIFIED",
       };
       setStorageData("resilio_patients", [newPatient, ...patients]);

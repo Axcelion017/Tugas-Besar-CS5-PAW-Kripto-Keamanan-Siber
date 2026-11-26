@@ -33,7 +33,7 @@ export interface DemoUserCollection extends Array<DemoUserAccount> {
   staf: DemoUserAccount;
 }
 
-// Data Pengguna Demo Terstandarisasi 4-Role
+// Data Pengguna Demo Terstandarisasi 4-Role (dipakai oleh prisma/seed.ts & pengujian)
 const BASE_USERS: DemoUserAccount[] = [
   {
     id: "DOC-01",
@@ -101,12 +101,10 @@ demoArray.staf = demoArray[3];
 export const DEMO_USERS: DemoUserCollection = demoArray;
 export const MOCK_USERS = DEMO_USERS;
 
-// Menyimpan sesi secara manual di localStorage dan cookie peramban
+// Menyimpan cache sesi UI di localStorage (Otoritas sesi mutlak tetap di cookie HTTP-Only server)
 export function saveSession(session: UserSession): void {
   if (typeof window !== "undefined") {
     localStorage.setItem("resilio_session", JSON.stringify(session));
-    document.cookie = `resilio_user_role=${normalizeRole(session.role)}; path=/; max-age=14400; SameSite=Lax`;
-    document.cookie = `resilio_session_active=true; path=/; max-age=14400; SameSite=Lax`;
   }
 }
 
@@ -118,15 +116,15 @@ export function normalizeRole(role: UserRole): "nakes" | "pasien" | "admin" | "s
   return "admin";
 }
 
-// Login otomatis dengan verifikasi kredensial
+// Helper login lokal hanya untuk kompatibilitas unit test lama (tidak dipakai oleh alur login server)
 export function loginUser(identifier: string, password: string): UserSession | null {
   const cleanId = identifier.trim().toLowerCase();
-  
+
   const user = DEMO_USERS.find(
     (u) =>
       (u.username.toLowerCase() === cleanId ||
-       u.email.toLowerCase() === cleanId ||
-       (u.nik && u.nik === cleanId)) &&
+        u.email.toLowerCase() === cleanId ||
+        (u.nik && u.nik === cleanId)) &&
       u.password === password
   );
 
@@ -155,57 +153,75 @@ export function loginUser(identifier: string, password: string): UserSession | n
   return session;
 }
 
-// Pengambilan sesi aktif (Resilient: mendeteksi localStorage dan self-healing via cookie)
+/**
+ * Membaca cache sesi lokal klien.
+ * Tidak lagi mempercayai cookie non-HttpOnly `resilio_user_role` untuk mencegah eskalasi hak akses.
+ */
 export function getUserSession(): UserSession | null {
   if (typeof window === "undefined") return null;
   const stored = localStorage.getItem("resilio_session");
-  if (stored) {
-    try {
-      return JSON.parse(stored) as UserSession;
-    } catch {
-      // lanjut fallback
-    }
-  }
+  if (!stored) return null;
 
-  // Self-healing fallback: jika localStorage kosong, pulihkan dari cookie peran aktif
   try {
-    const match = document.cookie.match(/resilio_user_role=([^;]+)/);
-    if (match && match[1]) {
-      const activeRole = match[1].trim();
-      const demo = DEMO_USERS.find((u) => normalizeRole(u.role) === activeRole);
-      if (demo) {
-        const recovered: UserSession = {
-          id: demo.id,
-          name: demo.name,
-          username: demo.username,
-          role: demo.role,
-          nik: demo.nik,
-          strNumber: demo.strNumber,
-          sipNumber: demo.sipNumber,
-          specialization: demo.specialization,
-          faskesId: demo.faskesId,
-          faskesName: demo.faskesName,
-          status: demo.status,
-          allergies: demo.allergies,
-          bloodType: demo.bloodType,
-          phone: demo.phone,
-          encryptionKeyHex: demo.encryptionKeyHex,
-          posisiStaf: demo.posisiStaf,
-        };
-        localStorage.setItem("resilio_session", JSON.stringify(recovered));
-        return recovered;
-      }
+    const parsed = JSON.parse(stored) as UserSession;
+    if (parsed && parsed.id && parsed.role) {
+      return parsed;
     }
   } catch {
-    // ignore
+    localStorage.removeItem("resilio_session");
   }
 
   return null;
 }
 
+export type ServerSessionSyncResult =
+  | { status: "ok"; session: UserSession }
+  | { status: "unauthenticated" }
+  | { status: "offline" };
+
+/**
+ * Memverifikasi dan memulihkan sesi klien dari cookie HTTP-Only `resilio_session_token`
+ * melalui endpoint server `/api/auth/session` (PostgreSQL persistent session).
+ */
+export async function syncSessionFromServer(): Promise<ServerSessionSyncResult> {
+  if (typeof window === "undefined") return { status: "unauthenticated" };
+
+  try {
+    const res = await fetch("/api/auth/session", {
+      method: "GET",
+      credentials: "include",
+      cache: "no-store",
+    });
+
+    if (res.status === 401 || res.status === 403) {
+      logoutUser();
+      return { status: "unauthenticated" };
+    }
+
+    if (!res.ok) {
+      return { status: "offline" };
+    }
+
+    const data = (await res.json()) as {
+      authenticated?: boolean;
+      session?: UserSession;
+    };
+
+    if (data.authenticated && data.session) {
+      saveSession(data.session);
+      return { status: "ok", session: data.session };
+    }
+
+    logoutUser();
+    return { status: "unauthenticated" };
+  } catch {
+    return { status: "offline" };
+  }
+}
+
 export const getSession = getUserSession;
 
-// Menghapus sesi saat logout
+// Menghapus sesi lokal saat logout (cookie HTTP-Only dihapus oleh server action / DELETE /api/auth/session)
 export function logoutUser(): void {
   if (typeof window !== "undefined") {
     localStorage.removeItem("resilio_session");

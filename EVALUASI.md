@@ -76,4 +76,20 @@ Pengujian dijalankan pada berkas `tests/validations.test.ts` memvalidasi skema d
 
 ## 4. Kesimpulan Kelaikan Sistem
 
-Resilio-Health v0.2 telah memenuhi seluruh kriteria evaluasi integrasi tiga mata kuliah (PAW, Kriptografi, KKS). Sistem siap dipresentasikan dengan arsitektur 4 peran lengkap, ketahanan *Offline-First* berdaya tahan tinggi, dan kepatuhan regulasi UU PDP No. 27/2022 serta Permenkes No. 24/2022.
+JagaMedis (sebelumnya Resilio-Health) v0.2 telah memenuhi seluruh kriteria evaluasi integrasi tiga mata kuliah (PAW, Kriptografi, KKS) dan kini telah ditingkatkan melalui **Fase 1 Hardening (`v0.3.0-fase1`, 26 November 2026)**.
+
+---
+
+## 5. Matriks Verifikasi Quality Gates Fase 1 (`tests/phase1-security-crypto.test.ts`)
+
+Pengujian otomatis tambahan dijalankan pada 26 November 2026 di branch `refactor/fase-1-security-crypto` (total **5 berkas tes, 40/40 lulus 100%**):
+
+| ID Uji | Sub-Fase | Skenario Uji | Standar Acuan | Hasil Riil | Status |
+| :--- | :---: | :--- | :--- | :--- | :---: |
+| **F1-01** | `F1.1` | Ketahanan sesi persisten PostgreSQL saat cache RAM server dikosongkan (simulasi restart) & pencabutan saat logout | OWASP ASVS V3.2 & NIST SP 800-63B | Sesi pulih dari tabel `sessions` DB dan bernilai `null` pasca-`revokeSessionAsync` | **LULUS (PASS)** |
+| **F1-02** | `F1.2` | Penolakan Server Actions sensitif (`toggleFaskesKillSwitch`, `approveKyc`, `revokeAccess`, `getSingleMedicalRecord`) tanpa sesi cookie | OWASP ASVS V4.1.1, V4.2.1 & API1:2023 | 100% ditolak (`401 Unauthorized`), 0 mutasi DB | **LULUS (PASS)** |
+| **F1-03** | `F1.2` | Penegakan wajib PIN 6-digit pada `AssignDpjpSchema` (menolak PIN kosong, `undefined`, atau < 6 digit) | OWASP ASVS V2.1 | Seluruh input PIN kosong/cacat ditolak ketat | **LULUS (PASS)** |
+| **F1-04** | `F1.3` | Enkripsi RME 2x beruntun menghasilkan IV 96-bit acak berbeda & ciphertext bukan Base64/Hex plaintext | NIST SP 800-38D & RFC 5869 | IV 24-hex unik per simpan, bukan JSON Hex/Base64, dekripsi `hkdf-aead` sukses | **LULUS (PASS)** |
+| **F1-05** | `F1.3` | *Fail-Closed* murni pada tamper 1-byte, AAD pasien berbeda, serta penolakan payload static IV / empty HMAC | ISO 27799 & NIST SP 800-38D | Seluruhnya mengembalikan `ok: false` (`HMAC_MISMATCH`/`INVALID_FORMAT`), 0 data palsu tampil | **LULUS (PASS)** |
+| **F1-06** | `F1.3` | Verifikasi HMAC *constant-time* (`crypto.subtle.verify`) & pemisahan sub-kunci HKDF citra biner | CWE-208 (NIST SP 800-107) & SP 800-57 | Hex tak valid ditolak aman (`false`); verifikasi biner gagal pada AAD berbeda | **LULUS (PASS)** |
+| **F1-07** | `F1.4` | Kelengkapan HTTP Security Headers pada `next.config.ts` | OWASP Secure Headers | `CSP`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy`, `Permissions-Policy` aktif | **LULUS (PASS)** |

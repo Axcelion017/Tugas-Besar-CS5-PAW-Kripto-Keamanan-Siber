@@ -6,6 +6,12 @@ import { useRouter } from "next/navigation";
 import { getUserSession, UserSession } from "@/lib/auth/auth";
 import { encryptAES } from "@/lib/crypto/aes";
 import { generateHMAC } from "@/lib/crypto/hmac";
+import { deriveSubKeysHKDF } from "@/lib/crypto/hkdf";
+import {
+  CanonicalSoapPayload,
+  encryptMedicalRecordPayload,
+  isValidMasterKeyHex,
+} from "@/features/medical-records/crypto-service";
 import {
   MOCK_APPOINTMENTS,
   MOCK_PATIENTS,
@@ -220,15 +226,19 @@ export default function ClinicalExaminationPage({
   const handleAddSampleImage = async () => {
     const title = imageTitle.trim() || `Pemeriksaan ${selectedImageType} Klinis`;
     const mockImagePayload = `BINARY_IMAGE_DATA_${selectedImageType}_${Date.now()}`;
-    const encryptionKey =
-      patient.encryptionKeyHex ||
-      "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90";
+    if (!isValidMasterKeyHex(patient.encryptionKeyHex)) {
+      setSubmitStatus("GALAT KRIPTOGRAFI (Fail-Closed): Kunci enkripsi 256-bit pasien tidak tersedia.");
+      return;
+    }
 
-    const { ciphertext, iv } = await encryptAES(mockImagePayload, encryptionKey);
-    const hmacTag = await generateHMAC(ciphertext, encryptionKey);
+    const imgId = `IMG-${Date.now().toString().slice(-6)}`;
+    const aad = `ATTACHMENT:${imgId}|PATIENT:${patient.id}`;
+    const { encKeyHex, macKeyHex } = await deriveSubKeysHKDF(patient.encryptionKeyHex, patient.id);
+    const { ciphertext, iv } = await encryptAES(mockImagePayload, encKeyHex, aad);
+    const hmacTag = await generateHMAC(ciphertext, macKeyHex);
 
     const newImage: EncryptedMedicalImage = {
-      id: `IMG-${Date.now().toString().slice(-4)}`,
+      id: imgId,
       title,
       type: selectedImageType,
       encryptedBlobHex: ciphertext,
@@ -236,7 +246,7 @@ export default function ClinicalExaminationPage({
       hmacDigest: hmacTag,
       mimeType: "image/jpeg",
       timestamp: new Date().toLocaleTimeString("id-ID"),
-      notes: "Terenkripsi AES-256-GCM + HMAC di sisi klien (IndexedDB Blob)",
+      notes: "Terenkripsi HKDF + AES-256-GCM + AAD + HMAC di sisi klien",
     };
 
     setAttachedImages((prev) => [...prev, newImage]);
@@ -288,13 +298,14 @@ export default function ClinicalExaminationPage({
     setIsSubmitting(true);
     setSubmitStatus(null);
 
-    const payloadObj = {
+    const payloadObj: CanonicalSoapPayload = {
       subjective,
       vitalSigns: {
         systolic: Number(systolic),
         diastolic: Number(diastolic),
         heartRate: Number(heartRate),
         temperature: Number(temperature),
+        respiratoryRate: 20,
         spo2: Number(spo2),
       },
       assessment: {
@@ -317,19 +328,25 @@ export default function ClinicalExaminationPage({
       },
     };
 
-    const plaintextString = JSON.stringify(payloadObj);
-    const encryptionKey =
-      patient.encryptionKeyHex ||
-      "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90";
+    if (!isValidMasterKeyHex(patient.encryptionKeyHex)) {
+      setSubmitStatus(
+        "GALAT KRIPTOGRAFI (Fail-Closed): Kunci enkripsi Zero-Knowledge 256-bit pasien tidak tersedia. Penyimpanan dibatalkan."
+      );
+      setIsSubmitting(false);
+      return;
+    }
 
     try {
-      // 1. Enkripsi Sisi Klien (AES-256-GCM)
-      const { ciphertext, iv } = await encryptAES(plaintextString, encryptionKey);
-
-      // 2. Generate Tag Integritas HMAC-SHA256 atas Ciphertext
-      const hmacTag = await generateHMAC(ciphertext, encryptionKey);
-
       const newRecordId = generateRecordId("REC");
+      const version = isAddendum ? 2 : 1;
+
+      // Enkripsi Sisi Klien Nyata: HKDF (Key Separation) + AES-256-GCM + AAD + HMAC-SHA256
+      const bundle = await encryptMedicalRecordPayload(payloadObj, patient.encryptionKeyHex, {
+        patientId: patient.id,
+        recordId: newRecordId,
+        version,
+      });
+
       const isOfflineMode =
         localStorage.getItem("resilio_network_mode") === "offline" || !navigator.onLine;
 
@@ -343,53 +360,62 @@ export default function ClinicalExaminationPage({
         dokterNama: session.name,
         primaryIcd10: icd10,
         diagnosisShort: icd10Map[icd10],
-        encryptedPayload: ciphertext,
-        ivHex: iv,
-        hmacDigest: hmacTag,
+        encryptedPayload: bundle.encryptedPayload,
+        ivHex: bundle.ivHex,
+        hmacDigest: bundle.hmacDigest,
         timestamp: new Date().toLocaleString("id-ID"),
         isOfflineCreated: isOfflineMode,
-        version: isAddendum ? 2 : 1,
+        version,
         addendumReason: isAddendum ? addendumReason : undefined,
         medicalImages: attachedImages,
       };
 
       if (isOfflineMode) {
-        // Simpan ke antrean lokal offline (UR-T05 & UR-T07: IndexedDB Blob)
         const offlineQueue = getStorageData<EncryptedMedicalRecord[]>("resilio_offline_queue", []);
         setStorageData("resilio_offline_queue", [record, ...offlineQueue]);
         window.dispatchEvent(new Event("storage"));
 
         setSubmitStatus(
-          "OFFLINE MODE: Rekam medis dan citra medis terenkripsi tersimpan aman di penyimpanan lokal peramban (IndexedDB). Akan otomatis disinkronkan saat koneksi pulih."
+          "OFFLINE MODE: Rekam medis terenkripsi HKDF + AES-256-GCM + AAD tersimpan aman di penyimpanan lokal peramban. Akan disinkronkan saat koneksi pulih."
         );
       } else {
-        // Simpan ke records pusat
         const existingRecords = getStorageData<EncryptedMedicalRecord[]>("resilio_records", []);
         setStorageData("resilio_records", [record, ...existingRecords]);
 
-        // Eksekusi Server Action untuk persistensi ke Basis Data PostgreSQL
-        try {
-          const fd = new FormData();
-          fd.append("bookingId", appointment.id);
-          fd.append("subjective", subjective);
-          fd.append("systolic", String(systolic));
-          fd.append("diastolic", String(diastolic));
-          fd.append("heartRate", String(heartRate));
-          fd.append("temperature", String(temperature));
-          fd.append("respiratoryRate", "20");
-          fd.append("spo2", String(spo2));
-          fd.append("icd10", icd10);
-          fd.append("assessment", icd10Map[icd10] || "Pemeriksaan Medis Rawat Jalan");
-          fd.append("planPrescription", planPrescription);
-          fd.append("planFollowUp", planAction || "Kontrol 1 minggu kemudian");
-          if (detectedAllergies.length > 0) fd.append("forceOverrideAllergy", "true");
-          fd.append("isMedicallyConfirmed", "true");
-          await submitPemeriksaanKlinisAction(null, fd);
-        } catch (saErr) {
-          console.log("Server Action sync status:", saErr);
+        const fd = new FormData();
+        fd.append("recordId", newRecordId);
+        fd.append("patientId", patient.id);
+        fd.append("bookingId", appointment.id);
+        fd.append("subjective", subjective);
+        fd.append("systolic", String(systolic));
+        fd.append("diastolic", String(diastolic));
+        fd.append("heartRate", String(heartRate));
+        fd.append("temperature", String(temperature));
+        fd.append("respiratoryRate", "20");
+        fd.append("spo2", String(spo2));
+        fd.append("icd10", icd10);
+        fd.append("assessment", icd10Map[icd10] || "Pemeriksaan Medis Rawat Jalan");
+        fd.append("planPrescription", planPrescription);
+        fd.append("planAction", planAction || "Kontrol 1 minggu kemudian");
+        fd.append("encryptedPayload", bundle.encryptedPayload);
+        fd.append("ivHex", bundle.ivHex);
+        fd.append("hmacDigest", bundle.hmacDigest);
+        fd.append("isAddendum", isAddendum ? "true" : "false");
+        if (addendumReason) fd.append("addendumReason", addendumReason);
+        if (detectedAllergies.length > 0) fd.append("forceOverrideAllergy", "true");
+        fd.append("isMedicallyConfirmed", "true");
+        fd.append("skipRedirect", "true");
+
+        const saRes = await submitPemeriksaanKlinisAction(null, fd);
+        if (!saRes.success) {
+          setSubmitStatus(`GAGAL SIMPAN SERVER: ${saRes.message || "Terjadi kesalahan otorisasi atau validasi."}`);
+          setIsSubmitting(false);
+          return;
         }
 
-        setSubmitStatus("SUKSES: Rekam medis dan citra medis berhasil dienkripsi (AES-256-GCM) dan disinkronkan ke PostgreSQL.");
+        setSubmitStatus(
+          "SUKSES: Rekam medis berhasil dienkripsi (HKDF + AES-256-GCM + AAD + HMAC-SHA256) dan disinkronkan ke PostgreSQL."
+        );
       }
 
       // Perbarui status appointment menjadi COMPLETED
