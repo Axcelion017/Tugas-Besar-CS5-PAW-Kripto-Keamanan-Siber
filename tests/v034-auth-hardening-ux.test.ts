@@ -105,6 +105,7 @@ describe("Tahap A (v0.3.4) Quality Gates — Auth Hardening, Rate Limit, Anti-En
 
     const loginSrc = fs.readFileSync(path.join(root, "app", "(auth)", "login", "page.tsx"), "utf-8");
     expect(loginSrc).toContain("isDemoLoginEnabled");
+    expect(loginSrc).toContain("router.replace(`/${targetRole}`)");
 
     const lookupSrc = fs.readFileSync(
       path.join(root, "app", "(dashboard)", "nakes", "pasien-lookup", "page.tsx"),
@@ -113,6 +114,14 @@ describe("Tahap A (v0.3.4) Quality Gates — Auth Hardening, Rate Limit, Anti-En
     expect(lookupSrc).not.toContain('|| "DOC-01"');
     expect(lookupSrc).not.toContain("MOCK_PATIENTS");
     expect(lookupSrc).toContain("getCachedPatients");
+    expect(lookupSrc).toContain("priorityFilter");
+
+    const rujukanSrc = fs.readFileSync(
+      path.join(root, "app", "(dashboard)", "nakes", "rujukan", "page.tsx"),
+      "utf-8"
+    );
+    expect(rujukanSrc).toContain("Pasien Sedang Ditangani");
+    expect(rujukanSrc).toContain("p.hasAccessGrant || p.queueStatus === \"IN_QUEUE\"");
 
     const offlineSyncSrc = fs.readFileSync(
       path.join(root, "app", "(dashboard)", "nakes", "offline-sync", "page.tsx"),
@@ -127,10 +136,12 @@ describe("Tahap A (v0.3.4) Quality Gates — Auth Hardening, Rate Limit, Anti-En
     expect(rmeDetailSrc).not.toContain("MOCK_ENCRYPTED_RECORDS");
   });
 
-  test("4. Navigasi RoleNav tanpa duplikasi /beranda, palet klinis teal, lencana outbox dokter, & 4 berkas domain medis <350 baris (P-02, P-03, P-04)", () => {
+  test("4. Navigasi RoleNav tanpa duplikasi /beranda, aksen tepi kiri lembut (anti-alert fatigue), lencana outbox dokter, & 4 berkas domain medis <=350 baris (P-02, P-03, P-04)", () => {
     const navSrc = fs.readFileSync(path.join(root, "components", "shared", "RoleNav.tsx"), "utf-8");
     expect(navSrc).not.toContain('label: "Beranda Terpadu"');
-    expect(navSrc).toContain("bg-teal-700");
+    expect(navSrc).toContain("bg-red-50/80 text-red-800 border-red-600");
+    expect(navSrc).toContain("border-l-4");
+    expect(navSrc).toContain('aria-current={isActive ? "page" : undefined}');
     expect(navSrc).toContain("pendingOutboxCount");
     expect(navSrc).toContain("OUTBOX_UPDATED_EVENT");
 
@@ -145,11 +156,21 @@ describe("Tahap A (v0.3.4) Quality Gates — Auth Hardening, Rate Limit, Anti-En
       "features/medical-records/patient-detail/PatientDetailWorkspace.tsx",
       "features/auth/session-actions.ts",
       "features/auth/register-actions.ts",
+      "features/auth/family-actions.ts",
+      "features/auth/FamilyMemberManager.tsx",
     ];
 
     for (const relPath of targetModules) {
       const lines = fs.readFileSync(path.join(root, relPath), "utf-8").split("\n").length;
       expect(lines, `${relPath} melebihi 350 baris (${lines})`).toBeLessThanOrEqual(350);
     }
+
+    const familySrc = fs.readFileSync(
+      path.join(root, "features", "auth", "family-actions.ts"),
+      "utf-8"
+    );
+    expect(familySrc).toContain('requireSession(["pasien"]');
+    expect(familySrc).toContain("existing.patientId !== patientId");
+    expect(familySrc).toContain("AuditAction.IDOR_BLOCKED");
   });
 });

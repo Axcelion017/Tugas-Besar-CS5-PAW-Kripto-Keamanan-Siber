@@ -172,12 +172,12 @@ export function RoleNav({ session }: RoleNavProps) {
               </svg>
             )}
           </button>
-          <Link href="/beranda" className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-teal-700 rounded-lg flex items-center justify-center text-white font-black text-sm">
+          <Link href={`/${role}`} className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-red-600 rounded-lg flex items-center justify-center text-white font-black text-sm">
               J
             </div>
             <span className="font-black text-slate-900 tracking-tight text-sm">
-              JAGA<span className="text-teal-700">MEDIS</span>
+              JAGA<span className="text-red-600">MEDIS</span>
             </span>
           </Link>
         </div>
@@ -196,13 +196,13 @@ export function RoleNav({ session }: RoleNavProps) {
         <div>
           {/* Logo Brand */}
           <div className="p-6 border-b border-slate-100">
-            <Link href="/beranda" className="flex items-center gap-3 group">
-              <div className="w-8 h-8 rounded-xl bg-teal-700 flex items-center justify-center text-white font-black text-base shadow-sm shrink-0">
+            <Link href={`/${role}`} className="flex items-center gap-3 group">
+              <div className="w-8 h-8 rounded-xl bg-red-600 flex items-center justify-center text-white font-black text-base shadow-sm shrink-0">
                 J
               </div>
               <div className="leading-tight">
-                <span className="font-black text-slate-900 tracking-tight text-sm group-hover:text-teal-800 transition">
-                  JAGA<span className="text-teal-700">MEDIS</span>
+                <span className="font-black text-slate-900 tracking-tight text-sm group-hover:text-red-700 transition">
+                  JAGA<span className="text-red-600">MEDIS</span>
                 </span>
                 <p className="text-[11px] text-slate-600 font-bold tracking-wider uppercase">
                   Zero-Trust HIS
@@ -257,25 +257,22 @@ export function RoleNav({ session }: RoleNavProps) {
                 <Link
                   key={item.href}
                   href={item.href}
+                  aria-current={isActive ? "page" : undefined}
                   onClick={() => setMobileMenuOpen(false)}
-                  className={`flex items-center justify-between gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                  className={`flex items-center justify-between gap-2 px-3.5 py-2.5 rounded-r-xl border-l-4 text-xs font-bold transition-all ${
                     isActive
-                      ? "bg-teal-700 text-white shadow-sm shadow-teal-700/25"
-                      : "text-slate-700 hover:bg-slate-100 hover:text-slate-900"
+                      ? "bg-red-50/80 text-red-800 border-red-600"
+                      : "border-transparent text-slate-700 hover:bg-slate-100 hover:text-slate-900"
                   }`}
                 >
                   <span className="flex items-center gap-3 min-w-0">
-                    <IconComp className={isActive ? "text-white" : "text-slate-500"} size={16} />
+                    <IconComp className={isActive ? "text-red-600" : "text-slate-500"} size={16} />
                     <span className="truncate">{item.label}</span>
                   </span>
                   {item.href === "/nakes/offline-sync" && pendingOutboxCount > 0 && (
                     <span
                       aria-label={`${pendingOutboxCount} berkas luring menunggu sinkronisasi`}
-                      className={`px-2 py-0.5 rounded-full text-[11px] font-black shrink-0 ${
-                        isActive
-                          ? "bg-white/20 text-white"
-                          : "bg-amber-100 text-amber-900 border border-amber-300"
-                      }`}
+                      className="px-2 py-0.5 rounded-full text-[11px] font-black shrink-0 bg-amber-100 text-amber-900 border border-amber-300"
                     >
                       {pendingOutboxCount}
                     </span>

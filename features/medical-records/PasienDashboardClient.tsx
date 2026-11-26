@@ -96,29 +96,35 @@ export function PasienDashboardClient({ data }: { data: PasienDashboardServerDat
             </p>
           </div>
 
-          {patient.familyMembers.length > 0 && (
-            <div className="bg-white/10 p-3 rounded-2xl border border-white/15">
+          <div className="bg-white/10 p-3 rounded-2xl border border-white/15 space-y-2">
+            <div className="flex items-center justify-between gap-3">
               <label
                 htmlFor="family-proxy-select"
-                className="block text-[10px] font-black uppercase tracking-wider text-blue-200 mb-1"
+                className="block text-[10px] font-black uppercase tracking-wider text-blue-200"
               >
                 Profil Keluarga (Family Proxy)
               </label>
-              <select
-                id="family-proxy-select"
-                value={selectedFamilyMember}
-                onChange={(e) => setSelectedFamilyMember(e.target.value)}
-                className="bg-slate-900 text-white text-xs font-bold px-3 py-1.5 rounded-lg border border-white/20"
+              <Link
+                href="/pasien/profil?tab=keluarga"
+                className="text-[10px] font-bold text-blue-200 hover:text-white underline"
               >
-                <option value="SELF">{patient.name} (Pemilik Akun)</option>
-                {patient.familyMembers.map((fam) => (
-                  <option key={fam.id} value={fam.id}>
-                    {fam.name} ({fam.relation})
-                  </option>
-                ))}
-              </select>
+                Kelola →
+              </Link>
             </div>
-          )}
+            <select
+              id="family-proxy-select"
+              value={selectedFamilyMember}
+              onChange={(e) => setSelectedFamilyMember(e.target.value)}
+              className="w-full bg-slate-900 text-white text-xs font-bold px-3 py-1.5 rounded-lg border border-white/20"
+            >
+              <option value="SELF">{patient.name} (Pemilik Akun)</option>
+              {patient.familyMembers.map((fam) => (
+                <option key={fam.id} value={fam.id}>
+                  {fam.name} ({fam.relation})
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {/* Badge Alergi & Kontak Darurat */}

@@ -76,7 +76,7 @@ export function PatientProfileCard({
               {activeQueuedAptId && (
                 <Link
                   href={`/nakes/periksa/${activeQueuedAptId}`}
-                  className="px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-xs font-black uppercase"
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase"
                 >
                   Buka Ruang Periksa →
                 </Link>

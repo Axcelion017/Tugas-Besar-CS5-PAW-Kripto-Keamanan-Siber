@@ -21,3 +21,9 @@ export {
   getPatientProfileServerAction,
   updatePatientProfileServerAction,
 } from "@/features/auth/profile-actions";
+
+export type { FamilyMemberDto } from "@/features/auth/family-actions";
+export {
+  upsertFamilyMemberServerAction,
+  deleteFamilyMemberServerAction,
+} from "@/features/auth/family-actions";
