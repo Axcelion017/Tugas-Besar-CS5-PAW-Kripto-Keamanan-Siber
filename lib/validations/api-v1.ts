@@ -1,8 +1,50 @@
 import { z } from "zod";
 
 // -----------------------------------------------------------------------------
-// 1. MASTER FASKES
+// 0. HELPER VALIDASI QUERY PAGINATION & BOOLEAN (ZOD V4)
 // -----------------------------------------------------------------------------
+function createPositiveIntQuerySchema(label: string, max?: number) {
+  const numberRule =
+    max !== undefined
+      ? z
+          .number({ message: `Parameter ${label} harus berupa angka.` })
+          .int({ message: `Parameter ${label} harus berupa bilangan bulat.` })
+          .min(1, { message: `Parameter ${label} minimal 1.` })
+          .max(max, { message: `Parameter ${label} maksimal ${max}.` })
+      : z
+          .number({ message: `Parameter ${label} harus berupa angka.` })
+          .int({ message: `Parameter ${label} harus berupa bilangan bulat.` })
+          .min(1, { message: `Parameter ${label} minimal 1.` });
+
+  return z
+    .string({ message: `Parameter ${label} wajib berupa bilangan bulat positif.` })
+    .trim()
+    .regex(/^\d+$/, {
+      message: `Parameter ${label} wajib berupa bilangan bulat positif.`,
+    })
+    .transform((val) => Number.parseInt(val, 10))
+    .pipe(numberRule);
+}
+
+function createBooleanQuerySchema(label: string) {
+  return z
+    .enum(["true", "false"], {
+      message: `Parameter ${label} harus bernilai 'true' atau 'false'.`,
+    })
+    .transform((val) => val === "true");
+}
+
+// -----------------------------------------------------------------------------
+// 1. MASTER FASKES (ID AKTUAL: String @db.VarChar(32))
+// -----------------------------------------------------------------------------
+export const FaskesIdSchema = z
+  .string({ message: "ID faskes wajib diisi." })
+  .trim()
+  .regex(/^[A-Za-z0-9_-]{3,32}$/, {
+    message:
+      "Format ID faskes tidak valid (wajib 3-32 karakter alfanumerik, tanda hubung, atau garis bawah).",
+  });
+
 export const FaskesTypeEnum = z.enum(["RUMAH_SAKIT", "KLINIK_PRATAMA", "PUSKESMAS"], {
   message: "Tipe faskes harus salah satu dari RUMAH_SAKIT, KLINIK_PRATAMA, atau PUSKESMAS.",
 });
@@ -11,17 +53,14 @@ export const FaskesStatusEnum = z.enum(["ACTIVE", "QUARANTINED"], {
   message: "Status faskes harus ACTIVE atau QUARANTINED.",
 });
 
-export const CreateFaskesApiSchema = z.object({
-  id: z
-    .string({ message: "ID faskes harus string." })
+const faskesStringListItem = (label: string) =>
+  z
+    .string({ message: `Item ${label} harus berupa teks.` })
     .trim()
-    .regex(/^[A-Za-z0-9_-]{3,32}$/, { message: "Format ID faskes tidak valid." })
-    .optional(),
-  kodeFaskes: z
-    .string({ message: "Kode faskes wajib diisi." })
-    .trim()
-    .min(3, { message: "Kode faskes minimal 3 karakter." })
-    .max(50, { message: "Kode faskes maksimal 50 karakter." }),
+    .min(1, { message: `Item ${label} tidak boleh kosong.` })
+    .max(100, { message: `Item ${label} maksimal 100 karakter.` });
+
+const FaskesMutableFields = {
   nama: z
     .string({ message: "Nama faskes wajib diisi." })
     .trim()
@@ -43,15 +82,115 @@ export const CreateFaskesApiSchema = z.object({
     .trim()
     .min(6, { message: "Kontak minimal 6 karakter." })
     .max(50, { message: "Kontak maksimal 50 karakter." }),
-  spesialisasiList: z.array(z.string().trim().min(1)).default([]),
-  kategoriPenyakit: z.array(z.string().trim().min(1)).default([]),
+};
+
+export const CreateFaskesApiSchema = z.object({
+  id: FaskesIdSchema.optional(),
+  kodeFaskes: z
+    .string({ message: "Kode faskes wajib diisi." })
+    .trim()
+    .min(3, { message: "Kode faskes minimal 3 karakter." })
+    .max(50, { message: "Kode faskes maksimal 50 karakter." }),
+  ...FaskesMutableFields,
+  spesialisasiList: z
+    .array(faskesStringListItem("spesialisasi"), {
+      message: "spesialisasiList harus berupa array teks.",
+    })
+    .max(30, { message: "Maksimal 30 spesialisasi per faskes." })
+    .default([]),
+  kategoriPenyakit: z
+    .array(faskesStringListItem("kategori penyakit"), {
+      message: "kategoriPenyakit harus berupa array teks.",
+    })
+    .max(30, { message: "Maksimal 30 kategori penyakit per faskes." })
+    .default([]),
 });
 
-export const UpdateFaskesApiSchema = CreateFaskesApiSchema.omit({ id: true, kodeFaskes: true })
-  .partial()
-  .refine((data) => Object.keys(data).length > 0, {
+export const UpdateFaskesApiSchema = z
+  .object({
+    nama: FaskesMutableFields.nama.optional(),
+    tipe: FaskesMutableFields.tipe.optional(),
+    alamat: FaskesMutableFields.alamat.optional(),
+    kota: FaskesMutableFields.kota.optional(),
+    kontak: FaskesMutableFields.kontak.optional(),
+    spesialisasiList: z
+      .array(faskesStringListItem("spesialisasi"), {
+        message: "spesialisasiList harus berupa array teks.",
+      })
+      .max(30, { message: "Maksimal 30 spesialisasi per faskes." })
+      .optional(),
+    kategoriPenyakit: z
+      .array(faskesStringListItem("kategori penyakit"), {
+        message: "kategoriPenyakit harus berupa array teks.",
+      })
+      .max(30, { message: "Maksimal 30 kategori penyakit per faskes." })
+      .optional(),
+  })
+  .refine((data) => Object.values(data).some((value) => value !== undefined), {
     message: "Minimal satu field harus disertakan untuk pembaruan faskes.",
   });
+
+export const FaskesQuerySchema = z.object({
+  page: createPositiveIntQuerySchema("page")
+    .optional()
+    .transform((val) => val ?? 1),
+  limit: createPositiveIntQuerySchema("limit", 50)
+    .optional()
+    .transform((val) => val ?? 20),
+  kota: z
+    .string({ message: "Parameter kota harus berupa teks." })
+    .trim()
+    .min(1, { message: "Parameter kota tidak boleh kosong." })
+    .max(100, { message: "Parameter kota maksimal 100 karakter." })
+    .optional(),
+  poli: z
+    .string({ message: "Parameter poli harus berupa teks." })
+    .trim()
+    .min(1, { message: "Parameter poli tidak boleh kosong." })
+    .max(100, { message: "Parameter poli maksimal 100 karakter." })
+    .optional(),
+  gejala: z
+    .string({ message: "Parameter gejala harus berupa teks." })
+    .trim()
+    .min(1, { message: "Parameter gejala tidak boleh kosong." })
+    .max(100, { message: "Parameter gejala maksimal 100 karakter." })
+    .optional(),
+  tipe: FaskesTypeEnum.optional(),
+  status: FaskesStatusEnum.optional(),
+  q: z
+    .string({ message: "Parameter pencarian q harus berupa teks." })
+    .trim()
+    .min(1, { message: "Parameter pencarian q tidak boleh kosong." })
+    .max(100, { message: "Parameter pencarian q maksimal 100 karakter." })
+    .optional(),
+});
+
+export const FaskesDoctorsQuerySchema = z.object({
+  page: createPositiveIntQuerySchema("page")
+    .optional()
+    .transform((val) => val ?? 1),
+  limit: createPositiveIntQuerySchema("limit", 50)
+    .optional()
+    .transform((val) => val ?? 20),
+  specialty: z
+    .string({ message: "Parameter specialty harus berupa teks." })
+    .trim()
+    .min(1, { message: "Parameter specialty tidak boleh kosong." })
+    .max(100, { message: "Parameter specialty maksimal 100 karakter." })
+    .optional(),
+  isActive: createBooleanQuerySchema("isActive").optional(),
+  q: z
+    .string({ message: "Parameter pencarian q harus berupa teks." })
+    .trim()
+    .min(1, { message: "Parameter pencarian q tidak boleh kosong." })
+    .max(100, { message: "Parameter pencarian q maksimal 100 karakter." })
+    .optional(),
+});
+
+export type CreateFaskesApiInput = z.infer<typeof CreateFaskesApiSchema>;
+export type UpdateFaskesApiInput = z.infer<typeof UpdateFaskesApiSchema>;
+export type FaskesQueryInput = z.infer<typeof FaskesQuerySchema>;
+export type FaskesDoctorsQueryInput = z.infer<typeof FaskesDoctorsQuerySchema>;
 
 export const QuarantineFaskesApiSchema = z.object({
   status: FaskesStatusEnum,

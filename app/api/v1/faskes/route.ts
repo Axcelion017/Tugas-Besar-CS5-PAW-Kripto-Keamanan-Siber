@@ -4,25 +4,25 @@ import { prisma } from "@/lib/db/prisma";
 import { requireApiSession } from "@/lib/api/auth";
 import {
   jsonOk,
-  parseJsonObject,
+  jsonPaginatedOk,
+  parseJsonBody,
+  parseQueryParams,
   prismaErrorToProblem,
-  problemResponse,
-  zodProblemResponse,
 } from "@/lib/api/problem";
-import { CreateFaskesApiSchema, FaskesStatusEnum } from "@/lib/validations/api-v1";
+import { CreateFaskesApiSchema, FaskesQuerySchema } from "@/lib/validations/api-v1";
 import { safeRevalidate } from "@/lib/utils/revalidate";
 
 /**
  * GET /api/v1/faskes
- * Daftar fasilitas kesehatan dengan dukungan filter `?kota=&poli=&gejala=&status=`.
+ * Daftar fasilitas kesehatan dengan validasi query Zod, filter sesuai model `Faskes`
+ * (`?kota=&poli=&gejala=&tipe=&status=&q=`), serta pagination (`?page=&limit=`) dan meta total via transaksi.
  */
 export async function GET(request: NextRequest) {
   const instance = request.nextUrl.pathname;
-  const searchParams = request.nextUrl.searchParams;
-  const kota = searchParams.get("kota")?.trim();
-  const poli = searchParams.get("poli")?.trim();
-  const gejala = searchParams.get("gejala")?.trim();
-  const statusParam = searchParams.get("status")?.trim();
+  const parsedQuery = parseQueryParams(request, FaskesQuerySchema, 400);
+  if (!parsedQuery.ok) return parsedQuery.response;
+
+  const { page, limit, kota, poli, gejala, tipe, status, q } = parsedQuery.data;
 
   const where: Prisma.FaskesWhereInput = {};
   if (kota) {
@@ -34,51 +34,59 @@ export async function GET(request: NextRequest) {
   if (gejala) {
     where.kategoriPenyakit = { has: gejala };
   }
-  if (statusParam) {
-    const parsedStatus = FaskesStatusEnum.safeParse(statusParam);
-    if (!parsedStatus.success) {
-      return problemResponse({
-        slug: "validation-error",
-        title: "Invalid Query Parameter",
-        status: 422,
-        detail: parsedStatus.error.issues[0]?.message || "Parameter status faskes tidak dikenal.",
-        instance,
-        errors: [
-          {
-            field: "status",
-            message: parsedStatus.error.issues[0]?.message || "Status tidak dikenal.",
-            code: "invalid_value",
-          },
-        ],
-      });
-    }
-    where.status = parsedStatus.data as FaskesStatus;
+  if (tipe) {
+    where.tipe = tipe as FaskesType;
+  }
+  if (status) {
+    where.status = status as FaskesStatus;
+  }
+  if (q) {
+    where.OR = [
+      { nama: { contains: q, mode: "insensitive" } },
+      { kodeFaskes: { contains: q, mode: "insensitive" } },
+      { alamat: { contains: q, mode: "insensitive" } },
+      { kota: { contains: q, mode: "insensitive" } },
+    ];
   }
 
+  const skip = (page - 1) * limit;
+
   try {
-    const faskesList = await prisma.faskes.findMany({
-      where,
-      include: {
-        doctors: {
-          select: {
-            id: true,
-            name: true,
-            specialty: true,
-            kuotaHarian: true,
-            strNumber: true,
-            sipNumber: true,
-            isActive: true,
+    const { faskesList, total } = await prisma.$transaction(async (tx) => {
+      const items = await tx.faskes.findMany({
+        where,
+        include: {
+          doctors: {
+            select: {
+              id: true,
+              name: true,
+              specialty: true,
+              kuotaHarian: true,
+              strNumber: true,
+              sipNumber: true,
+              isActive: true,
+            },
           },
         },
-      },
-      orderBy: { nama: "asc" },
+        orderBy: { nama: "asc" },
+        skip,
+        take: limit,
+      });
+      const count = await tx.faskes.count({ where });
+      return { faskesList: items, total: count };
     });
 
-    return jsonOk(
+    return jsonPaginatedOk(
       faskesList.map((f) => ({
         ...f,
         createdAt: f.createdAt.toISOString(),
-      }))
+      })),
+      {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      }
     );
   } catch (error) {
     return prismaErrorToProblem(error, instance, "Daftar Faskes");
@@ -88,21 +96,17 @@ export async function GET(request: NextRequest) {
 /**
  * POST /api/v1/faskes
  * Menambahkan fasilitas kesehatan baru (khusus peran Admin Regulator — UR-A03).
+ * JSON rusak -> 400, validasi isi Zod gagal -> 422, sukses -> 201 Created + header Location.
  */
 export async function POST(request: NextRequest) {
   const instance = request.nextUrl.pathname;
   const auth = await requireApiSession(request, ["admin"], "POST /api/v1/faskes");
   if (!auth.ok) return auth.response;
 
-  const jsonBody = await parseJsonObject(request);
-  if (!jsonBody.ok) return jsonBody.response;
+  const parsedBody = await parseJsonBody(request, CreateFaskesApiSchema);
+  if (!parsedBody.ok) return parsedBody.response;
 
-  const parsed = CreateFaskesApiSchema.safeParse(jsonBody.data);
-  if (!parsed.success) {
-    return zodProblemResponse(parsed.error, instance, 422);
-  }
-
-  const data = parsed.data;
+  const data = parsedBody.data;
   const id = data.id || `FAS-${Date.now().toString().slice(-6)}`;
 
   try {
