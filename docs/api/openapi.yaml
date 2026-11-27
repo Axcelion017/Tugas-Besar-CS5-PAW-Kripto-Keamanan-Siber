@@ -1,0 +1,801 @@
+openapi: 3.1.0
+info:
+  title: JagaMedis REST API v1 — Master Faskes
+  version: 0.3.5
+  summary: Kontrak REST API v1 untuk manajemen Master Fasilitas Pelayanan Kesehatan (Faskes) pada JagaMedis HIS.
+  description: >-
+    Spesifikasi OpenAPI 3.1.0 untuk 6 operasi aktual domain Master Faskes di bawah `/api/v1`
+    pada JagaMedis (Next.js 16 App Router, Prisma 7 PostgreSQL, Zod v4).
+    Seluruh respons galat mengikuti RFC 9457 (`application/problem+json`).
+    Operasi baca direktori (`GET /faskes`, `GET /faskes/{id}`) bersifat publik, sedangkan
+    operasi mutasi (`POST`, `PATCH`, `DELETE`) memerlukan sesi peran `admin` melalui cookie HTTP-Only
+    `resilio_session_token`.
+  license:
+    name: MIT
+    identifier: MIT
+
+servers:
+  - url: http://localhost:3000/api/v1
+    description: Server pengembangan lokal JagaMedis API v1
+
+security: []
+
+tags:
+  - name: Faskes
+    description: Direktori nasional fasilitas pelayanan kesehatan (Rumah Sakit, Klinik Pratama, Puskesmas) serta kontrol isolasi siber (kill-switch).
+
+paths:
+  /faskes:
+    get:
+      tags:
+        - Faskes
+      summary: Ambil daftar fasilitas kesehatan dengan filter dan pagination
+      description: >-
+        Mengambil koleksi faskes beserta ringkasan dokter praktik di tiap faskes.
+        Mendukung filter sesuai model `Faskes` (`kota`, `poli`, `gejala`, `tipe`, `status`, `q`)
+        serta pagination (`page`, `limit` maks. 50) dan metadata total yang dihitung dalam transaksi Prisma.
+      operationId: listFaskes
+      parameters:
+        - $ref: "#/components/parameters/PageQuery"
+        - $ref: "#/components/parameters/LimitQuery"
+        - name: kota
+          in: query
+          required: false
+          description: Filter nama kota/kabupaten (pencarian parsial case-insensitive).
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 100
+        - name: poli
+          in: query
+          required: false
+          description: Filter nama poli/spesialisasi yang terdapat pada `spesialisasiList`.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 100
+        - name: gejala
+          in: query
+          required: false
+          description: Filter kategori gejala/penyakit yang terdapat pada `kategoriPenyakit`.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 100
+        - name: tipe
+          in: query
+          required: false
+          description: Filter berdasarkan tipe fasilitas kesehatan.
+          schema:
+            $ref: "#/components/schemas/FaskesType"
+        - name: status
+          in: query
+          required: false
+          description: Filter berdasarkan status operasional atau karantina faskes.
+          schema:
+            $ref: "#/components/schemas/FaskesStatus"
+        - name: q
+          in: query
+          required: false
+          description: Kata kunci pencarian bebas (case-insensitive) pada `nama`, `kodeFaskes`, `alamat`, dan `kota`.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 100
+      responses:
+        "200":
+          description: Daftar faskes beserta metadata pagination berhasil diambil.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FaskesCollectionResponse"
+        "400":
+          $ref: "#/components/responses/BadRequestProblem"
+        "500":
+          $ref: "#/components/responses/InternalErrorProblem"
+
+    post:
+      tags:
+        - Faskes
+      summary: Tambah fasilitas kesehatan baru
+      description: >-
+        Menambahkan entitas faskes baru ke direktori nasional dengan status awal `ACTIVE`.
+        Hanya dapat diakses oleh sesi terautentikasi dengan peran `admin`.
+      operationId: createFaskes
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        description: Payload JSON data fasilitas kesehatan baru sesuai `CreateFaskesApiSchema`.
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateFaskesRequest"
+      responses:
+        "201":
+          description: Fasilitas kesehatan berhasil dibuat.
+          headers:
+            Location:
+              description: URI relatif menuju detail resource faskes yang baru dibuat (`/api/v1/faskes/{id}`).
+              required: true
+              schema:
+                type: string
+                examples:
+                  - /api/v1/faskes/FAS-UJI01
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FaskesSingleResponse"
+        "400":
+          $ref: "#/components/responses/BadRequestProblem"
+        "401":
+          $ref: "#/components/responses/UnauthorizedProblem"
+        "403":
+          $ref: "#/components/responses/ForbiddenProblem"
+        "409":
+          $ref: "#/components/responses/ConflictProblem"
+        "422":
+          $ref: "#/components/responses/ValidationErrorProblem"
+        "500":
+          $ref: "#/components/responses/InternalErrorProblem"
+
+  /faskes/{id}:
+    parameters:
+      - $ref: "#/components/parameters/FaskesIdPath"
+
+    get:
+      tags:
+        - Faskes
+      summary: Ambil detail satu fasilitas kesehatan
+      description: >-
+        Mengambil detail profil satu faskes berdasarkan `id` beserta daftar ringkas dokter praktik
+        dan kuota harian (UR-P03).
+      operationId: getFaskesById
+      responses:
+        "200":
+          description: Detail faskes ditemukan.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FaskesDetailResponse"
+        "400":
+          $ref: "#/components/responses/BadRequestProblem"
+        "404":
+          $ref: "#/components/responses/NotFoundProblem"
+        "500":
+          $ref: "#/components/responses/InternalErrorProblem"
+
+    patch:
+      tags:
+        - Faskes
+      summary: Perbarui sebagian data profil fasilitas kesehatan
+      description: >-
+        Memperbarui sebagian field profil faskes (minimal satu field wajib disertakan sesuai
+        `UpdateFaskesApiSchema`). Field `id`, `kodeFaskes`, dan `status` tidak diubah melalui endpoint ini.
+        Khusus peran `admin`.
+      operationId: updateFaskes
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        description: Payload JSON parsial (minimal 1 properti) sesuai `UpdateFaskesApiSchema`.
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateFaskesRequest"
+      responses:
+        "200":
+          description: Data faskes berhasil diperbarui.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FaskesSingleResponse"
+        "400":
+          $ref: "#/components/responses/BadRequestProblem"
+        "401":
+          $ref: "#/components/responses/UnauthorizedProblem"
+        "403":
+          $ref: "#/components/responses/ForbiddenProblem"
+        "404":
+          $ref: "#/components/responses/NotFoundProblem"
+        "422":
+          $ref: "#/components/responses/ValidationErrorProblem"
+        "500":
+          $ref: "#/components/responses/InternalErrorProblem"
+
+    delete:
+      tags:
+        - Faskes
+      summary: Hapus fasilitas kesehatan
+      description: >-
+        Menghapus faskes dari direktori nasional (khusus peran `admin`).
+        Mengembalikan `409 Conflict` jika faskes masih memiliki relasi aktif dokter, staf,
+        antrean kunjungan, atau rekam medis (`onDelete: Restrict`).
+      operationId: deleteFaskes
+      security:
+        - sessionCookie: []
+      responses:
+        "204":
+          description: Fasilitas kesehatan berhasil dihapus (tanpa body respons).
+        "400":
+          $ref: "#/components/responses/BadRequestProblem"
+        "401":
+          $ref: "#/components/responses/UnauthorizedProblem"
+        "403":
+          $ref: "#/components/responses/ForbiddenProblem"
+        "404":
+          $ref: "#/components/responses/NotFoundProblem"
+        "409":
+          $ref: "#/components/responses/ConflictProblem"
+        "500":
+          $ref: "#/components/responses/InternalErrorProblem"
+
+  /faskes/{id}/quarantine:
+    parameters:
+      - $ref: "#/components/parameters/FaskesIdPath"
+
+    patch:
+      tags:
+        - Faskes
+      summary: Ubah status isolasi siber (kill-switch) fasilitas kesehatan
+      description: >-
+        Mengubah status faskes antara `ACTIVE` dan `QUARANTINED` (Ransomware Kill-Switch — UR-A03)
+        serta mencatat jejak audit ke `security_audit_logs`. Khusus peran `admin`.
+      operationId: quarantineFaskes
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        description: Status isolasi target dan alasan opsional sesuai `QuarantineFaskesApiSchema`.
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QuarantineFaskesRequest"
+      responses:
+        "200":
+          description: Status isolasi faskes berhasil diperbarui.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuarantineFaskesResponse"
+        "400":
+          $ref: "#/components/responses/BadRequestProblem"
+        "401":
+          $ref: "#/components/responses/UnauthorizedProblem"
+        "403":
+          $ref: "#/components/responses/ForbiddenProblem"
+        "404":
+          $ref: "#/components/responses/NotFoundProblem"
+        "422":
+          $ref: "#/components/responses/ValidationErrorProblem"
+        "500":
+          $ref: "#/components/responses/InternalErrorProblem"
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: resilio_session_token
+      description: Cookie sesi HTTP-Only yang diterbitkan oleh `POST /api/auth/session` dan diverifikasi terhadap tabel `sessions`.
+
+  parameters:
+    FaskesIdPath:
+      name: id
+      in: path
+      required: true
+      description: >-
+        Pengenal unik faskes (`String @db.VarChar(32)`, divalidasi oleh `PathIdSchema`:
+        3-36 karakter alfanumerik, `-`, atau `_`).
+      schema:
+        type: string
+        minLength: 3
+        maxLength: 36
+        pattern: "^[A-Za-z0-9_-]{3,36}$"
+        examples:
+          - FAS-01
+
+    PageQuery:
+      name: page
+      in: query
+      required: false
+      description: Nomor halaman pagination (bilangan bulat positif, minimal 1, default 1).
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+
+    LimitQuery:
+      name: limit
+      in: query
+      required: false
+      description: Jumlah maksimum item per halaman (bilangan bulat 1-50, default 20).
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 50
+        default: 20
+
+  schemas:
+    FaskesType:
+      type: string
+      enum:
+        - RUMAH_SAKIT
+        - KLINIK_PRATAMA
+        - PUSKESMAS
+      description: Klasifikasi tipe fasilitas pelayanan kesehatan sesuai enum Prisma `FaskesType`.
+
+    FaskesStatus:
+      type: string
+      enum:
+        - ACTIVE
+        - QUARANTINED
+      description: Status operasional faskes sesuai enum Prisma `FaskesStatus`.
+
+    DoctorSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - specialty
+        - kuotaHarian
+        - strNumber
+        - sipNumber
+        - isActive
+      properties:
+        id:
+          type: string
+          maxLength: 32
+          examples:
+            - DOC-01
+        name:
+          type: string
+          maxLength: 120
+          examples:
+            - dr. Andi Pratama, Sp.PD
+        specialty:
+          type: string
+          maxLength: 100
+          examples:
+            - Penyakit Dalam
+        kuotaHarian:
+          type: integer
+          examples:
+            - 30
+        strNumber:
+          type: string
+          maxLength: 50
+          examples:
+            - STR-2026-001122
+        sipNumber:
+          type: string
+          maxLength: 50
+          examples:
+            - SIP-3471-00981
+        isActive:
+          type: boolean
+          examples:
+            - true
+
+    Faskes:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - kodeFaskes
+        - nama
+        - tipe
+        - alamat
+        - kota
+        - kontak
+        - spesialisasiList
+        - kategoriPenyakit
+        - status
+        - createdAt
+      properties:
+        id:
+          type: string
+          minLength: 3
+          maxLength: 32
+          pattern: "^[A-Za-z0-9_-]{3,32}$"
+          examples:
+            - FAS-01
+        kodeFaskes:
+          type: string
+          minLength: 3
+          maxLength: 50
+          examples:
+            - RS-YGY-001
+        nama:
+          type: string
+          minLength: 3
+          maxLength: 150
+          examples:
+            - RSUP Dr. Sardjito
+        tipe:
+          $ref: "#/components/schemas/FaskesType"
+        alamat:
+          type: string
+          minLength: 5
+          maxLength: 500
+          examples:
+            - Jl. Kesehatan No. 1, Sekip, Sleman
+        kota:
+          type: string
+          minLength: 2
+          maxLength: 100
+          examples:
+            - Yogyakarta
+        kontak:
+          type: string
+          minLength: 6
+          maxLength: 50
+          examples:
+            - 0274-587333
+        spesialisasiList:
+          type: array
+          items:
+            type: string
+          examples:
+            - - Penyakit Dalam
+              - Kardiologi
+        kategoriPenyakit:
+          type: array
+          items:
+            type: string
+          examples:
+            - - Hipertensi
+              - Jantung
+        status:
+          $ref: "#/components/schemas/FaskesStatus"
+        createdAt:
+          type: string
+          format: date-time
+          examples:
+            - "2026-11-27T08:00:00.000Z"
+
+    FaskesWithDoctors:
+      allOf:
+        - $ref: "#/components/schemas/Faskes"
+        - type: object
+          required:
+            - doctors
+          properties:
+            doctors:
+              type: array
+              items:
+                $ref: "#/components/schemas/DoctorSummary"
+
+    PaginationMeta:
+      type: object
+      additionalProperties: false
+      required:
+        - page
+        - limit
+        - total
+        - totalPages
+      properties:
+        page:
+          type: integer
+          minimum: 1
+          examples:
+            - 1
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 50
+          examples:
+            - 20
+        total:
+          type: integer
+          minimum: 0
+          examples:
+            - 3
+        totalPages:
+          type: integer
+          minimum: 0
+          examples:
+            - 1
+
+    FaskesCollectionResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/FaskesWithDoctors"
+        meta:
+          $ref: "#/components/schemas/PaginationMeta"
+
+    FaskesSingleResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+      properties:
+        data:
+          $ref: "#/components/schemas/Faskes"
+
+    FaskesDetailResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+      properties:
+        data:
+          $ref: "#/components/schemas/FaskesWithDoctors"
+
+    CreateFaskesRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - kodeFaskes
+        - nama
+        - tipe
+        - alamat
+        - kota
+        - kontak
+      properties:
+        id:
+          type: string
+          minLength: 3
+          maxLength: 32
+          pattern: "^[A-Za-z0-9_-]{3,32}$"
+          description: ID faskes kustom opsional; jika dikosongkan, server menghasilkan `FAS-<6 digit>`.
+          examples:
+            - FAS-UJI01
+        kodeFaskes:
+          type: string
+          minLength: 3
+          maxLength: 50
+          examples:
+            - RS-UJI-001
+        nama:
+          type: string
+          minLength: 3
+          maxLength: 150
+          examples:
+            - RS Uji Dummy Praktikum PAW
+        tipe:
+          $ref: "#/components/schemas/FaskesType"
+        alamat:
+          type: string
+          minLength: 5
+          maxLength: 500
+          examples:
+            - Jl. Merdeka No. 10, Kec. Coblong
+        kota:
+          type: string
+          minLength: 2
+          maxLength: 100
+          examples:
+            - Bandung
+        kontak:
+          type: string
+          minLength: 6
+          maxLength: 50
+          examples:
+            - 022-7001234
+        spesialisasiList:
+          type: array
+          maxItems: 30
+          default: []
+          items:
+            type: string
+            minLength: 1
+            maxLength: 100
+          examples:
+            - - Penyakit Dalam
+              - Umum
+        kategoriPenyakit:
+          type: array
+          maxItems: 30
+          default: []
+          items:
+            type: string
+            minLength: 1
+            maxLength: 100
+          examples:
+            - - Hipertensi
+              - ISPA
+
+    UpdateFaskesRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      description: Minimal satu properti wajib disertakan untuk pembaruan parsial faskes.
+      properties:
+        nama:
+          type: string
+          minLength: 3
+          maxLength: 150
+        tipe:
+          $ref: "#/components/schemas/FaskesType"
+        alamat:
+          type: string
+          minLength: 5
+          maxLength: 500
+        kota:
+          type: string
+          minLength: 2
+          maxLength: 100
+        kontak:
+          type: string
+          minLength: 6
+          maxLength: 50
+        spesialisasiList:
+          type: array
+          maxItems: 30
+          items:
+            type: string
+            minLength: 1
+            maxLength: 100
+        kategoriPenyakit:
+          type: array
+          maxItems: 30
+          items:
+            type: string
+            minLength: 1
+            maxLength: 100
+
+    QuarantineFaskesRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - status
+      properties:
+        status:
+          $ref: "#/components/schemas/FaskesStatus"
+        reason:
+          type: string
+          maxLength: 500
+          description: Alasan operasional atau insiden keamanan untuk pencatatan log SIEM.
+          examples:
+            - Deteksi anomali akses terindikasi ransomware
+
+    QuarantineFaskesResult:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - nama
+        - status
+        - reason
+      properties:
+        id:
+          type: string
+          maxLength: 32
+        nama:
+          type: string
+          maxLength: 150
+        status:
+          $ref: "#/components/schemas/FaskesStatus"
+        reason:
+          type:
+            - string
+            - "null"
+          maxLength: 500
+
+    QuarantineFaskesResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+      properties:
+        data:
+          $ref: "#/components/schemas/QuarantineFaskesResult"
+
+    ProblemFieldError:
+      type: object
+      additionalProperties: false
+      required:
+        - field
+        - message
+      properties:
+        field:
+          type: string
+          examples:
+            - limit
+        message:
+          type: string
+          examples:
+            - Parameter limit maksimal 50.
+        code:
+          type: string
+          examples:
+            - too_big
+
+    ProblemDetails:
+      type: object
+      additionalProperties: false
+      description: Format galat standar RFC 9457 (Problem Details for HTTP APIs).
+      required:
+        - type
+        - title
+        - status
+        - detail
+        - instance
+      properties:
+        type:
+          type: string
+          format: uri
+          examples:
+            - https://jagamedis.id/problems/validation-error
+        title:
+          type: string
+          examples:
+            - Unprocessable Entity
+        status:
+          type: integer
+          minimum: 400
+          maximum: 599
+          examples:
+            - 422
+        detail:
+          type: string
+          examples:
+            - Data yang dikirim tidak memenuhi skema validasi.
+        instance:
+          type: string
+          examples:
+            - /api/v1/faskes
+        errors:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProblemFieldError"
+
+  responses:
+    BadRequestProblem:
+      description: Permintaan tidak valid (body JSON rusak, parameter query invalid, atau format path ID tidak sah).
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+
+    UnauthorizedProblem:
+      description: Sesi autentikasi tidak ditemukan, tidak sah, atau telah kedaluwarsa.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+
+    ForbiddenProblem:
+      description: Peran akun tidak memiliki wewenang mengakses operasi ini (khusus peran `admin`).
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+
+    NotFoundProblem:
+      description: Resource faskes dengan ID yang diminta tidak ditemukan.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+
+    ConflictProblem:
+      description: >-
+        Konflik integritas data (duplikasi `kodeFaskes`/`id` atau larangan hapus relasi `onDelete: Restrict`).
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+
+    ValidationErrorProblem:
+      description: Payload JSON valid secara sintaksis tetapi melanggar skema validasi Zod v4.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+
+    InternalErrorProblem:
+      description: Kesalahan internal server atau basis data saat memproses permintaan.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"

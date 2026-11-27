@@ -140,13 +140,15 @@ export const PathIdSchema = z
 
 /**
  * Memvalidasi parameter dinamis `[id]` hasil `await context.params` sebelum diteruskan ke kueri Prisma.
+ * Mengembalikan HTTP 400 (`application/problem+json`) jika format ID tidak sesuai skema.
  */
 export function validatePathId(
   rawId: string | undefined,
   resourceLabel: string,
-  instance: string
+  instance: string,
+  schema: z.ZodType<string> = PathIdSchema
 ): { ok: true; id: string } | { ok: false; response: NextResponse<ProblemDetails> } {
-  const parsed = PathIdSchema.safeParse(rawId);
+  const parsed = schema.safeParse(rawId);
   if (!parsed.success) {
     return {
       ok: false,
@@ -167,6 +169,72 @@ export function validatePathId(
     };
   }
   return { ok: true, id: parsed.data };
+}
+
+/**
+ * Membaca parameter dinamis `[id]` dari `context.params` (Next.js 16 async params)
+ * lalu memvalidasinya sesuai skema ID aktual.
+ */
+export async function readPathId(
+  context: { params: Promise<{ id: string }> },
+  resourceLabel: string,
+  instance: string,
+  schema: z.ZodType<string> = PathIdSchema
+): Promise<{ ok: true; id: string } | { ok: false; response: NextResponse<ProblemDetails> }> {
+  const { id: rawId } = await context.params;
+  return validatePathId(rawId, resourceLabel, instance, schema);
+}
+
+/**
+ * Membaca body JSON (menolak JSON rusak/non-objek dengan HTTP 400) lalu memvalidasi
+ * isi body menggunakan skema Zod (menolak isi tidak valid dengan HTTP 422 RFC 9457).
+ */
+export async function parseJsonBody<TSchema extends z.ZodType>(
+  request: NextRequest,
+  schema: TSchema
+): Promise<
+  | { ok: true; data: z.infer<TSchema> }
+  | { ok: false; response: NextResponse<ProblemDetails> }
+> {
+  const jsonBody = await parseJsonObject(request);
+  if (!jsonBody.ok) return jsonBody;
+
+  const parsed = schema.safeParse(jsonBody.data);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      response: zodProblemResponse(parsed.error, request.nextUrl.pathname, 422),
+    };
+  }
+
+  return { ok: true, data: parsed.data };
+}
+
+/**
+ * Membaca query string dari `request.nextUrl.searchParams` dan memvalidasinya
+ * menggunakan skema Zod (default HTTP 400 Bad Request RFC 9457 untuk query tidak valid).
+ */
+export function parseQueryParams<TSchema extends z.ZodType>(
+  request: NextRequest,
+  schema: TSchema,
+  status: 400 | 422 = 400
+):
+  | { ok: true; data: z.infer<TSchema> }
+  | { ok: false; response: NextResponse<ProblemDetails> } {
+  const rawQuery: Record<string, string> = {};
+  for (const [key, value] of request.nextUrl.searchParams.entries()) {
+    rawQuery[key] = value;
+  }
+
+  const parsed = schema.safeParse(rawQuery);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      response: zodProblemResponse(parsed.error, request.nextUrl.pathname, status),
+    };
+  }
+
+  return { ok: true, data: parsed.data };
 }
 
 /**
@@ -220,8 +288,23 @@ export function prismaErrorToProblem(
   });
 }
 
+export interface PaginationMeta {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
+
 export function jsonOk<T>(data: T, status: 200 | 201 = 200, headers?: HeadersInit) {
   return NextResponse.json({ data }, { status, headers });
+}
+
+export function jsonPaginatedOk<T>(
+  data: T[],
+  meta: PaginationMeta,
+  headers?: HeadersInit
+) {
+  return NextResponse.json({ data, meta }, { status: 200, headers });
 }
 
 export function noContentResponse(): NextResponse {
